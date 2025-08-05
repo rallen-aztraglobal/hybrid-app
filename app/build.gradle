@@ -18,11 +18,101 @@ android {
         applicationId "com.bingoplus.bpom3410"
         minSdk 29
         targetSdk 36
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a' // 只支持这两个架构
+        }
+    }
+    flavorDimensions "channel"
+    productFlavors {
+        bpom3410 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3410"
+            resValue "string", "app_name", "Bingo Plus PH"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761517817004033\""
+        }
+        bpom3409 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3409"
+            resValue "string", "app_name", "Bingo Plus Live hub"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761517187858432\""
+        }
+        bpom3408 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3408"
+            resValue "string", "app_name", "Bingo Plus Slot Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761516571295745\""
+        }
+
+        bpom3407 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3407"
+            resValue "string", "app_name", "Bingo Plus Exlusive"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761515996676096\""
+        }
+
+        bpom3406 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3406"
+            resValue "string", "app_name", "Bingo Plus Vip"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761515430445057\""
+        }
+
+        bpom3405 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3405"
+            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761514809688064\""
+        }
+
+        bpom3404 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3404"
+            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761514172153857\""
+        }
+
+        bpom3403 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3403"
+            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761513538813952\""
+        }
+
+        bpom3402 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3402"
+            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761512943222785\""
+        }
+
+        bpom3401 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3401"
+            resValue "string", "app_name", "Bingo Plus - Mega Bingo"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761512230191104\""
         }
     }
 
@@ -51,6 +141,7 @@ android {
     }
     buildFeatures {
         compose true
+        buildConfig = true
     }
 }
 

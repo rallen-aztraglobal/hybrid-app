@@ -12,8 +12,6 @@ import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
@@ -34,8 +32,6 @@ import com.hybrid.android.utils.toLocalDateOrNull
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import kotlinx.coroutines.delay
-import java.io.ByteArrayInputStream
-
 
 class WebViewActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -43,12 +39,11 @@ class WebViewActivity : ComponentActivity() {
 
     private var currentPath: String? = null
     private var firstDepositFlag: Boolean? = null
+    private val palCode = BuildConfig.PAL_CODE
 
     private var domain = "https://www.bingoplus.com"
 
-
     private var lastUserApiJson: String? = null
-
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,23 +145,22 @@ class WebViewActivity : ComponentActivity() {
                         document.head.appendChild(style);
                     })();
                 """.trimIndent()
-
-                view?.evaluateJavascript(js, null)
+                view.evaluateJavascript(js, null)
             }
 
-            override fun shouldInterceptRequest(
-                view: WebView?,
-                request: WebResourceRequest?
-            ): WebResourceResponse? {
-                request?.url?.toString()?.let { url ->
-                    if (url.contains("websdk.appsflyer.com")) {
-                        // 返回一个空的 JS 响应，阻止加载
-                        val emptyStream = ByteArrayInputStream("".toByteArray(Charsets.UTF_8))
-                        return WebResourceResponse("application/javascript", "UTF-8", emptyStream)
-                    }
-                }
-                return super.shouldInterceptRequest(view, request)
-            }
+//            override fun shouldInterceptRequest(
+//                view: WebView?,
+//                request: WebResourceRequest?
+//            ): WebResourceResponse? {
+//                request?.url?.toString()?.let { url ->
+//                    if (url.contains("websdk.appsflyer.com")) {
+//                        // 返回一个空的 JS 响应，阻止加载
+//                        val emptyStream = ByteArrayInputStream("".toByteArray(Charsets.UTF_8))
+//                        return WebResourceResponse("application/javascript", "UTF-8", emptyStream)
+//                    }
+//                }
+//                return super.shouldInterceptRequest(view, request)
+//            }
 
             // 拦截 window.open 的跳转（包括 target="_blank"）
             override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
@@ -186,7 +180,7 @@ class WebViewActivity : ComponentActivity() {
         }
 
         // 加载网页
-        webView.loadUrl("${domain}/?palcode=1146761517817004033")
+        webView.loadUrl("${domain}/?palcode=${palCode}")
 
         // 处理返回键
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -214,13 +208,10 @@ class WebViewActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         Log.d("Last", lastUserApiJson ?: "");
-        if (firstDepositFlag == false) {
-            lifecycleScope.launch {
-                delay(1000)
+        if (currentPath?.contains("/confirm") == true) {
+            if (firstDepositFlag == false) {
                 replayUserApi()
             }
-        }
-        if (currentPath?.contains("/confirm") == true) {
             if (webView.canGoBack()) webView.goBack()
         }
     }
