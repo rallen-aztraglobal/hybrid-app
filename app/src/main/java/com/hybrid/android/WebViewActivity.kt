@@ -110,7 +110,7 @@ class WebViewActivity : ComponentActivity() {
         // 注入 JSBridge
         webView.addJavascriptInterface(
             WebAppBridge(webView) { apiUrl, fullRequestDataJson -> handleApiResponse(apiUrl, fullRequestDataJson) },
-            "_dsbridge"
+            "JSBridge"
         )
 
         // 设置 WebViewClient
@@ -208,11 +208,17 @@ class WebViewActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         Log.d("Last", lastUserApiJson ?: "");
-        if (currentPath?.contains("/confirm") == true) {
-            if (firstDepositFlag == false) {
-                replayUserApi()
+        if (firstDepositFlag == false) {
+            if (currentPath?.contains("wallet") ?: false) {
+                webView.post {
+                    var url = "${domain}/wallet?t=${System.currentTimeMillis()}"
+                    webView.loadUrl(url)
+                }
             }
-            if (webView.canGoBack()) webView.goBack()
+//            lifecycleScope.launch {
+//                delay(1000)
+//                replayUserApi()
+//            }
         }
     }
 
@@ -238,6 +244,7 @@ class WebViewActivity : ComponentActivity() {
         if ("http".equals(scheme, ignoreCase = true) || "https".equals(scheme, ignoreCase = true)) {
             if (url?.startsWith(domain) ?: false) {
                 // 是自己域名，WebView 内加载
+
                 return false
             } else {
                 // 外部网站，用系统浏览器打开
@@ -247,6 +254,9 @@ class WebViewActivity : ComponentActivity() {
                     // if ("$url".contains("payments") && webView.canGoBack()) webView.goBack()
                 } catch (e: java.lang.Exception) {
                     e.printStackTrace()
+                }
+                if (currentPath?.contains("/confirm") == true) {
+                    if (webView.canGoBack()) webView.goBack()
                 }
                 return true
             }
@@ -315,7 +325,7 @@ class WebViewActivity : ComponentActivity() {
             }
 
             function reportRequest(data) {
-                _dsbridge.onApiResponse(JSON.stringify(data));
+                JSBridge.onApiResponse(JSON.stringify(data));
             }
 
             const origFetch = window.fetch;
@@ -401,6 +411,7 @@ class WebViewActivity : ComponentActivity() {
 
     private fun replayUserApi() {
         lastUserApiJson?.let {
+            showToast("回到App，发起检测")
             webView.evaluateJavascript("window.replayRequest(${it.quoted()})", null)
         }
     }
@@ -408,6 +419,10 @@ class WebViewActivity : ComponentActivity() {
     private fun String.quoted(): String =
         replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").let { "\"$it\"" }
 
+
+    private fun showToast(text: String) {
+       //Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
+    }
 
     private fun handleApiResponse(apiUrl: String, fullRequestDataJson: String) {
 
@@ -425,7 +440,11 @@ class WebViewActivity : ComponentActivity() {
             val registDateStr = data.optString("registDate", "")
             val firstDepositDate = firstDepositDateStr.toLocalDateOrNull()
             val registDate = registDateStr.toLocalDateOrNull()
-            Toast.makeText(this@WebViewActivity, "检测首存状态： firstDepositFlag = $flag 历史首存状态：$firstDepositFlag", Toast.LENGTH_LONG).show()
+            if (firstDepositFlag == null) {
+                showToast("首存状态已就绪：firstDepositFlag = $flag");
+            } else if (firstDepositFlag == false) {
+                showToast("检测首存状态： firstDepositFlag = $flag 历史首存状态：$firstDepositFlag")
+            }
             if (firstDepositFlag == false && flag) {
                 val sameDay = firstDepositDate == registDate
                 if (sameDay) {
@@ -441,7 +460,7 @@ class WebViewActivity : ComponentActivity() {
         }
 
         if (apiUrl.contains("billDetail")) {
-            Toast.makeText(this@WebViewActivity, "拦截到billDetail接口响应： status = ${data.getInt("status")}", Toast.LENGTH_LONG).show()
+            showToast("拦截到billDetail接口响应： status = ${data.getInt("status")}")
             if (firstDepositFlag == true && data.getInt("status") == 0) {
                 sendAFEvent("AddToCart")
             }
@@ -450,7 +469,12 @@ class WebViewActivity : ComponentActivity() {
         // ✅ Login 事件：来自 loginAndRegisterV4 且 login 为 true
         if (apiUrl.contains("loginAndRegisterV4") && data.optBoolean("login", false)) {
             sendAFEvent(AFInAppEventType.LOGIN)
-            webView.loadUrl("javascript:location.reload()")
+            // 如果当前在钱包页面 回到首页
+            if (currentPath != null && currentPath!!.contains("wallet")) {
+                webView.post {
+                    webView.loadUrl("${domain}/wallet")
+                }
+            }
         }
     }
 
@@ -463,13 +487,13 @@ class WebViewActivity : ComponentActivity() {
                 override fun onSuccess() {
                     Log.d("Appsflyer", "Sent event SUCCESS: $eventName")
                     runOnUiThread {
-                        Toast.makeText(this@WebViewActivity, "事件发送成功: $eventName", Toast.LENGTH_LONG).show()
+                        showToast("事件发送成功: $eventName")
                     }
                 }
                 override fun onError(errorCode: Int, p1: String) {
                     Log.e("Appsflyer", "Sent event FAILED: $eventName, errorCode: $errorCode, message: $p1")
                     runOnUiThread {
-                        Toast.makeText(this@WebViewActivity, "事件发送失败: $p1", Toast.LENGTH_LONG).show()
+                        showToast("事件发送失败: $p1")
                     }
                 }
             }
