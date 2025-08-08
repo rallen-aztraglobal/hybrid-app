@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -23,37 +22,31 @@ import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
-import androidx.lifecycle.lifecycleScope
 import com.appsflyer.AFInAppEventType
 import com.appsflyer.AppsFlyerLib
 import com.appsflyer.attribution.AppsFlyerRequestListener
 import com.hybrid.android.bridge.WebAppBridge
 import com.hybrid.android.utils.toLocalDateOrNull
-import kotlinx.coroutines.launch
 import org.json.JSONObject
-import kotlinx.coroutines.delay
+import java.time.LocalDate
 
 class WebViewActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var splashImageView: ImageView
 
     private var currentPath: String? = null
-    private var firstDepositFlag: Boolean? = null
     private val palCode = BuildConfig.PAL_CODE
-
+    private var registDate: String? = ""
     private var domain = "https://gzone.ph"
 
-    private var lastUserApiJson: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-//        AppsFlyerLib.getInstance().setDebugLog(true)
+        AppsFlyerLib.getInstance().setDebugLog(true)
         AppsFlyerLib.getInstance().init("fXoKsKQwxPCRdhD8CD8q6F", null, this)
         AppsFlyerLib.getInstance().start(this)
-
-        firstDepositFlag = loadFirstDepositFlag(this);
-
+        registDate = loadRegistDateStr(this);
         val prefs = getSharedPreferences("af_install", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("install_tracked", false)) {
             sendAFEvent("Install")
@@ -148,20 +141,6 @@ class WebViewActivity : ComponentActivity() {
                 view.evaluateJavascript(js, null)
             }
 
-//            override fun shouldInterceptRequest(
-//                view: WebView?,
-//                request: WebResourceRequest?
-//            ): WebResourceResponse? {
-//                request?.url?.toString()?.let { url ->
-//                    if (url.contains("websdk.appsflyer.com")) {
-//                        // 返回一个空的 JS 响应，阻止加载
-//                        val emptyStream = ByteArrayInputStream("".toByteArray(Charsets.UTF_8))
-//                        return WebResourceResponse("application/javascript", "UTF-8", emptyStream)
-//                    }
-//                }
-//                return super.shouldInterceptRequest(view, request)
-//            }
-
             // 拦截 window.open 的跳转（包括 target="_blank"）
             override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                 val url = request.url.toString()
@@ -172,10 +151,6 @@ class WebViewActivity : ComponentActivity() {
                 super.doUpdateVisitedHistory(view, url, isReload)
                 currentPath = view.url
                 Log.d("URL", "历史记录 URL 更新为：$currentPath")
-                // ✅ Complete Registration：路径包含 /joinsuccess
-                if (view.url?.contains("/joinsuccess") ?: false) {
-                    sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
-                }
             }
         }
 
@@ -197,43 +172,22 @@ class WebViewActivity : ComponentActivity() {
 
     private fun handleDeepLink(intent: Intent?) {
         val data: Uri? = intent?.data
-        if (data != null && data.scheme == "bingo") {
-            val path = data.host
-            if (path == "deposit-success-back" && firstDepositFlag == true) {
-                sendAFEvent("AddToCart")
-            }
-        }
     }
 
     override fun onResume() {
         super.onResume()
-        Log.d("Last", lastUserApiJson ?: "");
-        if (firstDepositFlag == false) {
-            if (currentPath?.contains("wallet") ?: false) {
-                webView.post {
-                    var url = "${domain}/wallet?t=${System.currentTimeMillis()}"
-                    webView.loadUrl(url)
-                }
-            }
-//            lifecycleScope.launch {
-//                delay(1000)
-//                replayUserApi()
-//            }
+    }
+
+    private fun saveRegistDateStr(context: Context, str: String) {
+        val prefs = context.getSharedPreferences("user_cache", Context.MODE_PRIVATE)
+        prefs.edit {
+            putString("registDateStr", str)
         }
     }
 
-    fun saveFirstDepositFlag(context: Context, flag: Boolean?) {
+    private fun loadRegistDateStr(context: Context): String? {
         val prefs = context.getSharedPreferences("user_cache", Context.MODE_PRIVATE)
-        prefs.edit { putBoolean("first_deposit_flag", flag ?: false) }
-    }
-
-    fun loadFirstDepositFlag(context: Context): Boolean? {
-        val prefs = context.getSharedPreferences("user_cache", Context.MODE_PRIVATE)
-        return if (prefs.contains("first_deposit_flag")) {
-            prefs.getBoolean("first_deposit_flag", false)
-        } else {
-            null
-        }
+        return prefs.getString("registDateStr", null)
     }
 
     private fun handleDeeplink(context: Context, url: String?): Boolean {
@@ -242,24 +196,7 @@ class WebViewActivity : ComponentActivity() {
 
         // 标准网页直接加载
         if ("http".equals(scheme, ignoreCase = true) || "https".equals(scheme, ignoreCase = true)) {
-            if (url?.startsWith(domain) ?: false) {
-                // 是自己域名，WebView 内加载
-
-                return false
-            } else {
-                // 外部网站，用系统浏览器打开
-                try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, uri)
-                    context.startActivity(browserIntent)
-                    // if ("$url".contains("payments") && webView.canGoBack()) webView.goBack()
-                } catch (e: java.lang.Exception) {
-                    e.printStackTrace()
-                }
-                if (currentPath?.contains("/confirm") == true) {
-                    if (webView.canGoBack()) webView.goBack()
-                }
-                return true
-            }
+            return false
         } else {
             // 其他自定义 scheme（如 wechat://、alipays:// 等）
             try {
@@ -269,38 +206,7 @@ class WebViewActivity : ComponentActivity() {
                 // 如果未安装对应 App，可提示或忽略
                 Log.w("WebView", "App 未安装: " + url)
             }
-        }
-
-        // intent:// 类型处理
-        if ("intent".equals(scheme, ignoreCase = true)) {
-            try {
-                val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
-                // 检查是否有对应的 App
-                if (intent.getPackage() != null) {
-                    if (isAppInstalled(context, intent.getPackage()!!)) {
-                        context.startActivity(intent)
-                    } else {
-                        // 跳转应用市场
-                        val marketIntent = Intent(Intent.ACTION_VIEW)
-                        marketIntent.setData(Uri.parse("market://details?id=" + intent.getPackage()))
-                        context.startActivity(marketIntent)
-                    }
-                    return true
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
             return true
-        }
-        return false // 不管成功失败，都拦截 WebView 自己处理
-    }
-
-    private fun isAppInstalled(context: Context, packageName: String): Boolean {
-        try {
-            context.getPackageManager().getPackageInfo(packageName, 0)
-            return true
-        } catch (e: PackageManager.NameNotFoundException) {
-            return false
         }
     }
 
@@ -409,17 +315,6 @@ class WebViewActivity : ComponentActivity() {
         webView.evaluateJavascript(js, null)
     }
 
-    private fun replayUserApi() {
-        lastUserApiJson?.let {
-            showToast("回到App，发起检测")
-            webView.evaluateJavascript("window.replayRequest(${it.quoted()})", null)
-        }
-    }
-
-    private fun String.quoted(): String =
-        replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").let { "\"$it\"" }
-
-
     private fun showToast(text: String) {
        //Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
     }
@@ -434,45 +329,42 @@ class WebViewActivity : ComponentActivity() {
         Log.d("拦截到URL ====> ", apiUrl)
         // ✅ 处理 getById / getByLoginName 响应
         if ((apiUrl.contains("getById") || apiUrl.contains("getByLoginName"))) {
-            lastUserApiJson = fullRequestDataJson;
-            var flag = data.optBoolean("firstDepositFlag", false)
-            val firstDepositDateStr = data.optString("firstDepositDate", "")
             val registDateStr = data.optString("registDate", "")
-            val firstDepositDate = firstDepositDateStr.toLocalDateOrNull()
-            val registDate = registDateStr.toLocalDateOrNull()
-            if (firstDepositFlag == null) {
-                showToast("首存状态已就绪：firstDepositFlag = $flag");
-            } else if (firstDepositFlag == false) {
-                showToast("检测首存状态： firstDepositFlag = $flag 历史首存状态：$firstDepositFlag")
-            }
-            if (firstDepositFlag == false && flag) {
-                val sameDay = firstDepositDate == registDate
-                if (sameDay) {
-                    sendAFEvent("Purchase")
-                } else {
-                    sendAFEvent("OldRegPurchase")
-                }
-                sendAFEvent("TPFirstDeposit")
-            }
-            saveFirstDepositFlag(this, flag);
-            firstDepositFlag = flag
+            saveRegistDateStr(this, registDateStr)
+            registDate = registDateStr
             return
         }
 
-        if (apiUrl.contains("billDetail")) {
-            showToast("拦截到billDetail接口响应： status = ${data.getInt("status")}")
-            if (firstDepositFlag == true && data.getInt("status") == 0) {
-                sendAFEvent("AddToCart")
+        // ✅ Login 事件：来自 loginAndRegisterV4 且 login 为 true
+        if (apiUrl.contains("loginAndRegisterV4")) {
+            var isLogin = data.optBoolean("login", false)
+            if (isLogin) {
+                sendAFEvent(AFInAppEventType.LOGIN)
+            } else {
+                sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
+            }
+            // 登录完跳去 account 获取最新的账号数据
+            if (currentPath != null) {
+                webView.post {
+                    webView.loadUrl("${domain}/account")
+                }
             }
         }
-
-        // ✅ Login 事件：来自 loginAndRegisterV4 且 login 为 true
-        if (apiUrl.contains("loginAndRegisterV4") && data.optBoolean("login", false)) {
-            sendAFEvent(AFInAppEventType.LOGIN)
-            // 如果当前在钱包页面 回到首页
-            if (currentPath != null && currentPath!!.contains("wallet")) {
-                webView.post {
-                    webView.loadUrl("${domain}/wallet")
+        if (apiUrl.contains("checkDepositTransV2")) {
+            var depositFlag = data.optBoolean("depositFlag", false)
+            var firstDepositFlag = data.optBoolean("firstDepositFlag", false)
+            showToast("拦截到checkDepositTransV2接口响应： depositFlag = $depositFlag")
+            if (depositFlag) {
+                if (firstDepositFlag) {
+                    val sameDay = LocalDate.now() == registDate?.toLocalDateOrNull()
+                    if (sameDay) {
+                        sendAFEvent("Purchase")
+                    } else {
+                        sendAFEvent("OldRegPurchase")
+                    }
+                    sendAFEvent("TPFirstDeposit")
+                } else {
+                    sendAFEvent("AddToCart")
                 }
             }
         }
