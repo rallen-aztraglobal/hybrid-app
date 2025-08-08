@@ -15,11 +15,11 @@ android {
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.bingoplus.bpom3410"
+        applicationId "com.gamezone.gpgzmkk048"
         minSdk 29
         targetSdk 36
-        versionCode 3
-        versionName "1.0.2"
+        versionCode 1
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a' // 只支持这两个架构
@@ -27,92 +27,92 @@ android {
     }
     flavorDimensions "channel"
     productFlavors {
-        bpom3410 {
+        gpgzmkk042 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3410"
-            resValue "string", "app_name", "Bingo Plus PH"
+            applicationId "com.gamezone.gpgzmkk042"
+            resValue "string", "app_name", "Gamezone- 100% Rebate"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761517817004033\""
+            buildConfigField "String", "PAL_CODE", "\"1123689306919706625\""
         }
-        bpom3409 {
+        gpgzmkk043 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3409"
-            resValue "string", "app_name", "Bingo Plus Live hub"
+            applicationId "com.gamezone.gpgzmkk043"
+            resValue "string", "app_name", "Gamezone- 100% Rebate"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761517187858432\""
+            buildConfigField "String", "PAL_CODE", "\"1123689307339137024\""
         }
-        bpom3408 {
+        gpgzmkk044 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3408"
-            resValue "string", "app_name", "Bingo Plus Slot Master"
+            applicationId "com.gamezone.gpgzmkk044"
+            resValue "string", "app_name", "Gamezone-6888 bonus"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761516571295745\""
-        }
-
-        bpom3407 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3407"
-            resValue "string", "app_name", "Bingo Plus Exlusive"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761515996676096\""
+            buildConfigField "String", "PAL_CODE", "\"1123689307775344641\""
         }
 
-        bpom3406 {
+        gpgzmkk045 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3406"
-            resValue "string", "app_name", "Bingo Plus Vip"
+            applicationId "com.gamezone.gpgzmkk045"
+            resValue "string", "app_name", "Gamezone-6888 bonus"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761515430445057\""
+            buildConfigField "String", "PAL_CODE", "\"1123689308194775040\""
         }
 
-        bpom3405 {
+        gpgzmkk046 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3405"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            applicationId "com.gamezone.gpgzmkk046"
+            resValue "string", "app_name", "Gamezone-6888 bonus"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761514809688064\""
+            buildConfigField "String", "PAL_CODE", "\"1123689308618399745\""
         }
 
-        bpom3404 {
+        gpgzmkk047 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3404"
-            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
+            applicationId "com.gamezone.gpgzmkk047"
+            resValue "string", "app_name", "Game Zone Tongits plus"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761514172153857\""
+            buildConfigField "String", "PAL_CODE", "\"1123689309050413056\""
         }
 
-        bpom3403 {
+        gpgzmkk048 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3403"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            applicationId "com.gamezone.gpgzmkk048"
+            resValue "string", "app_name", "Game Zone PH"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761513538813952\""
+            buildConfigField "String", "PAL_CODE", "\"1123689309486620673\""
         }
 
-        bpom3402 {
+        gpgzmkk049 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3402"
-            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
+            applicationId "com.gamezone.gpgzmkk049"
+            resValue "string", "app_name", "Game Zone VIP"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761512943222785\""
+            buildConfigField "String", "PAL_CODE", "\"1123689309931216896\""
         }
 
-        bpom3401 {
+        gpgzmkk050 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3401"
-            resValue "string", "app_name", "Bingo Plus - Mega Bingo"
+            applicationId "com.gamezone.gpgzmkk050"
+            resValue "string", "app_name", "Game Zone Poker Master"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761512230191104\""
+            buildConfigField "String", "PAL_CODE", "\"1123689310371618817\""
+        }
+
+        gpgzmkk051 {
+            dimension "channel"
+            applicationId "com.gamezone.gpgzmkk051"
+            resValue "string", "app_name", "Game Zone Tongits Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1123689310791049216\""
         }
     }
 

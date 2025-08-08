@@ -41,7 +41,7 @@ class WebViewActivity : ComponentActivity() {
     private var firstDepositFlag: Boolean? = null
     private val palCode = BuildConfig.PAL_CODE
 
-    private var domain = "https://www.bingoplus.com"
+    private var domain = "https://gzone.ph"
 
     private var lastUserApiJson: String? = null
 
