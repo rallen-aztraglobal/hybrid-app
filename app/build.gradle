@@ -114,6 +114,24 @@ android {
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1123689310791049216\""
         }
+
+        gzmkt031 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmkt031"
+            resValue "string", "app_name", "Game Zone VIP"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1158040429090598912\""
+        }
+
+        gzmkt032 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmkt032"
+            resValue "string", "app_name", "Game Zone VIP"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1158040429602304001\""
+        }
     }
 
     signingConfigs {
