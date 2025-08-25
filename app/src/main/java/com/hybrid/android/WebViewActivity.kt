@@ -1,5 +1,6 @@
 package com.hybrid.android
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -7,18 +8,25 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.PermissionRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -107,6 +115,13 @@ class WebViewActivity : ComponentActivity() {
             insets
         }
 
+        val settings: WebSettings = webView.settings
+        settings.javaScriptEnabled = true
+        settings.mediaPlaybackRequiresUserGesture = false
+
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+
+
         // 注入 JSBridge
         webView.addJavascriptInterface(
             WebAppBridge(webView) { apiUrl, fullRequestDataJson -> handleApiResponse(apiUrl, fullRequestDataJson) },
@@ -176,6 +191,17 @@ class WebViewActivity : ComponentActivity() {
                 if (view.url?.contains("/joinsuccess") ?: false) {
                     sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
                 }
+                if (view.url?.contains("kyc") ?: false) {
+                    checkAndRequestPermission()
+                }
+            }
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                runOnUiThread {
+                    request?.grant(request.resources) // 允许 JS 使用相机/麦克风
+                }
             }
         }
 
@@ -188,6 +214,27 @@ class WebViewActivity : ComponentActivity() {
                 if (webView.canGoBack()) webView.goBack() else finish()
             }
         })
+    }
+
+
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            if (isGranted) {
+                // 权限已授予
+            } else {
+                // 权限被拒绝
+            }
+        }
+
+    // 调用相机权限申请
+    fun checkAndRequestPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            // 已有权限
+        } else {
+            requestPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
