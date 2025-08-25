@@ -1,9 +1,11 @@
 package com.hybrid.android
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -11,6 +13,9 @@ import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
@@ -18,6 +23,8 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -98,6 +105,13 @@ class WebViewActivity : ComponentActivity() {
         // 设置沉浸式状态栏
         enterImmersiveMode()
 
+        val settings: WebSettings = webView.settings
+        settings.javaScriptEnabled = true
+        settings.mediaPlaybackRequiresUserGesture = false
+
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+
+
         // 处理 window insets（状态栏/导航栏 padding）
         ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
             val systemInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -113,6 +127,14 @@ class WebViewActivity : ComponentActivity() {
             WebAppBridge(webView) { apiUrl, fullRequestDataJson -> handleApiResponse(apiUrl, fullRequestDataJson) },
             "JSBridge"
         )
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                runOnUiThread {
+                    request?.grant(request.resources) // 允许 JS 使用相机/麦克风
+                }
+            }
+        }
 
         // 设置 WebViewClient
         webView.webViewClient = object : WebViewClient() {
@@ -159,6 +181,9 @@ class WebViewActivity : ComponentActivity() {
                 super.doUpdateVisitedHistory(view, url, isReload)
                 currentPath = view.url
                 Log.d("URL", "历史记录 URL 更新为：$currentPath")
+                if (currentPath?.contains("kyc") ?: false) {
+                    checkAndRequestPermission()
+                }
             }
         }
 
@@ -171,6 +196,26 @@ class WebViewActivity : ComponentActivity() {
                 if (webView.canGoBack()) webView.goBack() else finish()
             }
         })
+    }
+
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            if (isGranted) {
+                // 权限已授予
+            } else {
+                // 权限被拒绝
+            }
+        }
+
+    // 调用相机权限申请
+    fun checkAndRequestPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            // 已有权限
+        } else {
+            requestPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
