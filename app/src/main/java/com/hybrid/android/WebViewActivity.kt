@@ -51,6 +51,14 @@ class WebViewActivity : ComponentActivity() {
         if (!prefs.getBoolean("install_tracked", false)) {
             sendAFEvent("Install")
             prefs.edit { putBoolean("install_tracked", true) }
+
+            // 发送全部事件。测试用
+            sendAFEvent(AFInAppEventType.LOGIN)
+            sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
+            sendAFEvent("Purchase")
+            sendAFEvent("OldRegPurchase")
+            sendAFEvent("TPFirstDeposit")
+            sendAFEvent("AddToCart")
         }
 
         // 创建 FrameLayout 根容器
