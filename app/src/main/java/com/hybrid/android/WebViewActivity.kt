@@ -468,7 +468,7 @@ class WebViewActivity : ComponentActivity() {
 
 
     private fun showToast(text: String) {
-       //Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
+       Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
     }
 
     private fun handleApiResponse(apiUrl: String, fullRequestDataJson: String) {
