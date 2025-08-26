@@ -49,6 +49,8 @@ class WebViewActivity : ComponentActivity() {
     private var firstDepositFlag: Boolean? = null
     private val palCode = BuildConfig.PAL_CODE
 
+    private val eventValues = HashMap<String, Any>()
+
     private var domain = "https://www.bingoplus.com"
 
     private var lastUserApiJson: String? = null
@@ -66,6 +68,14 @@ class WebViewActivity : ComponentActivity() {
         if (!prefs.getBoolean("install_tracked", false)) {
             sendAFEvent("Install")
             prefs.edit { putBoolean("install_tracked", true) }
+
+            // 发送全部事件。测试用
+            sendAFEvent(AFInAppEventType.LOGIN)
+            sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
+            sendAFEvent("Purchase")
+            sendAFEvent("OldRegPurchase")
+            sendAFEvent("TPFirstDeposit")
+            sendAFEvent("AddToCart")
         }
 
         // 创建 FrameLayout 根容器
@@ -516,6 +526,8 @@ class WebViewActivity : ComponentActivity() {
         // ✅ Login 事件：来自 loginAndRegisterV4 且 login 为 true
         if (apiUrl.contains("loginAndRegisterV4") && data.optBoolean("login", false)) {
             sendAFEvent(AFInAppEventType.LOGIN)
+            eventValues.put("mobileNo", data.getString("mobileNo"))
+            eventValues.put("customerId", data.getString("customerId"))
             // 如果当前在钱包页面 回到首页
             if (currentPath != null && currentPath!!.contains("wallet")) {
                 webView.post {
@@ -526,10 +538,11 @@ class WebViewActivity : ComponentActivity() {
     }
 
     private fun sendAFEvent(eventName: String) {
+        // 定义事件参数
         AppsFlyerLib.getInstance().logEvent(
             this,
             eventName,
-            null,
+            eventValues,
             object : AppsFlyerRequestListener {
                 override fun onSuccess() {
                     Log.d("Appsflyer", "Sent event SUCCESS: $eventName")
