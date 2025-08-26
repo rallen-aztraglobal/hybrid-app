@@ -1,6 +1,7 @@
 [versions]
 afAndroidSdk = "6.17.0"
 agp = "8.12.0-alpha01"
+fragmentKtx = "1.6.2"
 playServicesAdsIdentifierVersion = "18.2.0"
 playServicesAppset = "16.1.0"
 webviewInterceptor = "1.0.12"
@@ -16,6 +17,7 @@ filamentAndroid = "1.17.1"
 
 [libraries]
 af-android-sdk = { module = "com.appsflyer:af-android-sdk", version.ref = "afAndroidSdk" }
+androidx-fragment-ktx = { module = "androidx.fragment:fragment-ktx", version.ref = "fragmentKtx" }
 gms-play-services-ads-identifier = { module = "com.google.android.gms:play-services-ads-identifier", version.ref = "playServicesAdsIdentifierVersion" }
 play-services-appset = { module = "com.google.android.gms:play-services-appset", version.ref = "playServicesAppset" }
 webview-interceptor = { module = "com.github.acsbendi:Android-Request-Inspector-WebView", version.ref = "webviewInterceptor" }
