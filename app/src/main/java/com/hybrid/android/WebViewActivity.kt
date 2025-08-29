@@ -70,12 +70,12 @@ class WebViewActivity : ComponentActivity() {
             prefs.edit { putBoolean("install_tracked", true) }
 
             // 发送全部事件。测试用
-            sendAFEvent(AFInAppEventType.LOGIN)
-            sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
-            sendAFEvent("Purchase")
-            sendAFEvent("OldRegPurchase")
-            sendAFEvent("TPFirstDeposit")
-            sendAFEvent("AddToCart")
+//            sendAFEvent(AFInAppEventType.LOGIN)
+//            sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
+//            sendAFEvent("Purchase")
+//            sendAFEvent("OldRegPurchase")
+//            sendAFEvent("TPFirstDeposit")
+//            sendAFEvent("AddToCart")
         }
 
         // 创建 FrameLayout 根容器
@@ -478,7 +478,7 @@ class WebViewActivity : ComponentActivity() {
 
 
     private fun showToast(text: String) {
-       Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
+       //Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
     }
 
     private fun handleApiResponse(apiUrl: String, fullRequestDataJson: String) {
