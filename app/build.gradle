@@ -15,7 +15,7 @@ android {
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.gamezone.gpgzmkk042"
+        applicationId "com.arenaplus.ap01022"
         minSdk 29
         targetSdk 36
         versionCode 2
@@ -27,156 +27,13 @@ android {
     }
     flavorDimensions "channel"
     productFlavors {
-        gpgzmkk042 {
+        ap01022 {
             dimension "channel"
-            applicationId "com.gamezone.gpgzmkk042"
-            resValue "string", "app_name", "Gamezone- 100% Rebate"
+            applicationId "com.arenaplus.ap01022"
+            resValue "string", "app_name", "ArenaPlus PH"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689306919706625\""
-        }
-        gpgzmkk043 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk043"
-            resValue "string", "app_name", "Gamezone- 100% Rebate"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689307339137024\""
-        }
-        gpgzmkk044 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk044"
-            resValue "string", "app_name", "Gamezone-6888 bonus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689307775344641\""
-        }
-
-        gpgzmkk045 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk045"
-            resValue "string", "app_name", "Gamezone-6888 bonus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689308194775040\""
-        }
-
-        gpgzmkk046 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk046"
-            resValue "string", "app_name", "Gamezone-6888 bonus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689308618399745\""
-        }
-
-        gpgzmkk047 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk047"
-            resValue "string", "app_name", "Game Zone Tongits plus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689309050413056\""
-        }
-
-        gpgzmkk048 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk048"
-            resValue "string", "app_name", "Game Zone PH"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689309486620673\""
-        }
-
-        gpgzmkk049 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk049"
-            resValue "string", "app_name", "Game Zone VIP"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689309931216896\""
-        }
-
-        gpgzmkk050 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk050"
-            resValue "string", "app_name", "Game Zone Poker Master"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689310371618817\""
-        }
-
-        gpgzmkk051 {
-            dimension "channel"
-            applicationId "com.gamezone.gpgzmkk051"
-            resValue "string", "app_name", "Game Zone Tongits Master"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1123689310791049216\""
-        }
-
-        gzmkt026 {
-            dimension "channel"
-            applicationId "com.gamezone.gzmkt026"
-            resValue "string", "app_name", "Gamezone- 100% Rebate"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1158040426494324737\""
-        }
-
-        gzmkt027 {
-            dimension "channel"
-            applicationId "com.gamezone.gzmkt027"
-            resValue "string", "app_name", "Gamezone- 100% Rebate"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1158040426985058304\""
-        }
-
-        gzmkt028 {
-            dimension "channel"
-            applicationId "com.gamezone.gzmkt028"
-            resValue "string", "app_name", "Game Zone Tongits Master"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1158040427505152001\""
-        }
-
-        gzmkt029 {
-            dimension "channel"
-            applicationId "com.gamezone.gzmkt029"
-            resValue "string", "app_name", "Game Zone Tongits Master"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1158040428050411520\""
-        }
-
-        gzmkt030 {
-            dimension "channel"
-            applicationId "com.gamezone.gzmkt030"
-            resValue "string", "app_name", "Game Zone VIP"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1158040428574699521\""
-        }
-
-
-        gzmkt031 {
-            dimension "channel"
-            applicationId "com.gamezone.gzmkt031"
-            resValue "string", "app_name", "Game Zone VIP"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1158040429090598912\""
-        }
-
-        gzmkt032 {
-            dimension "channel"
-            applicationId "com.gamezone.gzmkt032"
-            resValue "string", "app_name", "Game Zone VIP"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1158040429602304001\""
+            buildConfigField "String", "PAL_CODE", "\"1053259235099742209\""
         }
     }
 

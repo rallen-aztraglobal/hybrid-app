@@ -44,7 +44,7 @@ class WebViewActivity : ComponentActivity() {
     private var currentPath: String? = null
     private val palCode = BuildConfig.PAL_CODE
     private var registDate: String? = ""
-    private var domain = "https://gzone.ph"
+    private var domain = "https://arenaplus.ph"
     private val eventValues = HashMap<String, Any>()
 
 
@@ -370,7 +370,7 @@ class WebViewActivity : ComponentActivity() {
     }
 
     private fun showToast(text: String) {
-       //Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
+       Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
     }
 
     private fun handleApiResponse(apiUrl: String, fullRequestDataJson: String) {
