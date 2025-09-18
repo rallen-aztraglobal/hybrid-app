@@ -61,12 +61,12 @@ class WebViewActivity : ComponentActivity() {
             prefs.edit { putBoolean("install_tracked", true) }
 
             // 发送全部事件。测试用
-//            sendAFEvent(AFInAppEventType.LOGIN)
-//            sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
-//            sendAFEvent("Purchase")
-//            sendAFEvent("OldRegPurchase")
-//            sendAFEvent("TPFirstDeposit")
-//            sendAFEvent("AddToCart")
+            sendAFEvent(AFInAppEventType.LOGIN)
+            sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
+            sendAFEvent("Purchase")
+            sendAFEvent("OldRegPurchase")
+            sendAFEvent("TPFirstDeposit")
+            sendAFEvent("AddToCart")
         }
 
         // 创建 FrameLayout 根容器
@@ -370,7 +370,7 @@ class WebViewActivity : ComponentActivity() {
     }
 
     private fun showToast(text: String) {
-       //Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
+       Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
     }
 
     private fun handleApiResponse(apiUrl: String, fullRequestDataJson: String) {
@@ -401,9 +401,9 @@ class WebViewActivity : ComponentActivity() {
             }
             // 登录完跳去 account 获取最新的账号数据
             if (currentPath != null) {
-                webView.post {
+                webView.postDelayed({
                     webView.loadUrl("${domain}/account")
-                }
+                }, 500) // 延迟500毫秒
             }
         }
         if (apiUrl.contains("checkDepositTransV2")) {
