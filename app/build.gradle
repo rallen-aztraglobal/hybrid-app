@@ -178,6 +178,47 @@ android {
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1158040429602304001\""
         }
+
+        gzmarket075 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket075"
+            resValue "string", "app_name", "Game Zone VIP"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189953179856896\""
+        }
+        gzmarket071 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket071"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189951086899200\""
+        }
+        gzmarket068 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket068"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189949497257984\""
+        }
+        gzmarket066 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket066"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189948394156032\""
+        }
+        gzmarket062 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket066"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189946217312256\""
+        }
     }
 
     signingConfigs {
