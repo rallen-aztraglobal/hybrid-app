@@ -399,12 +399,9 @@ class WebViewActivity : ComponentActivity() {
             } else {
                 sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
             }
-            // 登录完跳去 account 获取最新的账号数据
-            if (currentPath != null) {
-                webView.postDelayed({
-                    webView.loadUrl("${domain}/account")
-                }, 500) // 延迟500毫秒
-            }
+            val registDateStr = data.optString("createdDate", "")
+            saveRegistDateStr(this, registDateStr)
+            registDate = registDateStr
         }
         if (apiUrl.contains("checkDepositTransV2")) {
             var depositFlag = data.optBoolean("depositFlag", false)
