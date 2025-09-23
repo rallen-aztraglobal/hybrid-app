@@ -44,9 +44,8 @@ class WebViewActivity : ComponentActivity() {
     private var currentPath: String? = null
     private val palCode = BuildConfig.PAL_CODE
     private var registDate: String? = ""
-    private var domain = "https://gzone.ph"
+    private var domain = "https://arenaplus.ph"
     private val eventValues = HashMap<String, Any>()
-
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
