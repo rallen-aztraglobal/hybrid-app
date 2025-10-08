@@ -521,16 +521,16 @@ class WebViewActivity : ComponentActivity() {
 
         // ✅ Login 事件：来自 loginAndRegisterV4 且 login 为 true
         if (apiUrl.contains("loginAndRegisterV4")) {
+            eventValues.put("mobileNo", data.getString("mobileNo"))
+            eventValues.put("customerId", data.getString("customerId"))
             if (data.optBoolean("login", false)) {
                 sendAFEvent(AFInAppEventType.LOGIN)
-                eventValues.put("mobileNo", data.getString("mobileNo"))
-                eventValues.put("customerId", data.getString("customerId"))
                 // 如果当前在钱包页面 回到首页
-                if (currentPath != null && currentPath!!.contains("wallet")) {
-                    webView.post {
-                        webView.loadUrl("${domain}/wallet")
-                    }
-                }
+//                if (currentPath != null && currentPath!!.contains("wallet")) {
+//                    webView.post {
+//                        webView.loadUrl("${domain}/wallet")
+//                    }
+//                }
             } else {
                 sendAFEvent(AFInAppEventType.COMPLETE_REGISTRATION)
             }
