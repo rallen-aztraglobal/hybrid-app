@@ -219,6 +219,181 @@ android {
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1956189946217312256\""
         }
+
+        gzmarket019 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket019"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189923551293440\""
+        }
+        gzmarket018 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket018"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189923001839616\""
+        }
+        gzmarket016 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket016"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189921932292096\""
+        }
+        gzmarket015 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket015"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189921395421184\""
+        }
+        gzmarket014 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket014"
+            resValue "string", "app_name", "Gamezone 2025"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189920837578752\""
+        }
+
+        gzmarket020 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket020"
+            resValue "string", "app_name", "Game Zone Tongits Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189924088164352\""
+        }
+
+        gzmarket017 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket017"
+            resValue "string", "app_name", "Game Zone Tongits Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189922485940224\""
+        }
+
+        gzmarket011 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket011"
+            resValue "string", "app_name", "Game Zone Tongits Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189919340212224\""
+        }
+
+        gzmarket008 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket008"
+            resValue "string", "app_name", "Game Zone Tongits Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189917779931136\""
+        }
+        gzmarket007 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket007"
+            resValue "string", "app_name", "Game Zone Tongits Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189917276614656\""
+        }
+
+        gzmarket012 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket012"
+            resValue "string", "app_name", "Gamezone- 100% Rebate"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189919839334400\""
+        }
+
+        gzmarket013 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket013"
+            resValue "string", "app_name", "Gamezone- 101% Rebate"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189920346845184\""
+        }
+
+        gzmarket010 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket010"
+            resValue "string", "app_name", "Gamezone- 102% Rebate"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189918794952704\""
+        }
+
+        gzmarket009 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket009"
+            resValue "string", "app_name", "Gamezone- 103% Rebate"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189918291636224\""
+        }
+
+        gzmarket006 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket006"
+            resValue "string", "app_name", "Gamezone- 104% Rebate"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189916706189312\""
+        }
+
+        gzmarket005 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket005"
+            resValue "string", "app_name", "Game Zone Poker Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189916202872832\""
+        }
+
+        gzmarket004 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket004"
+            resValue "string", "app_name", "Game Zone Poker Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189915183656960\""
+        }
+
+        gzmarket003 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket003"
+            resValue "string", "app_name", "Game Zone Poker Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189914676146176\""
+        }
+
+        gzmarket002 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket002"
+            resValue "string", "app_name", "Game Zone Poker Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189915699556352\""
+        }
+
+        gzmarket001 {
+            dimension "channel"
+            applicationId "com.gamezone.gzmarket001"
+            resValue "string", "app_name", "Game Zone Poker Master"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1956189914135080960\""
+        }
     }
 
     signingConfigs {
