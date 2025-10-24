@@ -75,6 +75,43 @@ android {
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1053259232141049857\""
         }
+
+
+        ap01016 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01016"
+            resValue "string", "app_name", "ArenaPlus - sport betting"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259231469854720\""
+        }
+
+        ap01015 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01015"
+            resValue "string", "app_name", "ArenaPlus - sport betting"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259230905303041\""
+        }
+
+        ap01014 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01014"
+            resValue "string", "app_name", "ArenaPlus - welcome gift"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259230185979905\""
+        }
+
+        ap01013 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01013"
+            resValue "string", "app_name", "ArenaPlus - welcome gift"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259229638758401\""
+        }
     }
 
     signingConfigs {
