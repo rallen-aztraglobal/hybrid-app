@@ -114,6 +114,88 @@ android {
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761512230191104\""
         }
+
+
+        bpom3447 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3447"
+            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761540428496896\""
+        }
+
+        bpom3446 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3446"
+            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761539811934209\""
+        }
+
+        bpom3445 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3445"
+            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761539186982912\""
+        }
+
+        bpom3444 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3444"
+            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761538562031617\""
+        }
+
+        bpom3443 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3443"
+            resValue "string", "app_name", "Bingo Plus - Mega Bingo"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761537928691712\""
+        }
+
+        bpom3442 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3442"
+            resValue "string", "app_name", "Bingo Plus - lucky spin"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761537328906241\""
+        }
+
+        bpom3441 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3441"
+            resValue "string", "app_name", "Bingo Plus - lucky spin"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761536695566336\""
+        }
+
+        bpom3440 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3440"
+            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761536007700481\""
+        }
+
+        bpom3439 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3439"
+            resValue "string", "app_name", "Bingo Plus Exlusive"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761535399526400\""
+        }
+
+        bpom3438 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3438"
+            resValue "string", "app_name", "Bingo Plus Exlusive"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761534820712449\""
+        }
+
     }
 
     signingConfigs {
