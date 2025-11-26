@@ -35,6 +35,165 @@ android {
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1053259319096676352\""
         }
+
+        ap01018 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01018"
+            resValue "string", "app_name", "ArenaPlus:USA Basketball Live"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259232660520961\""
+        }
+
+        ap01018 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01018"
+            resValue "string", "app_name", "ArenaPlus:USA Basketball Live"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259232660520961\""
+        }
+
+        ap01034 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01034"
+            resValue "string", "app_name", "Arena Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259243279695873\""
+        }
+
+        ap01035 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01034"
+            resValue "string", "app_name", "Arena Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259242391433216\""
+        }
+
+        ap01036 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01036"
+            resValue "string", "app_name", "ArenaPlus:USA Basketball Live"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259243635879936\""
+        }
+
+        ap01037 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01037"
+            resValue "string", "app_name", "ArenaPlus:USA Basketball Live"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259244534595585\""
+        }
+
+        ap01038 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01038"
+            resValue "string", "app_name", "ArenaPlus:USA Basketball Live"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259244876943361\""
+        }
+
+        ap01039 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01039"
+            resValue "string", "app_name", "ArenaPlus:USA Basketball Live"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259245746688001\""
+        }
+
+        ap01040 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01040"
+            resValue "string", "app_name", "ArenaPlus:USA Basketball Live"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259246073843712\""
+        }
+
+        ap01045 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01045"
+            resValue "string", "app_name", "ArenaPlus PH"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259249406513152\""
+        }
+
+        ap01044 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01044"
+            resValue "string", "app_name", "ArenaPlus PH"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259248524001281\""
+        }
+
+        ap01043 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01043"
+            resValue "string", "app_name", "ArenaPlus PH"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259248228642817\""
+        }
+
+        ap01042 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01042"
+            resValue "string", "app_name", "ArenaPlus PH"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259247281991681\""
+        }
+
+        ap01041 {
+            dimension "channel"
+            applicationId "com.arenaplus.ap01041"
+            resValue "string", "app_name", "ArenaPlus PH"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1053259246993747969\""
+        }
+
+
+        johnc1010991 {
+            dimension "channel"
+            applicationId "com.arenaplus.johnc1010991"
+            resValue "string", "app_name", "Arena Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1981288271076900864\""
+        }
+
+        johnc1010992 {
+            dimension "channel"
+            applicationId "com.arenaplus.johnc1010992"
+            resValue "string", "app_name", "Arena Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1981288271513108480\""
+        }
+
+        johnc1010993 {
+            dimension "channel"
+            applicationId "com.arenaplus.johnc1010993"
+            resValue "string", "app_name", "Arena Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1981288271957704704\""
+        }
+
+        johnc1010994 {
+            dimension "channel"
+            applicationId "com.arenaplus.johnc1010994"
+            resValue "string", "app_name", "Arena Plus"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1981288272431661056\""
+        }
+
     }
 
     signingConfigs {
