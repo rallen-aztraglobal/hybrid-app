@@ -59,6 +59,7 @@ class WebViewActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 //        AppsFlyerLib.getInstance().setDebugLog(true)
+        AppsFlyerLib.getInstance().setCollectOaid(true)
         AppsFlyerLib.getInstance().init("fXoKsKQwxPCRdhD8CD8q6F", null, this)
         AppsFlyerLib.getInstance().start(this)
 

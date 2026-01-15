@@ -241,6 +241,8 @@ dependencies {
 
     implementation libs.webview.interceptor
     implementation libs.af.android.sdk
+    implementation libs.af.oaid
+    implementation libs.hms.ads.identifier
     implementation libs.gms.play.services.ads.identifier
     implementation libs.play.services.appset
     implementation libs.filament.android
