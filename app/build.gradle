@@ -10,12 +10,46 @@ if (localFile.exists()) {
     localFile.withInputStream { stream -> localProperties.load(stream) }
 }
 
+// ============================================================================
+// 大渠道（品牌）配置：所有小渠道按所属品牌共享 域名 / deeplink scheme / 策略。
+//   - domain          首页加载域名
+//   - scheme          deeplink scheme（写入 manifest 占位符 + BuildConfig）
+//   - hms             是否集成 HMS / AppsFlyer OAID（仅 BP 需要）
+// 小渠道清单（包名 / PAL_CODE / 应用名）在 channels/<brand>.csv 中，一行一个。
+// 新增小渠道 = CSV 加一行 + 在 app/src/<flavor>/ 放置 icon 与 splash 资源。
+// ============================================================================
+def brandConfig = [
+        ap: [domain: "https://arenaplus.ph", scheme: "gzone", hms: false],
+        gp: [domain: "https://gzone.ph", scheme: "gzone", hms: false],
+        bp: [domain: "https://www.bingoplus.com", scheme: "bingo", hms: true],
+]
+
+// 读取某品牌的小渠道清单 → [[name, applicationId, palCode, appName], ...]
+def loadChannels = { String brand ->
+    def csv = rootProject.file("channels/${brand}.csv")
+    def rows = []
+    if (!csv.exists()) return rows
+    csv.eachLine { rawLine ->
+        def line = rawLine.trim()
+        if (!line || line.startsWith('#')) return
+        def p = line.split('\\|', -1)
+        if (p.length < 4) return
+        rows << [name: p[0].trim(), appId: p[1].trim(), pal: p[2].trim(), appName: p[3].trim(), brand: brand]
+    }
+    rows
+}
+
+def allChannels = brandConfig.keySet().collectMany { loadChannels(it) }
+
+// 测试事件开关：打包时传 -PtestEvents=true 开启（默认关闭）。
+def enableTestEvents = (project.findProperty("testEvents") ?: "false").toString().toBoolean()
+
 android {
     namespace 'com.hybrid.android'
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.bingoplus.bpom3410"
+        applicationId "com.hybrid.android"
         minSdk 29
         targetSdk 36
         versionCode 4
@@ -24,178 +58,35 @@ android {
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a' // 只支持这两个架构
         }
+        // 所有渠道共用的配置
+        buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+        buildConfigField "boolean", "ENABLE_TEST_EVENTS", "${enableTestEvents}"
     }
+
     flavorDimensions "channel"
     productFlavors {
-        bpom3410 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3410"
-            resValue "string", "app_name", "Bingo Plus PH"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761517817004033\""
+        allChannels.each { ch ->
+            def cfg = brandConfig[ch.brand]
+            create(ch.name) {
+                dimension "channel"
+                applicationId ch.appId
+                resValue "string", "app_name", ch.appName
+                buildConfigField "String", "BRAND", "\"${ch.brand}\""
+                buildConfigField "String", "DOMAIN", "\"${cfg.domain}\""
+                buildConfigField "String", "DEEPLINK_SCHEME", "\"${cfg.scheme}\""
+                buildConfigField "String", "PAL_CODE", "\"${ch.pal}\""
+                manifestPlaceholders = [deeplinkScheme: cfg.scheme]
+            }
         }
-        bpom3409 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3409"
-            resValue "string", "app_name", "Bingo Plus Live hub"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761517187858432\""
-        }
-        bpom3408 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3408"
-            resValue "string", "app_name", "Bingo Plus Slot Master"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761516571295745\""
-        }
+    }
 
-        bpom3407 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3407"
-            resValue "string", "app_name", "Bingo Plus Exlusive"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761515996676096\""
+    // 小渠道资源按大渠道分目录存放：src/channels/<brand>/<flavor>/res
+    sourceSets {
+        allChannels.each { ch ->
+            getByName(ch.name) {
+                res.srcDirs = ["src/channels/${ch.brand}/${ch.name}/res"]
+            }
         }
-
-        bpom3406 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3406"
-            resValue "string", "app_name", "Bingo Plus Vip"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761515430445057\""
-        }
-
-        bpom3405 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3405"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761514809688064\""
-        }
-
-        bpom3404 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3404"
-            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761514172153857\""
-        }
-
-        bpom3403 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3403"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761513538813952\""
-        }
-
-        bpom3402 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3402"
-            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761512943222785\""
-        }
-
-        bpom3401 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3401"
-            resValue "string", "app_name", "Bingo Plus - Mega Bingo"
-            // 添加 AppsFlyer Key 和 Web 域名
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761512230191104\""
-        }
-
-
-        bpom3447 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3447"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761540428496896\""
-        }
-
-        bpom3446 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3446"
-            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761539811934209\""
-        }
-
-        bpom3445 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3445"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761539186982912\""
-        }
-
-        bpom3444 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3444"
-            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761538562031617\""
-        }
-
-        bpom3443 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3443"
-            resValue "string", "app_name", "Bingo Plus - Mega Bingo"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761537928691712\""
-        }
-
-        bpom3442 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3442"
-            resValue "string", "app_name", "Bingo Plus - lucky spin"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761537328906241\""
-        }
-
-        bpom3441 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3441"
-            resValue "string", "app_name", "Bingo Plus - lucky spin"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761536695566336\""
-        }
-
-        bpom3440 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3440"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761536007700481\""
-        }
-
-        bpom3439 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3439"
-            resValue "string", "app_name", "Bingo Plus Exlusive"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761535399526400\""
-        }
-
-        bpom3438 {
-            dimension "channel"
-            applicationId "com.bingoplus.bpom3438"
-            resValue "string", "app_name", "Bingo Plus Exlusive"
-            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
-            buildConfigField "String", "PAL_CODE", "\"1146761534820712449\""
-        }
-
     }
 
     signingConfigs {
@@ -241,11 +132,15 @@ dependencies {
 
     implementation libs.webview.interceptor
     implementation libs.af.android.sdk
-    implementation libs.af.oaid
-    implementation libs.hms.ads.identifier
     implementation libs.gms.play.services.ads.identifier
     implementation libs.play.services.appset
     implementation libs.filament.android
+
+    // HMS / AppsFlyer OAID：仅 BP 品牌渠道集成（按 flavor 维度注入依赖）
+    allChannels.findAll { brandConfig[it.brand].hms }.each { ch ->
+        add("${ch.name}Implementation", libs.af.oaid)
+        add("${ch.name}Implementation", libs.hms.ads.identifier)
+    }
 
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
