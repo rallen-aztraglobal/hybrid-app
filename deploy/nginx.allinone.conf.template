@@ -1,0 +1,84 @@
+# ============================================================================
+# deploy/nginx.allinone.conf.template —— 单机合并部署（A+B 同机）唯一对外 nginx
+#   决策：用户选「A+B 合并单机部署」——免 API_BASE_URL 注入（见 docs/admin/05）。
+#
+# 【当前模式：HTTP/IP（暂无域名、无证书，仅监听 80）】
+#   /api、/healthz、/swagger、/static → 内网 go-api:8090（含公开 /api/app/config?appId=）。
+#   /apks/ → 构建产物卷（APK 下载）。   /  → web（React dist）。
+#   关键：/api 直接反代【内网 go-api 上游】，go-api 地址固定 go-api:8090，部署零后端配置。
+#
+# ⚠️ 安全：HTTP 明文下管理员登录口令明文传输；仅作临时/内网用。拿到域名后启用 TLS：
+#   取消下方 80-only server，恢复「80→301→443 + 443 ssl」两段并挂 ./certs（见 docs/admin/05）。
+# ${DOMAIN} 由 compose 注入（填本机 IP 或 _），官方 nginx 镜像启动期 envsubst 渲染。
+# ============================================================================
+
+upstream go_api {
+    server go-api:8090;
+    keepalive 32;
+}
+upstream web_dist {
+    server web:80;
+    keepalive 16;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};          # 填本机 IP；也可用 _ 接受任意 Host。
+    server_tokens off;
+    client_max_body_size 32m;       # 图标主图 / 资源上传足够。
+    sendfile on;
+    tcp_nopush on;
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript application/xml image/svg+xml;
+    gzip_min_length 1024;
+
+    # ---- API → 内网 go-api（含公开 /api/app/config?appId= + 管理面 + 构建机接口）----
+    location /api/ {
+        proxy_pass         http://go_api;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Connection        "";
+        proxy_read_timeout 120s;
+    }
+
+    location = /healthz {
+        proxy_pass         http://go_api;
+        proxy_set_header   Host $host;
+        access_log         off;
+    }
+
+    location /swagger/ {
+        proxy_pass         http://go_api;
+        proxy_set_header   Host $host;
+    }
+
+    location /static/ {
+        proxy_pass         http://go_api;
+        proxy_set_header   Host $host;
+    }
+
+    # ---- 构建产物下载：/apks/<brand>/<flavor>/<versionName>/app-*.apk ----
+    location /apks/ {
+        alias /srv/apks/;
+        autoindex off;
+        types { application/vnd.android.package-archive apk; }
+        default_type application/octet-stream;
+        add_header Content-Disposition "attachment";
+        add_header Cache-Control "public, max-age=300";
+    }
+
+    # ---- 其余交给内部 web（React dist + SPA 回退）----
+    location / {
+        proxy_pass         http://web_dist;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Connection        "";
+    }
+}

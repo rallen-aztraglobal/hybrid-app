@@ -5,7 +5,30 @@
 
 ---
 
-## 总览：分两套独立部署
+## 方案 A（推荐 · 当前采用）：单机合并部署（A+B 同机，一台 4C8G）
+
+最简：**一台机器、一套 compose、一个 .env、不用填后端地址**。go-api / mysql / build-runner / web / 一个 nginx 全在本机，`/api` 走内网 `go-api:8090`（固定），管理后台、打包、APK 下载都在本机。
+
+```bash
+unzip hybrid_channel_console.zip && cd hybrid_channel_console
+bash images/load-images.sh                 # 无私有 registry 时离线 load 镜像（含 build-runner）
+cd deploy && cp .env.allinone.example .env
+vi .env                                     # 暂无域名 → DOMAIN=<本机公网IP>（如 47.80.75.106）；改口令 + RUNNER_TOKEN
+docker compose -f docker-compose.allinone.yml up -d
+curl -fsS http://<本机IP>/healthz           # 期望 {"ok":true,...}
+# 浏览器开 http://<本机IP>/ ，admin 登录 → 立即改密。
+```
+
+要点：
+- **无 `API_BASE_URL`**：单机内 go-api 地址固定，部署时不用填后端地址；`RUNNER_TOKEN` 一份，go-api 与 build-runner 共用、天然一致。
+- 当前 **HTTP/IP（80 端口）**：⚠️ admin 口令**明文传输**，仅作临时/内网用；拿到域名后启用 443 TLS（见文末「升级 TLS」）。
+- 首启自动导入 80 渠道 + 图标/启动页（ADR-0011）；打包由 build-runner 自动轮询本机 go-api 出包，落 `/apks`，「构建记录」下载。
+
+> 若要把「APK 拉域名配置端点（要稳/公网）」与「运营 Console（重/内网）」分到不同机器/规格，用下面的 **方案 B**。两者镜像相同、只是编排不同。
+
+---
+
+## 方案 B（规模化）：分两套独立部署
 
 | # | 服务 | 规格 | 面向 | 作用 |
 | --- | --- | --- | --- | --- |
@@ -89,3 +112,16 @@ docker compose pull && docker compose up -d
 ---
 
 > 进阶（镜像构建、keystore 安全模型、全部环境变量、CDN 抗封）属我方职责，见 [06](./06-release.md)。运维无需关心。
+
+---
+
+## 升级到域名 + TLS（拿到域名后）
+
+单机合并方案当前是 **HTTP/IP**（仅供内网调试 Console / 出包）。拿到域名后启用 HTTPS：
+
+1. 域名解析到本机；证书 `fullchain.pem` / `privkey.pem` 放到 `deploy/certs/`。
+2. `nginx.allinone.conf.template`：把当前「listen 80」单段，改回「80→301→443 + 443 ssl」两段（模板头注有说明，或复用 `nginx.api.conf.template` 的 TLS 段式）。
+3. `docker-compose.allinone.yml` 的 nginx：加回 `- ./certs:/etc/nginx/certs:ro` 挂载与 `"${HTTPS_PORT:-443}:443"` 端口；`.env` 的 `DOMAIN` 改成域名。
+4. `docker compose -f docker-compose.allinone.yml up -d`（我方可直接发带 TLS 的新 nginx 镜像，运维仍只 pull+up）。
+
+> ⚠️ APK 的运行时域名配置端点 `/api/app/config` **必须 HTTPS** 才能被 APK 使用（ADR-0003 只认 https）。**正式对 APK 提供服务前务必完成本步**；在此之前 HTTP/IP 仅供内网用 Console + 出包。
