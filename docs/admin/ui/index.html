@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>渠道中台 · UI 原型</title>
+<style>
+  /* ============ 设计令牌 ============ */
+  :root{
+    --bg:#f4f6fb; --panel:#ffffff; --panel-2:#fbfcfe;
+    --ink:#0f172a; --ink-2:#475569; --muted:#94a3b8; --line:#e7ecf3; --line-2:#eef2f7;
+    --brand:#6366f1; --brand-ink:#4f46e5;
+    --ok:#22c55e; --warn:#f59e0b; --down:#ef4444;
+    --ap:#f97316; --bp:#2563eb; --gp:#7c3aed;
+    --shadow-sm:0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+    --shadow-md:0 10px 30px -12px rgba(15,23,42,.22);
+    --shadow-lg:0 24px 60px -20px rgba(15,23,42,.35);
+    --radius:14px; --radius-sm:10px;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+  ::selection{background:rgba(99,102,241,.18)}
+  button{font-family:inherit;cursor:pointer;border:none;background:none}
+  input{font-family:inherit}
+  .mono{font-family:var(--mono)}
+
+  /* ============ 布局 ============ */
+  .app{display:grid;grid-template-columns:248px 1fr;height:100vh;overflow:hidden}
+
+  /* ---- 侧边栏 ---- */
+  .sidebar{background:linear-gradient(180deg,#0c1426 0%,#111c33 60%,#0e1830 100%);color:#cbd5e1;display:flex;flex-direction:column;padding:18px 14px;position:relative}
+  .sidebar::after{content:"";position:absolute;inset:0 0 0 auto;width:1px;background:linear-gradient(180deg,transparent,rgba(255,255,255,.06),transparent)}
+  .logo{display:flex;align-items:center;gap:11px;padding:8px 8px 18px}
+  .logo .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#ec4899);display:grid;place-items:center;color:#fff;font-weight:800;box-shadow:0 6px 18px -6px rgba(139,92,246,.7)}
+  .logo .name{font-weight:700;color:#fff;font-size:15px;letter-spacing:.2px}
+  .logo .sub{font-size:11px;color:#7c89a3}
+  .nav{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+  .nav .group-label{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#5f6c85;padding:14px 10px 6px}
+  .nav button{display:flex;align-items:center;gap:11px;width:100%;padding:9px 11px;border-radius:10px;color:#aab6cc;font-size:13.5px;font-weight:500;transition:.16s}
+  .nav button svg{width:18px;height:18px;opacity:.85;flex:none}
+  .nav button:hover{background:rgba(255,255,255,.05);color:#e6ecf6}
+  .nav button.active{background:linear-gradient(135deg,rgba(99,102,241,.22),rgba(139,92,246,.14));color:#fff;box-shadow:inset 0 0 0 1px rgba(129,140,248,.3)}
+  .nav button.active svg{opacity:1}
+  .nav .badge{margin-left:auto;font-size:11px;background:rgba(255,255,255,.1);padding:1px 7px;border-radius:20px;color:#c7d2e6}
+  .side-foot{margin-top:auto;padding:12px 8px 4px;border-top:1px solid rgba(255,255,255,.07)}
+  .userchip{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;transition:.16s}
+  .userchip:hover{background:rgba(255,255,255,.05)}
+  .userchip .av{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#22d3ee,#3b82f6);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px}
+  .userchip .who{font-size:13px;color:#e2e8f0;font-weight:600}
+  .userchip .role{font-size:11px;color:#7c89a3}
+
+  /* ---- 主区 ---- */
+  .main{display:flex;flex-direction:column;overflow:hidden}
+  .topbar{height:62px;flex:none;background:rgba(255,255,255,.8);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 26px}
+  .topbar h1{font-size:17px;font-weight:700;letter-spacing:.2px}
+  .topbar .crumb{color:var(--muted);font-size:12.5px;margin-top:1px}
+  .search{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;width:280px;color:var(--muted)}
+  .search input{border:none;background:none;outline:none;width:100%;color:var(--ink);font-size:13px}
+  .icon-btn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--ink-2);border:1px solid var(--line);background:var(--panel);transition:.16s}
+  .icon-btn:hover{background:var(--bg);color:var(--ink)}
+
+  .content{padding:24px 26px 40px;overflow:auto;flex:1}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- 大渠道 Tabs ---- */
+  .tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .tab{display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:12px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow-sm);transition:.18s;min-width:172px}
+  .tab:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
+  .tab .dot{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;flex:none}
+  .tab .t-name{font-weight:700;font-size:14px;line-height:1.2}
+  .tab .t-meta{font-size:11.5px;color:var(--muted)}
+  .tab .t-count{margin-left:auto;font-size:12px;font-weight:700;color:var(--ink-2);background:var(--bg);border-radius:8px;padding:3px 9px}
+  .tab.active{border-color:transparent;box-shadow:0 0 0 2px var(--accent) inset, var(--shadow-md)}
+  .tab.active .t-count{background:var(--accent);color:#fff}
+
+  /* ---- 工具条 ---- */
+  .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .toolbar .filters{display:flex;gap:8px;align-items:center}
+  .chip{padding:7px 13px;border-radius:9px;border:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--ink-2);font-weight:500;transition:.15s}
+  .chip:hover{background:var(--bg)}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .toolbar .right{margin-left:auto;display:flex;gap:10px}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:10px;font-weight:600;font-size:13px;transition:.16s;border:1px solid transparent}
+  .btn svg{width:16px;height:16px}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),#8b5cf6);color:#fff;box-shadow:0 8px 20px -8px rgba(99,102,241,.8)}
+  .btn.primary:hover{transform:translateY(-1px);box-shadow:0 12px 26px -8px rgba(99,102,241,.9)}
+  .btn.ghost{background:var(--panel);border-color:var(--line);color:var(--ink-2)}
+  .btn.ghost:hover{background:var(--bg);color:var(--ink)}
+
+  /* ---- 渠道卡片网格 ---- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm);transition:.18s;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);opacity:0;transition:.18s}
+  .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:#dfe6f0}
+  .card:hover::before{opacity:1}
+  .card-head{display:flex;gap:13px;align-items:flex-start}
+  .app-icon{width:52px;height:52px;border-radius:14px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800;font-size:17px;box-shadow:var(--shadow-sm);position:relative}
+  .app-icon span{text-shadow:0 1px 2px rgba(0,0,0,.25)}
+  .card .titles{min-width:0;flex:1}
+  .card .app-name{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .flavor{display:inline-block;margin-top:4px;font-size:11.5px;font-family:var(--mono);color:var(--brand-ink);background:rgba(99,102,241,.1);padding:2px 8px;border-radius:6px}
+  .status{position:absolute;top:14px;right:14px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px}
+  .status.on{color:#15803d;background:#dcfce7}
+  .status.off{color:#64748b;background:#f1f5f9}
+  .kv{margin-top:13px;display:flex;flex-direction:column;gap:7px}
+  .kv .row{display:flex;align-items:center;gap:8px;font-size:12px}
+  .kv .row .k{color:var(--muted);width:64px;flex:none}
+  .kv .row .v{font-family:var(--mono);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card-foot{margin-top:14px;padding-top:13px;border-top:1px solid var(--line-2);display:flex;align-items:center;gap:10px}
+  .health{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
+  .hdot{width:9px;height:9px;border-radius:50%;position:relative}
+  .hdot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+  .hdot.warn{background:var(--warn);box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+  .hdot.down{background:var(--down);box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+  .card-actions{margin-left:auto;display:flex;gap:6px;opacity:0;transition:.16s}
+  .card:hover .card-actions{opacity:1}
+  .mini{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--ink-2);border:1px solid var(--line);background:var(--panel);transition:.15s}
+  .mini:hover{background:var(--bg);color:var(--ink)}
+  .mini.danger:hover{color:var(--down);border-color:#fecaca;background:#fef2f2}
+  .mini svg{width:15px;height:15px}
+
+  /* ============ 抽屉（新增/编辑渠道） ============ */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);opacity:0;visibility:hidden;transition:.25s;z-index:40}
+  .overlay.show{opacity:1;visibility:visible}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:560px;max-width:94vw;background:var(--bg);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform .32s cubic-bezier(.4,0,.1,1);z-index:50;display:flex;flex-direction:column}
+  .drawer.show{transform:none}
+  .drawer-head{flex:none;padding:20px 24px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .drawer-head .d-title{font-size:16px;font-weight:700}
+  .drawer-head .d-sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .drawer-body{overflow:auto;padding:20px 24px;flex:1;display:flex;flex-direction:column;gap:20px}
+  .drawer-foot{flex:none;padding:14px 24px;background:var(--panel);border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
+
+  .section{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .section h3{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:14px;color:var(--ink)}
+  .section h3 .num{width:20px;height:20px;border-radius:6px;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800}
+  .field{margin-bottom:13px}
+  .field:last-child{margin-bottom:0}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+  .field label .req{color:var(--down)}
+  .field label .hint{font-weight:400;color:var(--muted);font-size:11.5px}
+  .field input[type=text]{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;background:var(--panel-2);transition:.15s}
+  .field input[type=text]:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+  .field input.mono{font-family:var(--mono);font-size:12.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* ---- 图标九宫格 ---- */
+  .dropzone{border:2px dashed #c7d2e6;border-radius:12px;padding:22px;text-align:center;background:repeating-linear-gradient(45deg,#fbfcfe,#fbfcfe 12px,#f6f8fc 12px,#f6f8fc 24px);transition:.18s;cursor:pointer}
+  .dropzone:hover,.dropzone.drag{border-color:var(--brand);background:rgba(99,102,241,.06)}
+  .dropzone .dz-ic{width:46px;height:46px;border-radius:13px;margin:0 auto 10px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand),#8b5cf6);color:#fff;box-shadow:0 8px 20px -8px rgba(99,102,241,.7)}
+  .dropzone .dz-t{font-weight:700;font-size:13.5px}
+  .dropzone .dz-s{font-size:12px;color:var(--muted);margin-top:3px}
+  .slot-label{font-size:11.5px;font-weight:700;color:var(--ink-2);margin:14px 0 9px;display:flex;align-items:center;gap:7px}
+  .slot-label .ln{flex:1;height:1px;background:var(--line-2)}
+  .slots{display:flex;gap:10px;flex-wrap:wrap}
+  .slot{width:74px;text-align:center}
+  .slot .box{width:74px;height:74px;border-radius:12px;border:1.5px dashed #cdd7e6;display:grid;place-items:center;background:var(--panel-2);transition:.2s;position:relative;overflow:hidden}
+  .slot .box .ph{color:var(--muted);font-size:11px}
+  .slot.round .box{border-radius:50%}
+  .slot .px{font-size:11px;font-weight:700;color:var(--ink-2);margin-top:6px}
+  .slot .dpi{font-size:10px;color:var(--muted)}
+  .slot .fill{position:absolute;inset:0;display:none;place-items:center;color:#fff;font-weight:800}
+  body.has-icon .slot .box{border-style:solid;border-color:transparent}
+  body.has-icon .slot .box .ph{display:none}
+  body.has-icon .slot .fill{display:grid}
+
+  /* ---- 域名配置 ---- */
+  .switch-row{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+  .switch{width:42px;height:24px;border-radius:20px;background:#cbd5e1;position:relative;transition:.2s;flex:none}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);transition:.2s}
+  .switch.on{background:var(--brand)}
+  .switch.on::after{left:20px}
+  .switch-row .s-txt{font-size:13px;font-weight:600}
+  .switch-row .s-sub{font-size:11.5px;color:var(--muted)}
+  .domain-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .domain-tag{font-size:11px;font-weight:700;width:52px;flex:none;text-align:center;padding:5px 0;border-radius:7px}
+  .domain-tag.main{background:rgba(99,102,241,.12);color:var(--brand-ink)}
+  .domain-tag.bak{background:#f1f5f9;color:#64748b}
+  .domain-row input{flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:var(--mono);font-size:12.5px;background:var(--panel)}
+  .domain-row input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+  .domain-row .hp{font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;white-space:nowrap;flex:none}
+  .hp.ok{color:#15803d;background:#dcfce7}
+  .hp.warn{color:#92681a;background:#fef3c7}
+  .hp.down{color:#b91c1c;background:#fee2e2}
+  .note{display:flex;gap:10px;padding:12px 13px;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.18);border-radius:10px;font-size:12px;color:var(--ink-2);line-height:1.55;margin-top:4px}
+  .note svg{width:17px;height:17px;color:var(--brand);flex:none;margin-top:1px}
+  .note b{color:var(--ink)}
+
+  /* ============ 打包中心 ============ */
+  .pack-wrap{display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start}
+  .pick-list{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow:auto;padding-right:4px}
+  .pick{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--panel);transition:.15s;cursor:pointer}
+  .pick:hover{background:var(--panel-2);border-color:#dfe6f0}
+  .pick.sel{border-color:var(--brand);background:rgba(99,102,241,.05);box-shadow:0 0 0 1px var(--brand) inset}
+  .checkbox{width:20px;height:20px;border-radius:6px;border:1.5px solid #cbd5e1;display:grid;place-items:center;flex:none;transition:.15s}
+  .pick.sel .checkbox{background:var(--brand);border-color:var(--brand)}
+  .checkbox svg{width:13px;height:13px;color:#fff;opacity:0}
+  .pick.sel .checkbox svg{opacity:1}
+  .pick .p-icon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;flex:none}
+  .pick .p-name{font-size:13.5px;font-weight:600}
+  .pick .p-flavor{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .pack-side{position:sticky;top:0}
+  .term{background:#0c1426;border-radius:14px;padding:16px;font-family:var(--mono);font-size:12px;color:#94e2b5;box-shadow:var(--shadow-md);min-height:150px;margin-top:14px;line-height:1.7}
+  .term .c-dim{color:#64748b}
+  .term .c-arrow{color:#60a5fa}
+  .term .c-ok{color:#4ade80}
+
+  .empty{text-align:center;color:var(--muted);padding:60px 0}
+  .placeholder-view{display:grid;place-items:center;height:60vh;color:var(--muted);text-align:center}
+  .placeholder-view .pv-ic{width:64px;height:64px;border-radius:18px;background:var(--panel);border:1px solid var(--line);display:grid;place-items:center;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ 侧边栏 ============ -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="mark">渠</div>
+      <div><div class="name">渠道中台</div><div class="sub">Hybrid Channel Console</div></div>
+    </div>
+    <nav class="nav">
+      <div class="group-label">运营</div>
+      <button class="active" data-view="channels">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        渠道管理 <span class="badge">79</span>
+      </button>
+      <button data-view="domains">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>
+        域名配置
+      </button>
+      <div class="group-label">交付</div>
+      <button data-view="pack">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
+        打包中心
+      </button>
+      <button data-view="builds">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+        构建记录
+      </button>
+      <div class="group-label">系统</div>
+      <button data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 6.6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 2.6 15H2.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 2.6h.09A2 2 0 0 1 13 2.6v.09A1.65 1.65 0 0 0 15.4 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21.4 9V9a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        系统设置
+      </button>
+    </nav>
+    <div class="side-foot">
+      <div class="userchip">
+        <div class="av">D</div>
+        <div><div class="who">Daly</div><div class="role">管理员 · admin</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="pageTitle">渠道管理</h1>
+        <div class="crumb" id="pageCrumb">运营 / 按大渠道分组管理小渠道包</div>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input placeholder="搜索渠道 / 包名 / PAL_CODE…" />
+      </div>
+      <button class="icon-btn" title="通知">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      </button>
+    </header>
+
+    <div class="content">
+      <!-- ====== 渠道管理 ====== -->
+      <section class="view active" id="view-channels">
+        <div class="tabs" id="brandTabs"></div>
+        <div class="toolbar">
+          <div class="filters">
+            <button class="chip on" data-f="all">全部</button>
+            <button class="chip" data-f="enabled">启用中</button>
+            <button class="chip" data-f="disabled">已停用</button>
+          </div>
+          <div class="right">
+            <button class="btn ghost" onclick="alert('从后台同步到本地 CSV / res（hybrid-pack pull）')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              同步状态
+            </button>
+            <button class="btn primary" onclick="openDrawer()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+              新增渠道
+            </button>
+          </div>
+        </div>
+        <div class="grid" id="channelGrid"></div>
+      </section>
+
+      <!-- ====== 打包中心 ====== -->
+      <section class="view" id="view-pack">
+        <div class="tabs" id="packTabs"></div>
+        <div class="pack-wrap">
+          <div>
+            <div class="toolbar" style="margin-bottom:12px">
+              <strong style="font-size:13px">选择要打包的小渠道</strong>
+              <div class="right"><button class="chip" id="selAll">全选 / 取消</button></div>
+            </div>
+            <div class="pick-list" id="pickList"></div>
+          </div>
+          <div class="pack-side">
+            <div class="section">
+              <h3><span class="num">⚙</span>打包配置</h3>
+              <div class="switch-row" id="teSwitch">
+                <div class="switch" id="teToggle"></div>
+                <div><div class="s-txt">测试事件</div><div class="s-sub">首次安装一次性发送全部 AF 事件</div></div>
+              </div>
+              <div class="field"><label>构建类型</label><input type="text" value="Release" readonly></div>
+              <button class="btn primary" style="width:100%;justify-content:center;margin-top:4px" onclick="runPack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 3 14 9-14 9V3z"/></svg>
+                开始打包 (<span id="selCount">0</span>)
+              </button>
+            </div>
+            <div class="term" id="term"><span class="c-dim"># hybrid-pack release --brand <span id="termBrand">ap</span></span><br>等待开始…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== 占位视图 ====== -->
+      <section class="view" id="view-domains"></section>
+      <section class="view" id="view-builds"><div class="placeholder-view"><div class="pv-ic"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#94a3b8" stroke-width="1.8"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></div><div><b>构建记录</b><br>CLI 每次 build/release 回传的历史（状态 / 产物 / 操作人 / 日志）</div></div></section>
+      <section class="view" id="view-settings"><div class="placeholder-view"><div class="pv-ic"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#94a3b8" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg></div><div><b>系统设置</b><br>账号与权限（admin/operator/viewer）· 探针端点 · CDN 快照</div></div></section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 抽屉：新增/编辑渠道 ============ -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div style="flex:1"><div class="d-title" id="drawerTitle">新增小渠道</div><div class="d-sub" id="drawerSub">大渠道：ArenaPlus（ap）</div></div>
+    <button class="icon-btn" onclick="closeDrawer()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="drawer-body">
+    <!-- 基本信息 -->
+    <div class="section">
+      <h3><span class="num">1</span>基本信息</h3>
+      <div class="field"><label>应用名称 <span class="req">*</span> <span class="hint">桌面图标下显示</span></label><input type="text" placeholder="例如 ArenaPlus:USA Basketball Live"></div>
+      <div class="grid2">
+        <div class="field"><label>Flavor 名 <span class="req">*</span></label><input type="text" class="mono" placeholder="ap01060"></div>
+        <div class="field"><label>PAL_CODE <span class="req">*</span></label><input type="text" class="mono" placeholder="1053259…"></div>
+      </div>
+      <div class="field"><label>包名 applicationId <span class="req">*</span> <span class="hint">全局唯一，自动校验重复</span></label><input type="text" class="mono" placeholder="com.arenaplus.ap01060"></div>
+    </div>
+
+    <!-- 图标九宫格 -->
+    <div class="section">
+      <h3><span class="num">2</span>App 图标 <span style="font-weight:400;color:var(--muted);font-size:11.5px">· 拖入一张主图自动生成全部尺寸</span></h3>
+      <div class="dropzone" id="dropzone" onclick="fillIcons()">
+        <div class="dz-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div>
+        <div class="dz-t">拖入主图 1024 × 1024（点击此处模拟）</div>
+        <div class="dz-s">支持 PNG / JPG，自动方形裁剪并下采样到各 density</div>
+      </div>
+
+      <div class="slot-label">方形 ic_launcher <span class="ln"></span></div>
+      <div class="slots" id="slotsSquare"></div>
+
+      <div class="slot-label">圆形 ic_launcher_round <span class="ln"></span></div>
+      <div class="slots" id="slotsRound"></div>
+
+      <div class="slot-label">自适应前景 ic_launcher_foreground <span class="ln"></span></div>
+      <div class="slots" id="slotsFg"></div>
+    </div>
+
+    <!-- 启动图 -->
+    <div class="section">
+      <h3><span class="num">3</span>启动图 splash</h3>
+      <div class="dropzone" style="padding:16px">
+        <div class="dz-t" style="font-size:13px">拖入全屏启动图 splash_fullscreen</div>
+        <div class="dz-s">全屏 CENTER_CROP，建议竖屏高清大图</div>
+      </div>
+    </div>
+
+    <!-- 域名配置 -->
+    <div class="section">
+      <h3><span class="num">4</span>域名配置 <span style="font-weight:400;color:var(--muted);font-size:11.5px">· 1 主 + 最多 3 备用</span></h3>
+      <div class="switch-row">
+        <div class="switch on" id="inheritToggle" onclick="toggleInherit()"></div>
+        <div style="flex:1"><div class="s-txt">继承大渠道默认域名</div><div class="s-sub">关闭后可为本渠道单独配置（覆盖品牌默认）</div></div>
+      </div>
+      <div id="domainEditor" style="opacity:.5;pointer-events:none">
+        <div class="domain-row"><span class="domain-tag main">主</span><input class="mono" value="https://arenaplus.ph"><span class="hp ok">● 正常</span></div>
+        <div class="domain-row"><span class="domain-tag bak">备用1</span><input class="mono" value="https://ap-mirror.net"><span class="hp ok">● 正常</span></div>
+        <div class="domain-row"><span class="domain-tag bak">备用2</span><input class="mono" value="https://ap-cdn.app"><span class="hp warn">● 延迟高</span></div>
+        <div class="domain-row"><span class="domain-tag bak">备用3</span><input class="mono" placeholder="https://（可选）"><span class="hp" style="background:#f1f5f9;color:#94a3b8">○ 未配</span></div>
+      </div>
+      <div class="note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>APK 启动按 <b>主 → 备用</b> 顺序探测，命中后加载 <span class="mono">https://域名/?palcode=…</span>。只有<b>确认域名故障</b>才切换；本机断网只提示「网络异常」<b>不乱换</b>。域名可在后台随时热更，已安装包下次启动生效，无需重新打包。</div>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn ghost" onclick="closeDrawer()">取消</button>
+    <button class="btn primary" onclick="saveChannel()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+      保存渠道
+    </button>
+  </div>
+</aside>
+
+<script>
+/* ============ 模拟数据（取自 channels/*.csv） ============ */
+const BRANDS = {
+  ap:{name:"ArenaPlus", code:"ap", color:"var(--ap)", c:"#f97316", count:18, domains:["arenaplus.ph","ap-mirror.net","ap-cdn.app"], health:["ok","ok","warn"]},
+  bp:{name:"BingoPlus", code:"bp", color:"var(--bp)", c:"#2563eb", count:20, domains:["www.bingoplus.com","bingo-mirror.net"], health:["ok","down","x"]},
+  gp:{name:"GameZone", code:"gp", color:"var(--gp)", c:"#7c3aed", count:41, domains:["gzone.ph","gz-backup.app"], health:["ok","ok","x"]},
+};
+const CH = {
+  ap:[
+    ["ap01159","com.arenaplus.ap01159","ArenaPlus - daily bonus","1053259319096676352",1],
+    ["ap01018","com.arenaplus.ap01018","ArenaPlus:USA Basketball Live","1053259232660520961",1],
+    ["ap01034","com.arenaplus.ap01034","Arena Plus","1053259243279695873",1],
+    ["ap01045","com.arenaplus.ap01045","ArenaPlus PH","1053259249406513152",1],
+    ["johnc1010991","com.arenaplus.johnc1010991","Arena Plus","1981288271076900864",0],
+    ["ap01040","com.arenaplus.ap01040","ArenaPlus:USA Basketball Live","1053259246073843712",1],
+  ],
+  bp:[
+    ["bpom3410","com.bingoplus.bpom3410","Bingo Plus PH","1146761517817004033",1],
+    ["bpom3409","com.bingoplus.bpom3409","Bingo Plus Live hub","1146761517187858432",1],
+    ["bpom3408","com.bingoplus.bpom3408","Bingo Plus Slot Master","1146761516571295745",1],
+    ["bpom3405","com.bingoplus.bpom3405","Bingo Plus - 30% Bonus","1146761514809688064",1],
+    ["bpom3401","com.bingoplus.bpom3401","Bingo Plus - Mega Bingo","1146761512230191104",1],
+    ["bpom3442","com.bingoplus.bpom3442","Bingo Plus - lucky spin","1146761537328906241",0],
+  ],
+  gp:[
+    ["gpgzmkk042","com.gamezone.gpgzmkk042","Gamezone- 100% Rebate","1123689306919706625",1],
+    ["gpgzmkk047","com.gamezone.gpgzmkk047","Game Zone Tongits plus","1123689309050413056",1],
+    ["gzmkt030","com.gamezone.gzmkt030","Game Zone VIP","1158040428574699521",1],
+    ["gzmarket001","com.gamezone.gzmarket001","Game Zone Poker Master","1956189914135080960",1],
+    ["gzmarket071","com.gamezone.gzmarket071","Gamezone 2025","1956189951086899200",1],
+    ["gzmkt028","com.gamezone.gzmkt028","Game Zone Tongits Master","1158040427505152001",0],
+  ],
+};
+let curBrand="ap", curFilter="all";
+
+/* ============ 渲染：大渠道 Tabs ============ */
+function renderTabs(containerId){
+  const el=document.getElementById(containerId);
+  el.innerHTML=Object.values(BRANDS).map(b=>`
+    <button class="tab ${b.code===curBrand?'active':''}" style="--accent:${b.color}" onclick="switchBrand('${b.code}')">
+      <div class="dot" style="background:${b.color}">${b.name[0]}</div>
+      <div><div class="t-name">${b.name}</div><div class="t-meta">${b.code} · ${b.domains[0]}</div></div>
+      <div class="t-count">${b.count}</div>
+    </button>`).join("");
+}
+function switchBrand(code){ curBrand=code; renderTabs("brandTabs"); renderTabs("packTabs"); renderChannels(); renderPickList(); document.getElementById('termBrand').textContent=code; }
+
+/* ============ 渲染：渠道卡片 ============ */
+function iconGrad(c){ return `linear-gradient(135deg, ${c}, ${c}cc 60%, #ffffff22)`; }
+function healthDots(b){ return BRANDS[b].health.map(h=> h==='x'?'<span class="hdot" style="background:#e2e8f0"></span>':`<span class="hdot ${h}"></span>`).join(""); }
+function renderChannels(){
+  const b=BRANDS[curBrand];
+  let list=CH[curBrand];
+  if(curFilter==='enabled') list=list.filter(c=>c[4]===1);
+  if(curFilter==='disabled') list=list.filter(c=>c[4]===0);
+  const grid=document.getElementById("channelGrid");
+  if(!list.length){ grid.innerHTML='<div class="empty">该筛选下暂无渠道</div>'; return; }
+  grid.innerHTML=list.map(c=>{
+    const [flavor,pkg,name,pal,on]=c;
+    return `<div class="card" style="--accent:${b.color}">
+      <span class="status ${on?'on':'off'}">${on?'启用中':'已停用'}</span>
+      <div class="card-head">
+        <div class="app-icon" style="background:${iconGrad(b.c)}"><span>${name.replace(/[^A-Za-z]/g,'').slice(0,2).toUpperCase()||b.name[0]}</span></div>
+        <div class="titles">
+          <div class="app-name" title="${name}">${name}</div>
+          <span class="flavor">${flavor}</span>
+        </div>
+      </div>
+      <div class="kv">
+        <div class="row"><span class="k">包名</span><span class="v" title="${pkg}">${pkg}</span></div>
+        <div class="row"><span class="k">PAL_CODE</span><span class="v" title="${pal}">${pal}</span></div>
+      </div>
+      <div class="card-foot">
+        <div class="health" title="主域名 + 备用域名健康状态">${healthDots(curBrand)} <span>${b.domains.length} 域名</span></div>
+        <div class="card-actions">
+          <button class="mini" title="编辑" onclick="openDrawer('${name}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+          <button class="mini danger" title="删除" onclick="event.stopPropagation();confirm('确认归档该渠道？（软删除，保留归因历史）')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ============ 图标九宫格 ============ */
+const SQUARE=[["48","mdpi"],["72","hdpi"],["96","xhdpi"],["144","xxhdpi"],["192","xxxhdpi"]];
+const FG=[["108","mdpi"],["162","hdpi"],["216","xhdpi"],["324","xxhdpi"],["432","xxxhdpi"]];
+function renderSlots(id,arr,round){
+  document.getElementById(id).innerHTML=arr.map(([px,dpi])=>`
+    <div class="slot ${round?'round':''}">
+      <div class="box"><span class="ph">${px}</span><div class="fill" style="background:${iconGrad(BRANDS[curBrand].c)}">${px<=72?'':'AP'}</div></div>
+      <div class="px">${px}px</div><div class="dpi">${dpi}</div>
+    </div>`).join("");
+}
+function fillIcons(){
+  document.body.classList.add("has-icon");
+  document.getElementById("dropzone").classList.add("drag");
+  document.querySelector("#dropzone .dz-t").textContent="✓ 已生成 15 张图标（5档 × 方形/圆形/自适应）";
+}
+
+/* ============ 抽屉 ============ */
+function openDrawer(name){
+  const b=BRANDS[curBrand];
+  document.getElementById("drawerTitle").textContent=name?("编辑渠道 · "+name):"新增小渠道";
+  document.getElementById("drawerSub").textContent=`大渠道：${b.name}（${b.code}）`;
+  renderSlots("slotsSquare",SQUARE,false);
+  renderSlots("slotsRound",SQUARE,true);
+  renderSlots("slotsFg",FG,false);
+  document.body.classList.remove("has-icon");
+  document.querySelector("#dropzone .dz-t").textContent="拖入主图 1024 × 1024（点击此处模拟）";
+  document.getElementById("overlay").classList.add("show");
+  document.getElementById("drawer").classList.add("show");
+}
+function closeDrawer(){ document.getElementById("overlay").classList.remove("show"); document.getElementById("drawer").classList.remove("show"); }
+function saveChannel(){ closeDrawer(); }
+function toggleInherit(){
+  const t=document.getElementById("inheritToggle"); const ed=document.getElementById("domainEditor");
+  t.classList.toggle("on");
+  const on=t.classList.contains("on");
+  ed.style.opacity=on?".5":"1"; ed.style.pointerEvents=on?"none":"auto";
+}
+
+/* ============ 筛选 ============ */
+document.querySelectorAll('.toolbar .chip[data-f]').forEach(c=>c.onclick=()=>{
+  document.querySelectorAll('.toolbar .chip[data-f]').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on'); curFilter=c.dataset.f; renderChannels();
+});
+
+/* ============ 侧边栏切换视图 ============ */
+const TITLES={channels:["渠道管理","运营 / 按大渠道分组管理小渠道包"],domains:["域名配置","运营 / 主域名 + 备用域名 + 健康巡检"],pack:["打包中心","交付 / 拉取后台配置并跨平台打包"],builds:["构建记录","交付 / CLI 回传的打包历史"],settings:["系统设置","系统 / 账号权限与探针配置"]};
+document.querySelectorAll('.nav button').forEach(btn=>btn.onclick=()=>{
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const v=btn.dataset.view;
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('pageTitle').textContent=TITLES[v][0];
+  document.getElementById('pageCrumb').textContent=TITLES[v][1];
+  if(v==='domains') renderDomainsView();
+});
+
+/* ============ 打包中心 ============ */
+let picked=new Set();
+function renderPickList(){
+  picked=new Set();
+  const b=BRANDS[curBrand];
+  document.getElementById("pickList").innerHTML=CH[curBrand].map((c,i)=>{
+    const [flavor,pkg,name]=c;
+    return `<div class="pick" data-i="${i}" onclick="togglePick(${i})">
+      <div class="checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></div>
+      <div class="p-icon" style="background:${iconGrad(b.c)}">${name.replace(/[^A-Za-z]/g,'').slice(0,2).toUpperCase()}</div>
+      <div><div class="p-name">${name}</div><div class="p-flavor">${flavor}</div></div>
+    </div>`;
+  }).join("");
+  updateCount();
+}
+function togglePick(i){
+  const el=document.querySelector(`.pick[data-i="${i}"]`);
+  if(picked.has(i)){picked.delete(i);el.classList.remove('sel');}else{picked.add(i);el.classList.add('sel');}
+  updateCount();
+}
+function updateCount(){ document.getElementById("selCount").textContent=picked.size; }
+document.getElementById("selAll").onclick=()=>{
+  const all=CH[curBrand].length; if(picked.size<all){CH[curBrand].forEach((_,i)=>picked.add(i));}else{picked.clear();}
+  document.querySelectorAll('.pick').forEach((el,i)=>el.classList.toggle('sel',picked.has(i))); updateCount();
+};
+document.getElementById("teToggle").onclick=function(){ this.classList.toggle('on'); };
+function runPack(){
+  const term=document.getElementById("term"); const b=curBrand;
+  const sel=[...picked].map(i=>CH[b][i][0]);
+  if(!sel.length){ term.innerHTML='<span class="c-dim"># 请先勾选至少一个小渠道</span>'; return; }
+  const lines=['<span class="c-dim"># hybrid-pack release --brand '+b+'</span>',
+    '<span class="c-arrow">→</span> 从后台同步配置… <span class="c-ok">✓ '+BRANDS[b].count+' 渠道</span>',
+    '<span class="c-arrow">→</span> 渲染 channels/'+b+'.csv + res… <span class="c-ok">✓</span>'];
+  sel.forEach(f=>lines.push('<span class="c-arrow">→</span> gradlew assemble'+f.charAt(0).toUpperCase()+f.slice(1)+'Release'));
+  lines.push('<span class="c-ok">✓ 完成 '+sel.length+' 个 APK · 已回传构建记录</span>');
+  term.innerHTML=''; let k=0;
+  const tick=()=>{ if(k<lines.length){ term.innerHTML+=(k?'<br>':'')+lines[k]; k++; setTimeout(tick,360);} };
+  tick();
+}
+
+/* ============ 域名配置视图 ============ */
+function renderDomainsView(){
+  const html=Object.values(BRANDS).map(b=>{
+    const rows=b.domains.map((d,i)=>{
+      const h=b.health[i]; const hp = h==='ok'?'<span class="hp ok">● 正常</span>':h==='warn'?'<span class="hp warn">● 延迟高</span>':'<span class="hp down">● 不可达</span>';
+      return `<div class="domain-row"><span class="domain-tag ${i===0?'main':'bak'}">${i===0?'主':'备用'+i}</span><input class="mono" value="https://${d}">${hp}</div>`;
+    }).join("");
+    return `<div class="section" style="margin-bottom:16px;border-left:3px solid ${b.color}">
+      <h3><span class="dot" style="display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;background:${b.color};color:#fff;font-size:12px">${b.name[0]}</span>${b.name} · 品牌默认域名 <span style="font-weight:400;color:var(--muted);font-size:11.5px;margin-left:6px">该品牌 ${b.count} 个渠道默认继承</span></h3>
+      ${rows}
+      <div style="display:flex;gap:10px;margin-top:8px"><button class="btn ghost" style="font-size:12px">+ 添加备用域名</button><button class="btn primary" style="font-size:12px" onclick="alert('保存并生成 CDN 配置快照 → 已安装 APK 下次启动生效')">保存并下发</button></div>
+    </div>`;
+  }).join("");
+  document.getElementById("view-domains").innerHTML=`
+    <div class="note" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <div>域名以<b>大渠道为单位</b>统一管理（被封时整品牌一起换）。保存即生成 <span class="mono">/api/app/config</span> 的 CDN 快照，<b>所有已安装 APK 下次启动自动拉取最新域名，无需重新打包</b>。个别渠道需差异化可在渠道编辑里关闭「继承」。</div></div>
+    ${html}`;
+}
+
+/* ============ 初始化 ============ */
+renderTabs("brandTabs"); renderTabs("packTabs"); renderChannels(); renderPickList();
+</script>
+</body>
+</html>

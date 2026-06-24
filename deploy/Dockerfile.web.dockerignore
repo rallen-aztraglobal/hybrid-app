@@ -1,0 +1,22 @@
+# 构建上下文 = 仓库根；此镜像只需 web/（前端源码 + 锁文件），不要 node_modules/dist。
+# 同时需要 deploy/nginx.conf 拷进 nginx 镜像。
+*
+
+# 放行前端源码与本部署目录（取 nginx.conf）。
+!web/
+!deploy/
+
+# 排除前端重产物（镜像内重新安装/构建）。
+web/node_modules/
+web/dist/
+**/*.tsbuildinfo
+
+# 部署目录里只需 nginx.conf，排除机密与 env。
+deploy/secrets/
+deploy/.env
+deploy/.env.*
+
+# 安全：keystore / 本地配置绝不进构建上下文（护栏 #4）。
+**/local.properties
+**/*.keystore
+**/*.jks

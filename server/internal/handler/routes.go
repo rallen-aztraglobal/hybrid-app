@@ -1,0 +1,78 @@
+package handler
+
+import (
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	echoSwagger "github.com/swaggo/echo-swagger"
+
+	"github.com/hybrid-app/server/internal/auth"
+	_ "github.com/hybrid-app/server/internal/docs" // 注册 swag 生成的 OpenAPI spec
+	"github.com/hybrid-app/server/internal/model"
+)
+
+// Register 挂载全部路由到 Echo 实例。
+// 鉴权分层：/api/app/* 与 /healthz 公开；其余需 JWT；写操作要求 operator+，账号管理要求 admin。
+func (h *Handler) Register(e *echo.Echo) {
+	// 全局中间件。
+	e.Use(middleware.Recover())
+	e.Use(middleware.RequestID())
+	e.Use(middleware.Logger())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: h.cfg.CORSAllowOrigin,
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders: []string{echo.HeaderAuthorization, echo.HeaderContentType},
+	}))
+
+	// OpenAPI / Swagger UI（供前端生成 TS 客户端；spec 在 /swagger/doc.json）。
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+	// 注：本地存储的 /static 已由 cmd/server/main.go 注册（e.Static("/static", local.Root())），此处不再重复。
+
+	// 公开端点（APK / 探针）。
+	e.GET("/healthz", h.Healthz)
+	e.GET("/api/app/config", h.AppConfig)
+
+	// 鉴权端点（登录/刷新公开）。
+	e.POST("/api/auth/login", h.Login)
+	e.POST("/api/auth/refresh", h.Refresh)
+
+	// 需要 JWT 的管理面。
+	api := e.Group("/api")
+	api.Use(h.authMgr.Middleware())
+
+	viewer := auth.RequireRole(model.RoleViewer)   // 只读
+	operator := auth.RequireRole(model.RoleOperator) // 写
+
+	// 大渠道。
+	api.GET("/brands", h.ListBrands, viewer)
+	api.GET("/brands/:code/domains", h.GetBrandDomains, viewer)
+	api.PUT("/brands/:code/domains", h.SetBrandDomains, operator)
+
+	// 小渠道 CRUD。
+	api.GET("/channels", h.ListChannels, viewer)
+	api.POST("/channels", h.CreateChannel, operator)
+	api.GET("/channels/:id", h.GetChannel, viewer)
+	api.PUT("/channels/:id", h.UpdateChannel, operator)
+	api.DELETE("/channels/:id", h.DeleteChannel, operator)
+	api.PUT("/channels/:id/domains", h.SetChannelDomains, operator)
+	api.GET("/channels/:id/latest-apk", h.LatestApk, viewer) // 渠道卡片「下载最新包」（ADR-0008）
+
+	// 图标管线。
+	api.POST("/channels/:id/icon", h.UploadIcon, operator)
+	api.POST("/channels/:id/splash", h.UploadSplash, operator)
+	api.GET("/channels/:id/res.zip", h.GetResZip, viewer)
+
+	// 打包：manifest 供 CLI 拉全量；jobs 队列与记录供 Web 打包中心（ADR-0008）。
+	api.GET("/build/manifest", h.BuildManifest, viewer)
+	api.POST("/build/jobs", h.CreateBuildJob, operator)
+	api.GET("/build/records", h.ListBuildRecords, viewer)
+	api.GET("/build/records/:id", h.GetBuildRecord, viewer)
+	api.GET("/build/records/:id/logs", h.BuildLogs, viewer)
+
+	// 构建机（runner）领取与上报：机器对机器，要求 operator+ 的服务账号。
+	api.POST("/build/claim", h.ClaimBuild, operator)
+	api.POST("/build/records/:id/status", h.ReportBuildStatus, operator)
+	api.POST("/build/records/:id/logs", h.AppendBuildLog, operator)
+	api.POST("/build/records/:id/artifacts", h.AddBuildArtifact, operator)
+}

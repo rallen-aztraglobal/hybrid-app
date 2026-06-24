@@ -1,0 +1,880 @@
+basePath: /
+definitions:
+  github_com_hybrid-app_server_internal_domainutil.DomainInput:
+    properties:
+      enabled:
+        type: boolean
+      position:
+        type: integer
+      url:
+        type: string
+    type: object
+  github_com_hybrid-app_server_internal_httpx.Envelope:
+    properties:
+      code:
+        description: 0 = 成功，非 0 = 业务错误码（沿用 HTTP 状态码语义）
+        type: integer
+      data:
+        description: 业务数据
+      message:
+        description: 人类可读信息
+        type: string
+    type: object
+  github_com_hybrid-app_server_internal_service.AddBuildArtifactInput:
+    properties:
+      apkUrl:
+        type: string
+      flavor:
+        type: string
+      size:
+        type: integer
+      versionName:
+        type: string
+    required:
+    - apkUrl
+    - flavor
+    type: object
+  github_com_hybrid-app_server_internal_service.AppConfig:
+    properties:
+      appId:
+        description: = applicationId（解析键）
+        type: string
+      configVersion:
+        description: 渠道 updated_at 时间戳，单调递增便于客户端判新
+        type: integer
+      domains:
+        description: '[主, 备用1..3]，按 position 升序'
+        items:
+          type: string
+        type: array
+      palcode:
+        description: 渠道 PAL_CODE（回显，APK 拼 /?palcode= 用，可跨品牌重复）
+        type: string
+      probePath:
+        description: APK 探测「确实是我们站点」用（ADR-0003）
+        type: string
+      ttlSeconds:
+        description: 建议缓存秒数
+        type: integer
+    type: object
+  github_com_hybrid-app_server_internal_service.BuildLogSegment:
+    properties:
+      done:
+        description: 构建是否已进入终态（前端据此停止轮询）
+        type: boolean
+      log:
+        description: '[offset, next) 区间的日志'
+        type: string
+      next:
+        description: 下次请求应传的 offset
+        type: integer
+      offset:
+        description: 本段起始字节偏移
+        type: integer
+    type: object
+  github_com_hybrid-app_server_internal_service.BuildManifest:
+    properties:
+      brand:
+        type: string
+      brandDomains:
+        description: 品牌默认域名（继承用）
+        items:
+          type: string
+        type: array
+      channels:
+        items:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.ManifestChannel'
+        type: array
+      configBaseUrl:
+        description: CDN 配置端点前缀（烧录进 bootstrap.json）
+        type: string
+      generatedAt:
+        type: string
+      hmsEnabled:
+        type: boolean
+      scheme:
+        type: string
+    type: object
+  github_com_hybrid-app_server_internal_service.CreateBuildJobInput:
+    properties:
+      brand:
+        type: string
+      flavors:
+        items:
+          type: string
+        type: array
+      name:
+        description: 可空，默认 <brand>-<versionName>-<YYYYMMDD-HHmm>
+        type: string
+      testEvents:
+        type: boolean
+      versionName:
+        type: string
+    required:
+    - brand
+    - flavors
+    - versionName
+    type: object
+  github_com_hybrid-app_server_internal_service.CreateChannelInput:
+    properties:
+      appName:
+        type: string
+      brandCode:
+        type: string
+      flavorName:
+        type: string
+      palCode:
+        type: string
+      remark:
+        type: string
+    required:
+    - appName
+    - brandCode
+    - flavorName
+    - palCode
+    type: object
+  github_com_hybrid-app_server_internal_service.ManifestChannel:
+    properties:
+      appName:
+        type: string
+      applicationId:
+        type: string
+      configSnapshotUrl:
+        description: 该渠道的 CDN 配置快照地址
+        type: string
+      effectiveDomains:
+        description: 合并继承后的域名（写 bootstrap.json 兜底）
+        items:
+          type: string
+        type: array
+      flavorName:
+        type: string
+      palCode:
+        type: string
+      resZipUrl:
+        description: 资源 zip 地址（CLI 下载解压到 flavor 目录）
+        type: string
+      splashUrl:
+        type: string
+      status:
+        type: string
+    type: object
+  github_com_hybrid-app_server_internal_service.ReportBuildStatusInput:
+    properties:
+      logExcerpt:
+        description: 可选：末段日志摘要，列表展示用
+        type: string
+      status:
+        type: string
+    required:
+    - status
+    type: object
+  github_com_hybrid-app_server_internal_service.UpdateChannelInput:
+    properties:
+      appName:
+        type: string
+      flavorName:
+        type: string
+      palCode:
+        type: string
+      remark:
+        type: string
+      status:
+        type: string
+    type: object
+  internal_handler.claimReq:
+    properties:
+      runner:
+        type: string
+    type: object
+  internal_handler.healthzResp:
+    properties:
+      brand:
+        type: string
+      ok:
+        type: boolean
+      v:
+        type: integer
+    type: object
+  internal_handler.loginReq:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_handler.refreshReq:
+    properties:
+      refreshToken:
+        type: string
+    type: object
+  internal_handler.setChannelDomainsReq:
+    properties:
+      domains:
+        items:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_domainutil.DomainInput'
+        type: array
+      inheritBrand:
+        type: boolean
+    type: object
+  internal_handler.setDomainsReq:
+    properties:
+      domains:
+        items:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_domainutil.DomainInput'
+        type: array
+    type: object
+  internal_handler.tokenResp:
+    properties:
+      accessToken:
+        type: string
+      expiresIn:
+        type: integer
+      refreshToken:
+        type: string
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: hybrid-app 多渠道打包后台：渠道 CRUD / 图标管线 / 域名配置 / 运行时下发。
+  title: 渠道中台 API
+  version: "1.0"
+paths:
+  /api/app/config:
+    get:
+      description: APK 启动用不变的 applicationId（BuildConfig.APPLICATION_ID）拉最新域名（ADR-0002/0009）。可被
+        CDN 强缓存；后台域名变更后刷新快照。
+      parameters:
+      - description: 渠道 applicationId（解析键）
+        in: query
+        name: appId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_service.AppConfig'
+      summary: 运行时配置（APK 公开消费，强缓存）— 返回该渠道最新域名清单 + 探测端点
+      tags:
+      - app
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 账号密码
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.loginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_handler.tokenResp'
+              type: object
+      summary: 账号密码登录
+      tags:
+      - auth
+  /api/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.refreshReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_handler.tokenResp'
+              type: object
+      summary: 刷新 access token
+      tags:
+      - auth
+  /api/brands:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 大渠道列表（含渠道计数、accent 色、默认域名）
+      tags:
+      - brands
+  /api/brands/{code}/domains:
+    get:
+      parameters:
+      - description: 品牌 code (ap/bp/gp)
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 品牌默认域名清单
+      tags:
+      - brands
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 品牌 code
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 域名清单
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.setDomainsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 更新品牌默认域名（主+最多3备用，强校验）
+      tags:
+      - brands
+  /api/build/claim:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: runner 标识
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/internal_handler.claimReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: runner 领取下一条 queued 任务（原子；无任务返回 data:null）
+      tags:
+      - build
+  /api/build/jobs:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: brand/flavors/versionName(X.Y.Z)/testEvents/name?
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.CreateBuildJobInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 入队一个构建任务（Web 打包中心触发；状态机 queued→running→success/failed）
+      tags:
+      - build
+  /api/build/manifest:
+    get:
+      parameters:
+      - description: 品牌 code
+        in: query
+        name: brand
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_hybrid-app_server_internal_service.BuildManifest'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 一次拉全：某品牌启用渠道 + 域名 + palcode + 资源 zip 地址（CLI 据此重写 CSV/res）
+      tags:
+      - build
+  /api/build/records:
+    get:
+      parameters:
+      - description: 品牌 code
+        in: query
+        name: brand
+        type: string
+      - description: 状态 queued/running/success/failed
+        in: query
+        name: status
+        type: string
+      - description: 条数，默认 50
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 构建记录列表（按品牌/状态筛选）
+      tags:
+      - build
+  /api/build/records/{id}:
+    get:
+      parameters:
+      - description: 构建记录 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 单条构建记录（含全部 APK 产物，供「构建记录页」列出下载）
+      tags:
+      - build
+  /api/build/records/{id}/artifacts:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 构建记录 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: flavor/versionName/apkUrl/size
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.AddBuildArtifactInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: runner 上报一个产出的 APK（落 build_artifact，并汇总进记录）
+      tags:
+      - build
+  /api/build/records/{id}/logs:
+    get:
+      parameters:
+      - description: 构建记录 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 起始字节偏移，默认 0
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_hybrid-app_server_internal_service.BuildLogSegment'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 构建日志（分段/流式）—— 传 offset 拉增量，轮询 next 直到 done
+      tags:
+      - build
+    post:
+      consumes:
+      - text/plain
+      parameters:
+      - description: 构建记录 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 日志片段（纯文本）
+        in: body
+        name: body
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: runner 增量上报构建日志（请求体为纯文本，追加到该记录日志）
+      tags:
+      - build
+  /api/build/records/{id}/status:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 构建记录 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 状态
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.ReportBuildStatusInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: runner 上报构建状态（running/success/failed）
+      tags:
+      - build
+  /api/channels:
+    get:
+      parameters:
+      - description: 品牌 code
+        in: query
+        name: brand
+        type: string
+      - description: 状态 enabled/disabled/archived
+        in: query
+        name: status
+        type: string
+      - description: 关键词（flavor/包名/应用名/palcode）
+        in: query
+        name: q
+        type: string
+      - description: 页码，默认 1
+        in: query
+        name: page
+        type: integer
+      - description: 每页，默认 50
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 渠道列表（分页/搜索/筛选）
+      tags:
+      - channels
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 渠道字段
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.CreateChannelInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 新增渠道（applicationId 派生自品牌包前缀+flavor；唯一性校验 applicationId 与 (brand,flavor)）
+      tags:
+      - channels
+  /api/channels/{id}:
+    delete:
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 软删除渠道（置 archived）
+      tags:
+      - channels
+    get:
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 渠道详情
+      tags:
+      - channels
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 可选更新字段
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.UpdateChannelInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 修改渠道
+      tags:
+      - channels
+  /api/channels/{id}/domains:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: inheritBrand=true 表示切回继承
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.setChannelDomainsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 设置渠道域名覆盖 / 切回继承品牌
+      tags:
+      - channels
+  /api/channels/{id}/icon:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 主图 PNG/JPEG
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: '自适应图标背景色 #RRGGBB'
+        in: formData
+        name: background
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 上传裁剪后的主图(1024²) → imaging 生成全密度 → 返回各槽位预览
+      tags:
+      - icon
+  /api/channels/{id}/latest-apk:
+    get:
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」）
+      tags:
+      - channels
+  /api/channels/{id}/res.zip:
+    get:
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/zip
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: 下载整套 res 资源 zip（CLI 用）
+      tags:
+      - icon
+  /api/channels/{id}/splash:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: splash 源图
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 上传 splash 源图
+      tags:
+      - icon
+  /healthz:
+    get:
+      description: 返回约定 JSON {"ok":true,"brand":"ap","v":1}。带 ?brand= 时回显品牌，供按品牌校验。
+      parameters:
+      - description: 品牌 code（回显，便于 APK 校验 brand 匹配）
+        in: query
+        name: brand
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.healthzResp'
+      summary: 业务健康端点（供 APK 探针校验是我们站点）
+      tags:
+      - app
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

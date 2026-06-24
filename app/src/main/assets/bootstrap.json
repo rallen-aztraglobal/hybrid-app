@@ -1,0 +1,12 @@
+{
+  "_comment": "编译期兜底域名清单（仅在『从未成功拉取过运行时配置』时使用，例如首次安装即无网）。一旦成功拉取过一次，本地缓存即接管兜底角色，本文件不再被读取。详见 docs/admin/02-domain-failover.md STEP1 与 ADR-0002。此为 src/main 的通用默认值，单渠道可在 app/src/<flavor>/assets/bootstrap.json 覆盖；打包时由 hybrid-pack CLI 按渠道渲染（ADR-0004）。注意：域名一律运行时下发，本文件只是抗『首启无网』的最后保险，绝非编译期数据源。appId 为空时运行时回落 BuildConfig.APPLICATION_ID（ADR-0009：解析键用 applicationId）。",
+  "schemaVersion": 1,
+  "brand": "ap",
+  "appId": "",
+  "palcode": "",
+  "configUrl": "https://config.hybrid-cdn.example/api/app/config",
+  "probePath": "/healthz",
+  "defaultDomains": [
+    "https://arenaplus.ph"
+  ]
+}

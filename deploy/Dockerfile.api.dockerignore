@@ -1,0 +1,31 @@
+# 构建上下文 = 仓库根；此镜像需 server/ 源码 + 首次部署的种子数据
+# （channels/*.csv 与各渠道 res 图片，用于资产初始化，见 deploy/Dockerfile.api「种子层」）。
+# 其余全部排除（含 1GB 的 app/ 构建产物、.git、机密）。
+# BuildKit 会优先采用与 Dockerfile 同名的 <dockerfile>.dockerignore。
+*
+
+# 仅放行后端源码。
+!server/
+
+# 放行渠道清单 CSV（首次部署导入；很小）。
+!channels/
+
+# 放行渠道资源源图：仅 app/src/channels/**（其下各 flavor 仅有 res/ 图片，无构建产物）。
+# 注意：用目录前缀放行需逐级取消父目录的排除，否则深层文件仍被 * 命中。
+!app/
+app/*
+!app/src/
+app/src/*
+!app/src/channels/
+
+# 即便放行 server/，也排除其构建产物与本地数据。
+server/bin/
+server/data/
+server/smoke.db
+**/*.db
+
+# 安全：keystore / 本地配置绝不进构建上下文（护栏 #4）。
+**/local.properties
+**/*.keystore
+**/*.jks
+**/.env

@@ -11,3 +11,11 @@
 /captures
 .externalNativeBuild
 .cxx
+
+# === 渠道中台（server / cli / web）构建产物 ===
+/server/bin/
+/server/data/
+/cli/bin/
+/web/node_modules/
+/web/dist/
+*.tsbuildinfo

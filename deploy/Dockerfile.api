@@ -1,0 +1,64 @@
+# ============================================================================
+# deploy/Dockerfile.api —— 渠道中台后端（Go + Echo）多阶段构建
+#
+# 产出：单个全静态二进制，跑在 distroless/static 上（无 shell、无包管理器、最小攻击面）。
+# 依据：ADR-0001（Go 单静态二进制）、ADR-0008（API 与构建机分离）、
+#       docs/admin/01 §1/§7（镜像 ~20MB，scratch/distroless 基底）。
+#
+# 关键点：
+#   - server 用 glebarez/sqlite（纯 Go，无 cgo），故 CGO_ENABLED=0 可全静态编译。
+#   - keystore 红线：本镜像不接收、不打入任何签名密钥（护栏 #4）。
+#   - 构建上下文 = 仓库根（compose 里 context: ..），故下文路径以 server/ 开头。
+#
+# 单独构建（自测，可选）：
+#   docker build -f deploy/Dockerfile.api -t hybrid-api .
+# ============================================================================
+
+# ---- 构建阶段 ----
+FROM golang:1.25-bookworm AS build
+WORKDIR /src
+
+# 先拷 go.mod/go.sum 预热依赖缓存（命中率高，改代码不必重下依赖）。
+COPY server/go.mod server/go.sum ./server/
+RUN cd server && go mod download
+
+# 再拷源码并编译。
+COPY server/ ./server/
+# -trimpath 去构建机绝对路径；-ldflags "-s -w" 去符号表与调试信息，缩小体积。
+RUN cd server \
+    && CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=mod \
+       go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+
+# 预建对象存储根目录；其属主随后由 COPY --chown 带进运行镜像（评审 D5）。
+RUN mkdir -p /data/objects
+
+# ---- 运行阶段 ----
+# distroless/static：仅 CA 证书 + tzdata + nonroot 用户，无 shell。
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+
+# 拷贝静态二进制。
+COPY --from=build /out/server /app/server
+
+# ---- 种子层：首次部署的数据初始化源（渠道 CSV + 渠道资源图）----
+# server import / DB_AUTOSEED 从 SEED_DIR(默认 /app/seed) 读取，把 80 个渠道及其
+# 已有图标/启动页注册进库并经 storage(/static→nginx) 提供（见 internal/seed/assets.go）。
+# 布局：/app/seed/channels/*.csv + /app/seed/res/<brand>/<flavor>/res/*.png（精简布局①）。
+# 这些是构建期静态快照；不含 keystore / local.properties（护栏 #4，已被 dockerignore 拦截）。
+COPY channels/ /app/seed/channels/
+COPY app/src/channels/ /app/seed/res/
+
+# 预创建对象存储根目录并归属 nonroot(65532)：命名卷首次挂载会继承镜像里该路径的属主，
+# 否则 distroless 的 nonroot 无法在 root 属主的空卷里 mkdir /data/objects → 首部署即崩（评审 D5）。
+COPY --from=build --chown=nonroot:nonroot /data /data
+
+# 元数据卷：sqlite 兜底文件 / 本地对象存储默认目录（生产走 MySQL + MinIO 时可忽略）。
+VOLUME ["/data"]
+
+# 内部端口：与 nginx 上游、compose 的 SERVER_ADDR 一致（ADR-0008 / 本轮约定 :8090）。
+EXPOSE 8090
+
+# distroless:nonroot 默认以 uid 65532 运行。
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/server"]

@@ -1,0 +1,4 @@
+# 编译产物（交叉编译的单文件二进制），不入库（见 ADR-0007）
+/bin/
+hybrid-pack
+hybrid-pack.exe

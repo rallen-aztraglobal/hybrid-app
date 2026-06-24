@@ -1,0 +1,554 @@
+import type {
+  ApiEnvelope,
+  AuthUser,
+  Brand,
+  BrandCode,
+  BuildArtifact,
+  BuildJob,
+  BuildJobRequest,
+  BuildLogChunk,
+  Channel,
+  ChannelInput,
+  DomainEntry,
+  DomainInput,
+  ListResult,
+  LoginResponse,
+  ProbeResult,
+} from './types';
+import { mockDb } from './mock/db';
+import { BRAND_META } from './brands';
+
+/**
+ * API 客户端 —— 对齐**真实后端**（server/internal/handler 路由 + httpx.Envelope）。
+ *
+ * 第二轮：把第一轮的 demo/mock 接到真实 /api。策略：
+ *  - 真实后端为**主**路径，每个端点做精确的「响应整形（adapter）」，把 Go 的字段
+ *    形态（string[] 域名 / {items,total} / accessToken / 数字 id）转成 UI 类型。
+ *  - 仅当真实请求**失败**（后端未起 / 网络断 / 端点尚未上线）时，透明回退到本地
+ *    mock，保证前端可独立 `pnpm dev` 演示完整闭环（VITE_USE_MOCK=1 可强制 mock）。
+ *  - ADR-0008 的 /build/jobs + 日志流、ADR-0009 的 packagePrefix 等「下一轮后端落地」
+ *    的端点：客户端已按 ADR 契约实现，后端未就绪时由 fallback 给出**模拟**响应，UI 即开即用。
+ */
+
+const FORCE_MOCK = import.meta.env.VITE_USE_MOCK === '1';
+const MOCK_LATENCY = 180; // 模拟网络延迟，让 loading 态可见
+
+function delay<T>(value: T, ms = MOCK_LATENCY): Promise<T> {
+  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
+}
+
+/** 统一 fetch：带 JWT、解信封（成功 code=0）、非 2xx 抛错（带后端 message）。 */
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
+  const res = await fetch(`/api${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+  // 后端错误也走 Envelope（{code,message}），优先取其 message 抛出。
+  let json: ApiEnvelope<T> | undefined;
+  try {
+    json = (await res.json()) as ApiEnvelope<T>;
+  } catch {
+    /* 空响应体 */
+  }
+  // token 失效/过期（401）：清登录态并跳回登录页，而不是把空数据丢给页面
+  // （否则用户会误以为"数据没了"）。登录请求自身的 401（账号密码错）不在此列。
+  if (res.status === 401 && token && !path.startsWith('/auth/')) {
+    setToken(null);
+    try {
+      localStorage.removeItem('hybrid:auth'); // 清 zustand persist 的登录态
+    } catch {
+      /* ignore */
+    }
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.assign('/login');
+    }
+  }
+  if (!res.ok) {
+    throw new ApiError(json?.message || `HTTP ${res.status} ${res.statusText}`, res.status);
+  }
+  if (json && json.code !== 0 && json.code !== 200) {
+    throw new ApiError(json.message || '请求失败', json.code);
+  }
+  return (json?.data as T) ?? (undefined as T);
+}
+
+/** 带 HTTP 状态码的错误，便于上层区分 401/404/409。 */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * 包一层：FORCE_MOCK 直接走 mock；否则真实请求失败再回退 mock。
+ *
+ * 关键区分（接真实后端的正确性）：只在「后端不可达 / 端点尚未上线」时回退；
+ * **业务错误（4xx，如 400 校验失败 / 409 唯一性冲突 / 401 未授权）必须如实抛给用户**，
+ * 否则真实 409 会被 mock 的 upsert 掩盖成「保存成功」，违背唯一性护栏。
+ * 视为「不可达」的情形：fetch 抛 TypeError（网络层）或 5xx / 404（端点缺失）。
+ */
+function shouldFallback(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    // 404 = 端点未上线（下一轮后端落地前）；5xx = 服务异常 → 回退演示。其余 4xx 抛出。
+    return err.status === 404 || err.status >= 500;
+  }
+  // fetch 网络错误（后端没起）→ TypeError。
+  return true;
+}
+
+async function withFallback<T>(real: () => Promise<T>, mock: () => T): Promise<T> {
+  if (FORCE_MOCK) return delay(mock());
+  try {
+    return await real();
+  } catch (err) {
+    if (!shouldFallback(err)) throw err;
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn('[api] 后端不可达/端点缺失，回退到本地 mock（来源 channels/*.csv）:', (err as Error)?.message);
+    }
+    return delay(mock());
+  }
+}
+
+// ---------- token 存取（与 auth store 共用 localStorage key） ----------
+const TOKEN_KEY = 'hybrid:token';
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+export function setToken(token: string | null): void {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+// =========================================================================
+// 适配器：后端形态 → UI 类型
+// =========================================================================
+
+/** 后端 string[] 域名 → DomainEntry[]（position 即下标，主在前）。 */
+function domainsFromUrls(urls: string[] | null | undefined, probes?: ProbeResult[]): DomainEntry[] {
+  const byUrl = new Map((probes ?? []).map((p) => [p.url, p]));
+  return (urls ?? []).map((url, i) => {
+    const p = byUrl.get(url);
+    return {
+      position: i,
+      url,
+      enabled: true,
+      health: p ? (p.ok ? 'ok' : 'down') : 'unknown',
+      latencyMs: p?.latencyMs,
+    };
+  });
+}
+
+/** DomainEntry[] → 后端 DomainInput[]（去空、规范化 position）。 */
+function domainsToInput(domains: DomainEntry[]): DomainInput[] {
+  return domains
+    .filter((d) => d.url.trim())
+    .map((d) => ({ position: d.position, url: d.url.trim(), enabled: d.enabled }));
+}
+
+/** 后端 service.BrandView → UI Brand（domains: string[] → DomainEntry[]）。 */
+interface BrandViewDTO {
+  id?: number;
+  code: BrandCode;
+  name: string;
+  scheme: string;
+  hmsEnabled: boolean;
+  accentColor: string;
+  channelCount: number;
+  domains: string[];
+  packagePrefix?: string;
+}
+function adaptBrand(b: BrandViewDTO): Brand {
+  return {
+    id: b.id != null ? String(b.id) : undefined,
+    code: b.code,
+    name: b.name,
+    scheme: b.scheme,
+    hmsEnabled: b.hmsEnabled,
+    // 后端 accentColor 与原型略有出入；UI 配色以 BRAND_META 为权威（与 docs/admin/ui 一致）。
+    accentColor: BRAND_META[b.code]?.accentColor ?? b.accentColor,
+    channelCount: b.channelCount,
+    domains: domainsFromUrls(b.domains),
+    packagePrefix: b.packagePrefix || BRAND_META[b.code]?.packagePrefix,
+  };
+}
+
+/** 后端 model.Channel（数字 id + brandId）→ UI Channel（字符串 id + brandCode）。 */
+interface ChannelDTO {
+  id: number;
+  brandCode?: BrandCode;
+  brand?: { code?: BrandCode } | null;
+  flavorName: string;
+  applicationId: string;
+  palCode: string;
+  appName: string;
+  status: Channel['status'];
+  useBrandDomains: boolean;
+  domains?: { position: number; url: string; enabled: boolean }[] | null;
+  iconMasterUrl?: string;
+  splashUrl?: string;
+  remark?: string;
+  latestApkUrl?: string;
+  updatedAt?: string;
+}
+function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
+  const brandCode = (c.brandCode ?? c.brand?.code ?? brandHint ?? 'ap') as BrandCode;
+  return {
+    id: String(c.id),
+    brandCode,
+    flavorName: c.flavorName,
+    applicationId: c.applicationId,
+    palCode: c.palCode,
+    appName: c.appName,
+    status: c.status,
+    useBrandDomains: c.useBrandDomains,
+    domains: c.domains?.length
+      ? c.domains.map((d) => ({ position: d.position, url: d.url, enabled: d.enabled, health: 'unknown' as const }))
+      : undefined,
+    iconMasterUrl: c.iconMasterUrl || undefined,
+    splashUrl: c.splashUrl || undefined,
+    remark: c.remark || undefined,
+    latestApkUrl: c.latestApkUrl || undefined,
+    updatedAt: c.updatedAt,
+  };
+}
+
+// =========================================================================
+// 鉴权
+// =========================================================================
+export const authApi = {
+  async login(username: string, password: string): Promise<AuthUser> {
+    return withFallback<AuthUser>(
+      async () => {
+        const r = await request<LoginResponse>('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ username, password }),
+        });
+        return { username: r.username, role: r.role, token: r.accessToken, refreshToken: r.refreshToken };
+      },
+      () => {
+        // mock：任意非空账号密码即登录，演示 RBAC 角色
+        if (!username || !password) throw new ApiError('请输入账号密码', 400);
+        const role: AuthUser['role'] = username === 'admin' ? 'admin' : 'operator';
+        return { username, role, token: `mock-token-${username}-${Date.now()}` };
+      },
+    );
+  },
+};
+
+// =========================================================================
+// 大渠道 + 域名
+// =========================================================================
+export const brandApi = {
+  list(): Promise<Brand[]> {
+    return withFallback(
+      async () => (await request<BrandViewDTO[]>('/brands')).map(adaptBrand),
+      () => mockDb.listBrands(),
+    );
+  },
+  getDomains(code: BrandCode): Promise<DomainEntry[]> {
+    return withFallback(
+      async () => {
+        // 后端返回 { domains: string[] }
+        const r = await request<{ domains: string[] }>(`/brands/${code}/domains`);
+        return domainsFromUrls(r.domains);
+      },
+      () => mockDb.getBrandDomains(code),
+    );
+  },
+  updateDomains(code: BrandCode, domains: DomainEntry[]): Promise<DomainEntry[]> {
+    return withFallback(
+      async () => {
+        // 后端返回 { domains: string[], probes: ProbeResult[] }
+        const r = await request<{ domains: string[]; probes?: ProbeResult[] }>(`/brands/${code}/domains`, {
+          method: 'PUT',
+          body: JSON.stringify({ domains: domainsToInput(domains) }),
+        });
+        return domainsFromUrls(r.domains, r.probes);
+      },
+      () => mockDb.setBrandDomains(code, domains),
+    );
+  },
+};
+
+// =========================================================================
+// 小渠道 CRUD
+// =========================================================================
+export const channelApi = {
+  list(): Promise<Channel[]> {
+    return withFallback(
+      async () => {
+        // 后端 { items, total }；一次性拉大页（中台规模可控）。
+        // 注意 repo 把 pageSize 上限钳在 500（>500 会被重置为默认 50），故取 500。
+        const r = await request<ListResult<ChannelDTO>>('/channels?pageSize=500');
+        return r.items.map((c) => adaptChannel(c));
+      },
+      () => mockDb.listChannels(),
+    );
+  },
+  get(id: string): Promise<Channel | undefined> {
+    return withFallback(
+      async () => adaptChannel(await request<ChannelDTO>(`/channels/${id}`)),
+      () => mockDb.getChannel(id),
+    );
+  },
+  create(input: ChannelInput): Promise<Channel> {
+    return withFallback(
+      async () => {
+        // 1) 基本信息（后端 CreateChannelInput：不含域名/图标）。
+        const created = await request<ChannelDTO>('/channels', {
+          method: 'POST',
+          body: JSON.stringify({
+            brandCode: input.brandCode,
+            flavorName: input.flavorName.trim(),
+            applicationId: input.applicationId.trim(),
+            palCode: input.palCode.trim(),
+            appName: input.appName.trim(),
+            remark: input.remark ?? '',
+          }),
+        });
+        const ch = adaptChannel(created, input.brandCode);
+        // 2) 副作用：域名覆盖 / 图标 / splash（容错，不阻断主流程）。
+        await applyChannelSideEffects(ch.id, input);
+        return ch;
+      },
+      () => mockDb.upsertChannel(inputToChannel(input)),
+    );
+  },
+  update(id: string, input: ChannelInput): Promise<Channel> {
+    return withFallback(
+      async () => {
+        const updated = await request<ChannelDTO>(`/channels/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            // applicationId 派生只读：flavor 不可改（编辑态禁用），故不下发 flavorName/applicationId。
+            palCode: input.palCode.trim(),
+            appName: input.appName.trim(),
+            status: input.status,
+            remark: input.remark ?? '',
+          }),
+        });
+        const ch = adaptChannel(updated, input.brandCode);
+        await applyChannelSideEffects(ch.id, input);
+        return ch;
+      },
+      () => mockDb.upsertChannel({ ...inputToChannel(input), id }),
+    );
+  },
+  archive(id: string): Promise<void> {
+    return withFallback(
+      async () => {
+        await request<{ archived: boolean }>(`/channels/${id}`, { method: 'DELETE' });
+      },
+      () => mockDb.archiveChannel(id),
+    );
+  },
+};
+
+/**
+ * 渠道副作用：域名覆盖 + 图标 + splash。后端把它们拆成独立端点，这里串起来。
+ * 每步独立容错：单步失败仅 console 警告，不让整次保存回滚（基本信息已落库）。
+ */
+async function applyChannelSideEffects(id: string, input: ChannelInput): Promise<void> {
+  // 域名：继承 → inheritBrand=true；覆盖 → 提交渠道级清单。
+  try {
+    if (input.useBrandDomains) {
+      await request(`/channels/${id}/domains`, {
+        method: 'PUT',
+        body: JSON.stringify({ inheritBrand: true, domains: [] }),
+      });
+    } else if (input.domains && input.domains.some((d) => d.url.trim())) {
+      await request(`/channels/${id}/domains`, {
+        method: 'PUT',
+        body: JSON.stringify({ inheritBrand: false, domains: domainsToInput(input.domains) }),
+      });
+    }
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[api] 设置渠道域名失败:', (err as Error)?.message);
+  }
+  // 图标主图：dataURL → multipart 上传（后端 fan-out 全密度）。
+  if (input.iconMasterDataUrl?.startsWith('data:')) {
+    try {
+      await uploadDataUrl(`/channels/${id}/icon`, input.iconMasterDataUrl, 'icon.png');
+    } catch (err) {
+      if (import.meta.env.DEV) console.warn('[api] 上传图标失败:', (err as Error)?.message);
+    }
+  }
+  // splash 源图。
+  if (input.splashDataUrl?.startsWith('data:')) {
+    try {
+      await uploadDataUrl(`/channels/${id}/splash`, input.splashDataUrl, 'splash.png');
+    } catch (err) {
+      if (import.meta.env.DEV) console.warn('[api] 上传 splash 失败:', (err as Error)?.message);
+    }
+  }
+}
+
+/** dataURL → Blob → multipart POST（字段名 file，与后端 openUpload 一致）。 */
+async function uploadDataUrl(path: string, dataUrl: string, filename: string): Promise<void> {
+  const blob = await (await fetch(dataUrl)).blob();
+  const fd = new FormData();
+  fd.append('file', blob, filename);
+  const token = getToken();
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: fd,
+  });
+  if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+}
+
+// =========================================================================
+// 打包编排 + 构建记录（ADR-0008）
+// =========================================================================
+export const buildApi = {
+  /** 构建任务列表（构建记录页）。 */
+  listJobs(brand?: BrandCode): Promise<BuildJob[]> {
+    const q = brand ? `?brand=${brand}` : '';
+    return withFallback(
+      async () => {
+        // 优先新端点 /build/jobs；后端未上线时（404）回退兼容旧 /build/records。
+        try {
+          return await request<BuildJob[]>(`/build/jobs${q}`);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404) {
+            const recs = await request<BuildRecordDTO[]>(`/build/records${q}`);
+            return recs.map(adaptRecordToJob);
+          }
+          throw err;
+        }
+      },
+      () => mockDb.listBuildJobs(brand),
+    );
+  },
+
+  /** 触发打包任务（ADR-0008：渠道 + versionName + 任务名 + 测试事件）。 */
+  submitJob(req: BuildJobRequest): Promise<BuildJob> {
+    return withFallback(
+      async () => {
+        // 适配后端 service.CreateBuildJobInput 的字段名：brand（非 brandCode）/ name（非 jobName）。
+        const rec = await request<BuildRecordDTO>('/build/jobs', {
+          method: 'POST',
+          body: JSON.stringify({
+            brand: req.brandCode,
+            flavors: req.flavors,
+            versionName: req.versionName,
+            name: req.jobName,
+            testEvents: req.testEvents,
+          }),
+        });
+        return adaptRecordToJob(rec);
+      },
+      () => mockDb.createBuildJob(req),
+    );
+  },
+
+  /**
+   * 增量拉取任务日志（轮询 logs 流；done=true 时停止）。
+   * 对齐后端真实端点 GET /api/build/records/:id/logs?offset=（返回 BuildLogSegment{offset,next,log,done}，
+   * 不含 status）。done 时再取一次记录拿到真实终态 success/failed（评审 W1）。
+   */
+  getJobLogs(jobId: string, after = 0): Promise<BuildLogChunk> {
+    return withFallback(
+      async () => {
+        const seg = await request<{ offset: number; next: number; log: string; done: boolean }>(
+          `/build/records/${jobId}/logs?offset=${after}`,
+        );
+        let status: BuildLogChunk['status'] = seg.done ? 'success' : 'running';
+        if (seg.done) {
+          // 段接口不含状态：done 后取记录确定 success/failed。
+          try {
+            const rec = await request<BuildRecordDTO>(`/build/records/${jobId}`);
+            status = (rec.status as BuildLogChunk['status']) || 'success';
+          } catch {
+            /* 取记录失败则按 success 兜底，不影响日志展示 */
+          }
+        }
+        const lines = seg.log ? seg.log.replace(/\n+$/, '').split('\n') : [];
+        return { cursor: seg.next, lines, done: seg.done, status };
+      },
+      () => mockDb.jobLogs(jobId, after),
+    );
+  },
+};
+
+/** 旧 build_record 形态（兼容回退用）。 */
+interface BuildRecordDTO {
+  id: number;
+  name?: string; // 任务名（后端默认 <brand>-<versionName>-<时间>，可被前端覆盖）
+  brandCode: BrandCode;
+  flavors: string; // JSON 字符串
+  testEvents: boolean;
+  status: 'queued' | 'running' | 'success' | 'failed';
+  operator?: string;
+  versionName?: string;
+  apkUrls?: string; // JSON 字符串
+  logExcerpt?: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+function adaptRecordToJob(r: BuildRecordDTO): BuildJob {
+  const flavors = safeParseArray(r.flavors);
+  const apkUrls = safeParseArray(r.apkUrls);
+  const artifacts: BuildArtifact[] = apkUrls.map((url, i) => ({
+    flavor: flavors[i] ?? flavors[0] ?? '',
+    versionName: r.versionName ?? '',
+    apkUrl: url,
+  }));
+  return {
+    id: String(r.id),
+    jobName: r.name || `${r.brandCode}-${r.versionName ?? ''}`,
+    brandCode: r.brandCode,
+    flavors,
+    versionName: r.versionName ?? '',
+    testEvents: r.testEvents,
+    status: r.status,
+    operator: r.operator,
+    artifacts,
+    logExcerpt: r.logExcerpt,
+    startedAt: r.startedAt,
+    finishedAt: r.finishedAt,
+  };
+}
+function safeParseArray(s: string | undefined): string[] {
+  if (!s) return [];
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 给 UI 用的品牌色（即便后端返回也用本地 meta 兜底色）。 */
+export function brandAccent(code: BrandCode): string {
+  return BRAND_META[code].accentColor;
+}
+
+// ---------- 辅助：ChannelInput → Channel（mock 落库用） ----------
+function inputToChannel(input: ChannelInput): Channel {
+  const id = `${input.brandCode}-${input.flavorName}`;
+  return {
+    id,
+    brandCode: input.brandCode,
+    flavorName: input.flavorName.trim(),
+    applicationId: input.applicationId.trim(),
+    palCode: input.palCode.trim(),
+    appName: input.appName.trim(),
+    status: input.status ?? 'enabled',
+    useBrandDomains: input.useBrandDomains,
+    domains: input.useBrandDomains ? undefined : input.domains,
+    iconMasterUrl: input.iconMasterDataUrl,
+    splashUrl: input.splashDataUrl,
+    remark: input.remark,
+  };
+}

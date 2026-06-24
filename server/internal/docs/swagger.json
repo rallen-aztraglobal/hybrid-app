@@ -1,0 +1,1403 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "hybrid-app 多渠道打包后台：渠道 CRUD / 图标管线 / 域名配置 / 运行时下发。",
+        "title": "渠道中台 API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/api/app/config": {
+            "get": {
+                "description": "APK 启动用不变的 applicationId（BuildConfig.APPLICATION_ID）拉最新域名（ADR-0002/0009）。可被 CDN 强缓存；后台域名变更后刷新快照。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "app"
+                ],
+                "summary": "运行时配置（APK 公开消费，强缓存）— 返回该渠道最新域名清单 + 探测端点",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "渠道 applicationId（解析键）",
+                        "name": "appId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.AppConfig"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "账号密码登录",
+                "parameters": [
+                    {
+                        "description": "账号密码",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.loginReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_handler.tokenResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/refresh": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "刷新 access token",
+                "parameters": [
+                    {
+                        "description": "refresh token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.refreshReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_handler.tokenResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/brands": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brands"
+                ],
+                "summary": "大渠道列表（含渠道计数、accent 色、默认域名）",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/brands/{code}/domains": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brands"
+                ],
+                "summary": "品牌默认域名清单",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 code (ap/bp/gp)",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brands"
+                ],
+                "summary": "更新品牌默认域名（主+最多3备用，强校验）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "域名清单",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.setDomainsReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/claim": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "runner 领取下一条 queued 任务（原子；无任务返回 data:null）",
+                "parameters": [
+                    {
+                        "description": "runner 标识",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.claimReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/jobs": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "入队一个构建任务（Web 打包中心触发；状态机 queued→running→success/failed）",
+                "parameters": [
+                    {
+                        "description": "brand/flavors/versionName(X.Y.Z)/testEvents/name?",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.CreateBuildJobInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/manifest": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "一次拉全：某品牌启用渠道 + 域名 + palcode + 资源 zip 地址（CLI 据此重写 CSV/res）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 code",
+                        "name": "brand",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.BuildManifest"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/records": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "构建记录列表（按品牌/状态筛选）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 code",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态 queued/running/success/failed",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "条数，默认 50",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/records/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "单条构建记录（含全部 APK 产物，供「构建记录页」列出下载）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "构建记录 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/records/{id}/artifacts": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "runner 上报一个产出的 APK（落 build_artifact，并汇总进记录）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "构建记录 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "flavor/versionName/apkUrl/size",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.AddBuildArtifactInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/records/{id}/logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "构建日志（分段/流式）—— 传 offset 拉增量，轮询 next 直到 done",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "构建记录 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "起始字节偏移，默认 0",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.BuildLogSegment"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "text/plain"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "runner 增量上报构建日志（请求体为纯文本，追加到该记录日志）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "构建记录 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "日志片段（纯文本）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/build/records/{id}/status": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "build"
+                ],
+                "summary": "runner 上报构建状态（running/success/failed）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "构建记录 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "状态",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.ReportBuildStatusInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "channels"
+                ],
+                "summary": "渠道列表（分页/搜索/筛选）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 code",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态 enabled/disabled/archived",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词（flavor/包名/应用名/palcode）",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，默认 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页，默认 50",
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "channels"
+                ],
+                "summary": "新增渠道（applicationId 派生自品牌包前缀+flavor；唯一性校验 applicationId 与 (brand,flavor)）",
+                "parameters": [
+                    {
+                        "description": "渠道字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.CreateChannelInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "channels"
+                ],
+                "summary": "渠道详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "channels"
+                ],
+                "summary": "修改渠道",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "可选更新字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.UpdateChannelInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "channels"
+                ],
+                "summary": "软删除渠道（置 archived）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels/{id}/domains": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "channels"
+                ],
+                "summary": "设置渠道域名覆盖 / 切回继承品牌",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "inheritBrand=true 表示切回继承",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.setChannelDomainsReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels/{id}/icon": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "icon"
+                ],
+                "summary": "上传裁剪后的主图(1024²) → imaging 生成全密度 → 返回各槽位预览",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "主图 PNG/JPEG",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "自适应图标背景色 #RRGGBB",
+                        "name": "background",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels/{id}/latest-apk": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "channels"
+                ],
+                "summary": "渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels/{id}/res.zip": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/zip"
+                ],
+                "tags": [
+                    "icon"
+                ],
+                "summary": "下载整套 res 资源 zip（CLI 用）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels/{id}/splash": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "icon"
+                ],
+                "summary": "上传 splash 源图",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "渠道 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "splash 源图",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/healthz": {
+            "get": {
+                "description": "返回约定 JSON {\"ok\":true,\"brand\":\"ap\",\"v\":1}。带 ?brand= 时回显品牌，供按品牌校验。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "app"
+                ],
+                "summary": "业务健康端点（供 APK 探针校验是我们站点）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 code（回显，便于 APK 校验 brand 匹配）",
+                        "name": "brand",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.healthzResp"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "github_com_hybrid-app_server_internal_domainutil.DomainInput": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_httpx.Envelope": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "0 = 成功，非 0 = 业务错误码（沿用 HTTP 状态码语义）",
+                    "type": "integer"
+                },
+                "data": {
+                    "description": "业务数据"
+                },
+                "message": {
+                    "description": "人类可读信息",
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.AddBuildArtifactInput": {
+            "type": "object",
+            "required": [
+                "apkUrl",
+                "flavor"
+            ],
+            "properties": {
+                "apkUrl": {
+                    "type": "string"
+                },
+                "flavor": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "versionName": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.AppConfig": {
+            "type": "object",
+            "properties": {
+                "appId": {
+                    "description": "= applicationId（解析键）",
+                    "type": "string"
+                },
+                "configVersion": {
+                    "description": "渠道 updated_at 时间戳，单调递增便于客户端判新",
+                    "type": "integer"
+                },
+                "domains": {
+                    "description": "[主, 备用1..3]，按 position 升序",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "palcode": {
+                    "description": "渠道 PAL_CODE（回显，APK 拼 /?palcode= 用，可跨品牌重复）",
+                    "type": "string"
+                },
+                "probePath": {
+                    "description": "APK 探测「确实是我们站点」用（ADR-0003）",
+                    "type": "string"
+                },
+                "ttlSeconds": {
+                    "description": "建议缓存秒数",
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.BuildLogSegment": {
+            "type": "object",
+            "properties": {
+                "done": {
+                    "description": "构建是否已进入终态（前端据此停止轮询）",
+                    "type": "boolean"
+                },
+                "log": {
+                    "description": "[offset, next) 区间的日志",
+                    "type": "string"
+                },
+                "next": {
+                    "description": "下次请求应传的 offset",
+                    "type": "integer"
+                },
+                "offset": {
+                    "description": "本段起始字节偏移",
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.BuildManifest": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "brandDomains": {
+                    "description": "品牌默认域名（继承用）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "channels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.ManifestChannel"
+                    }
+                },
+                "configBaseUrl": {
+                    "description": "CDN 配置端点前缀（烧录进 bootstrap.json）",
+                    "type": "string"
+                },
+                "generatedAt": {
+                    "type": "string"
+                },
+                "hmsEnabled": {
+                    "type": "boolean"
+                },
+                "scheme": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.CreateBuildJobInput": {
+            "type": "object",
+            "required": [
+                "brand",
+                "flavors",
+                "versionName"
+            ],
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "flavors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "可空，默认 \u003cbrand\u003e-\u003cversionName\u003e-\u003cYYYYMMDD-HHmm\u003e",
+                    "type": "string"
+                },
+                "testEvents": {
+                    "type": "boolean"
+                },
+                "versionName": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.CreateChannelInput": {
+            "type": "object",
+            "required": [
+                "appName",
+                "brandCode",
+                "flavorName",
+                "palCode"
+            ],
+            "properties": {
+                "appName": {
+                    "type": "string"
+                },
+                "brandCode": {
+                    "type": "string"
+                },
+                "flavorName": {
+                    "type": "string"
+                },
+                "palCode": {
+                    "type": "string"
+                },
+                "remark": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.ManifestChannel": {
+            "type": "object",
+            "properties": {
+                "appName": {
+                    "type": "string"
+                },
+                "applicationId": {
+                    "type": "string"
+                },
+                "configSnapshotUrl": {
+                    "description": "该渠道的 CDN 配置快照地址",
+                    "type": "string"
+                },
+                "effectiveDomains": {
+                    "description": "合并继承后的域名（写 bootstrap.json 兜底）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "flavorName": {
+                    "type": "string"
+                },
+                "palCode": {
+                    "type": "string"
+                },
+                "resZipUrl": {
+                    "description": "资源 zip 地址（CLI 下载解压到 flavor 目录）",
+                    "type": "string"
+                },
+                "splashUrl": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.ReportBuildStatusInput": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "logExcerpt": {
+                    "description": "可选：末段日志摘要，列表展示用",
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.UpdateChannelInput": {
+            "type": "object",
+            "properties": {
+                "appName": {
+                    "type": "string"
+                },
+                "flavorName": {
+                    "type": "string"
+                },
+                "palCode": {
+                    "type": "string"
+                },
+                "remark": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.claimReq": {
+            "type": "object",
+            "properties": {
+                "runner": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.healthzResp": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "ok": {
+                    "type": "boolean"
+                },
+                "v": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_handler.loginReq": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.refreshReq": {
+            "type": "object",
+            "properties": {
+                "refreshToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.setChannelDomainsReq": {
+            "type": "object",
+            "properties": {
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_domainutil.DomainInput"
+                    }
+                },
+                "inheritBrand": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_handler.setDomainsReq": {
+            "type": "object",
+            "properties": {
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_domainutil.DomainInput"
+                    }
+                }
+            }
+        },
+        "internal_handler.tokenResp": {
+            "type": "object",
+            "properties": {
+                "accessToken": {
+                    "type": "string"
+                },
+                "expiresIn": {
+                    "type": "integer"
+                },
+                "refreshToken": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

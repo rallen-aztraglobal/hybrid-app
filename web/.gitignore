@@ -1,0 +1,12 @@
+# web/ (React) — 由 ADR-0007 约定忽略
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+
+# 编辑器
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

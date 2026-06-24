@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============ 设计令牌（取自 docs/admin/ui/index.html，视觉权威） ============ */
+:root {
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --panel-2: #fbfcfe;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --muted: #94a3b8;
+  --line: #e7ecf3;
+  --line-2: #eef2f7;
+  --brand: #6366f1;
+  --brand-ink: #4f46e5;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --down: #ef4444;
+  --ap: #f97316;
+  --bp: #2563eb;
+  --gp: #7c3aed;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .04);
+  --shadow-md: 0 10px 30px -12px rgba(15, 23, 42, .22);
+  --shadow-lg: 0 24px 60px -20px rgba(15, 23, 42, .35);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+::selection {
+  background: rgba(99, 102, 241, .18);
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+/* 细滚动条，贴合中台密集表单观感 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============ 可复用组件类（@layer components 便于 Tailwind 合并） ============ */
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-[10px] px-[15px] py-[9px] text-[13px] font-semibold transition border border-transparent;
+  }
+  .btn svg {
+    @apply w-4 h-4;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--brand), #8b5cf6);
+    color: #fff;
+    box-shadow: 0 8px 20px -8px rgba(99, 102, 241, .8);
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px -8px rgba(99, 102, 241, .9);
+  }
+  .btn-primary:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-ghost {
+    background: var(--panel);
+    border-color: var(--line);
+    color: var(--ink-2);
+  }
+  .btn-ghost:hover {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  .field-input {
+    @apply w-full rounded-[10px] border px-3 py-[10px] text-[13px] transition;
+    border-color: var(--line);
+    background: var(--panel-2);
+  }
+  .field-input:focus {
+    outline: none;
+    border-color: var(--brand);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, .12);
+  }
+
+  .section-card {
+    @apply rounded-[14px] border p-[18px];
+    background: var(--panel);
+    border-color: var(--line);
+  }
+
+  .chip {
+    @apply rounded-[9px] border px-[13px] py-[7px] text-[13px] font-medium transition;
+    border-color: var(--line);
+    background: var(--panel);
+    color: var(--ink-2);
+  }
+  .chip:hover {
+    background: var(--bg);
+  }
+  .chip-on {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+}

@@ -1,0 +1,25 @@
+# 构建上下文 = 仓库根；构建机镜像只需 cli/（编译 hybrid-pack）+ deploy/（入口脚本）。
+# Android 工程不从构建上下文进镜像——它在运行时经仓库卷 checkout（见 builder-entrypoint.sh）。
+*
+
+# 放行 CLI 源码与本部署目录。
+!cli/
+!deploy/
+
+# 排除 CLI 构建产物。
+cli/bin/
+
+# 部署目录里排除机密与 env（release.keystore 例外，见文件末尾放行）。
+deploy/secrets/*
+deploy/.env
+deploy/.env.*
+
+# 安全：keystore / 本地配置绝不进构建上下文（护栏 #4）。
+**/local.properties
+**/*.keystore
+**/*.jks
+
+# 例外（必须放最后，否则被上面的 **/*.keystore 重新排除）：
+# build-runner 镜像【必须】烧入这一个签名 keystore（ADR-0008/0010：运营决定直接内置、
+# 私有 registry、接受风险）。CI 把 release.keystore 放到 deploy/secrets/ 后构建。
+!deploy/secrets/release.keystore

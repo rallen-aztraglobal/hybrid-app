@@ -1,0 +1,133 @@
+/**
+ * 渠道管理页 —— 复刻原型「渠道管理」视图：
+ * 3 大渠道 Tab + 状态筛选 chip + 同步状态 + 新增渠道 + 渠道卡片网格。
+ * 顶栏全局搜索（uiStore.search）联动过滤 flavor/包名/PAL_CODE/应用名。
+ */
+import { useMemo, useState } from 'react';
+import { useArchiveChannel, useBrands, useChannels } from '@/hooks/queries';
+import { useUiStore } from '@/store/uiStore';
+import { BRAND_META } from '@/lib/brands';
+import type { Channel, ChannelStatus } from '@/lib/types';
+import { BrandTabs } from '@/components/BrandTabs';
+import { ChannelCard } from '@/components/ChannelCard';
+import { ChannelDrawer } from '@/components/ChannelDrawer';
+import { Button } from '@/components/ui';
+import { PlusIcon, RefreshIcon } from '@/components/icons';
+import { cn } from '@/lib/cn';
+
+type Filter = 'all' | 'enabled' | 'disabled';
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'enabled', label: '启用中' },
+  { key: 'disabled', label: '已停用' },
+];
+
+export function ChannelsPage() {
+  const { data: brands } = useBrands();
+  const { data: channels, isLoading } = useChannels();
+  const archive = useArchiveChannel();
+
+  const currentBrand = useUiStore((s) => s.currentBrand);
+  const setCurrentBrand = useUiStore((s) => s.setCurrentBrand);
+  const search = useUiStore((s) => s.search);
+  const openCreate = useUiStore((s) => s.openCreate);
+  const openEdit = useUiStore((s) => s.openEdit);
+
+  // 本页本地筛选态（启用/停用），不污染全局 store
+  const [activeFilter, setFilter] = useState<Filter>('all');
+
+  const brand = (brands ?? []).find((b) => b.code === currentBrand);
+
+  const visible = useMemo(() => {
+    let list = (channels ?? []).filter(
+      (c) => c.brandCode === currentBrand && c.status !== 'archived',
+    );
+    if (activeFilter !== 'all') {
+      const want: ChannelStatus = activeFilter === 'enabled' ? 'enabled' : 'disabled';
+      list = list.filter((c) => c.status === want);
+    }
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter((c) =>
+        [c.flavorName, c.applicationId, c.palCode, c.appName].some((f) =>
+          f.toLowerCase().includes(q),
+        ),
+      );
+    }
+    return list;
+  }, [channels, currentBrand, activeFilter, search]);
+
+  return (
+    <section>
+      {brands && (
+        <BrandTabs brands={brands} current={currentBrand} onSelect={setCurrentBrand} />
+      )}
+
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="flex gap-2 items-center">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={cn('chip', activeFilter === f.key && 'chip-on')}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex gap-[10px]">
+          <Button
+            onClick={() =>
+              alert('从后台同步到本地 CSV / res（hybrid-pack pull）\n\n这是 CLI 动作，后台仅作展示入口。')
+            }
+          >
+            <RefreshIcon />
+            同步状态
+          </Button>
+          <Button variant="primary" onClick={openCreate}>
+            <PlusIcon />
+            新增渠道
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <GridSkeleton />
+      ) : visible.length === 0 ? (
+        <div className="text-center text-muted py-[60px]">
+          {search.trim() ? '没有匹配搜索的渠道' : '该筛选下暂无渠道'}
+        </div>
+      ) : (
+        <div
+          className="grid gap-[14px]"
+          style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))' }}
+        >
+          {brand &&
+            visible.map((c: Channel) => (
+              <ChannelCard
+                key={c.id}
+                channel={c}
+                brand={brand}
+                onEdit={() => openEdit(c.id)}
+                onArchive={() => archive.mutate(c.id)}
+              />
+            ))}
+        </div>
+      )}
+
+      {/* 新增/编辑抽屉 */}
+      <ChannelDrawer brandMeta={BRAND_META[currentBrand]} />
+    </section>
+  );
+}
+
+function GridSkeleton() {
+  return (
+    <div className="grid gap-[14px]" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))' }}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="h-[176px] rounded-card bg-panel border border-line animate-pulse" />
+      ))}
+    </div>
+  );
+}

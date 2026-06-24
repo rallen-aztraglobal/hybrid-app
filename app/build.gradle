@@ -44,6 +44,20 @@ def allChannels = brandConfig.keySet().collectMany { loadChannels(it) }
 // 测试事件开关：打包时传 -PtestEvents=true 开启（默认关闭）。
 def enableTestEvents = (project.findProperty("testEvents") ?: "false").toString().toBoolean()
 
+// 版本号：打包时传 -PversionName=1.0.1（固定 X.Y.Z 格式）。
+// versionCode 由 versionName「去掉点」换算（1.0.1 → 101）。
+// 注意：为保证 versionCode 单调递增，各段建议保持个位数（0-9）。
+def appVersionName = (project.findProperty("versionName") ?: "1.0.3").toString().trim()
+if (!(appVersionName ==~ /\d+\.\d+\.\d+/)) {
+    throw new GradleException("versionName 必须为 X.Y.Z 格式（如 1.0.1），当前: '${appVersionName}'")
+}
+// versionCode 由 versionName「去掉点」换算（1.0.1 → 101）。为保证单调递增，各段必须个位数（0-9）：
+// 多位会破坏顺序（1.0.10→1010 反超 1.1.0→110），故直接拒绝而非静默错排（评审 A3）。
+if (appVersionName.tokenize('.').any { it.toInteger() > 9 }) {
+    throw new GradleException("versionName 各段须为个位数 0-9（当前: '${appVersionName}'）；如需多位段请改用定宽 versionCode 方案")
+}
+def appVersionCode = appVersionName.replace(".", "").toInteger()
+
 android {
     namespace 'com.hybrid.android'
     compileSdk 36
@@ -52,8 +66,8 @@ android {
         applicationId "com.hybrid.android"
         minSdk 29
         targetSdk 36
-        versionCode 4
-        versionName "1.0.3"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a' // 只支持这两个架构
@@ -89,18 +103,29 @@ android {
         }
     }
 
+    // 仅当 local.properties 配齐 keystore 时才装配 release 签名；否则留空（评审 A4：
+    // 避免 file(null) 在配置期 NPE，连带把 assembleDebug 也搞挂）。构建机镜像已烧入 local.properties。
+    def keystoreFile = localProperties.get("KEYSTORE_FILE")?.toString()?.trim()
+    def hasKeystore = keystoreFile != null && !keystoreFile.isEmpty()
+
     signingConfigs {
         release {
-            storeFile file(localProperties.get("KEYSTORE_FILE"))
-            storePassword localProperties.get("KEYSTORE_PASSWORD")
-            keyAlias localProperties.get("KEY_ALIAS")
-            keyPassword localProperties.get("KEY_PASSWORD")
+            if (hasKeystore) {
+                storeFile file(keystoreFile)
+                storePassword localProperties.get("KEYSTORE_PASSWORD")
+                keyAlias localProperties.get("KEY_ALIAS")
+                keyPassword localProperties.get("KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn("未配置 KEYSTORE_FILE：release 将不签名（仅适用于无密钥环境的冒烟编译）。")
+            }
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -115,6 +140,14 @@ android {
     buildFeatures {
         compose true
         buildConfig = true
+    }
+    // 单测在纯 JVM 跑：用 Robolectric 提供真实 org.json / android.util.Log（替代会抛异常的桩）。
+    // includeAndroidResources 让 Robolectric 能加载合并后的资源/清单（DomainResolver 单测虽不读资源，
+    // 但开启后 Robolectric 运行更稳，且为后续可能读 assets/资源的测试留好基建）。
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
     }
 }
 
@@ -136,6 +169,11 @@ dependencies {
     implementation libs.play.services.appset
     implementation libs.filament.android
 
+    // 域名容灾（DomainResolver）：协程做 STEP1 拉取 / STEP2 并发探测；OkHttp 做网络与证书校验
+    implementation libs.kotlinx.coroutines.android
+    implementation libs.androidx.lifecycle.runtime.compose
+    implementation libs.okhttp
+
     // HMS / AppsFlyer OAID：仅 BP 品牌渠道集成（按 flavor 维度注入依赖）
     allChannels.findAll { brandConfig[it.brand].hms }.each { ch ->
         add("${ch.name}Implementation", libs.af.oaid)
@@ -143,6 +181,10 @@ dependencies {
     }
 
     testImplementation libs.junit
+    testImplementation libs.kotlinx.coroutines.test
+    testImplementation libs.okhttp.mockwebserver
+    // Robolectric：在纯 JVM 单测中提供真实 org.json / android.util.Log 实现（解决桩 NPE / not-mocked）。
+    testImplementation libs.robolectric
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core
     androidTestImplementation platform(libs.androidx.compose.bom)

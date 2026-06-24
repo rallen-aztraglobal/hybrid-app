@@ -1,0 +1,139 @@
+# ============================================================================
+# deploy/docker-compose.api.yml —— 服务 A「API 服务」(1C2G·公网)
+#   决策：ADR-0008（两套独立部署）/ ADR-0010（预构建镜像）/ docs/admin/05、06
+#
+# 拓扑（服务 A，docs/admin/05 §「服务 A」）：
+#   nginx   对外 TLS 终结 + 路由：/api → go-api:8090、/healthz、/static、/swagger
+#   go-api  后端 Echo 单静态二进制（distroless），内部 :8090
+#   mysql   元数据库（MySQL 8）—— 跟随服务 A
+#
+# 对外职责：供已装 APK 拉域名配置（公开 GET /api/app/config?appId=）+ 后台数据 API。
+#   APK 下载（/apks/）不在本服务——在服务 B（Console+打包）。
+#
+# 交付（ADR-0010）：我方 CI 用 build: 段构建并按 vX.Y.Z 推私有 registry；
+#   运维只 `docker compose -f docker-compose.api.yml pull && up -d`，永不 build。
+#   每个自建服务同时写 image:（运维 pull）与 build:（我方 CI build）。
+#
+# keystore：本服务【完全不涉及】签名密钥（仅服务 B 的 build-runner 内置，见 06 §4）。
+#
+# 自测（只校验语法，不要 up）：
+#   docker compose -f deploy/docker-compose.api.yml config -q
+# 配置来自同目录 .env（拷 .env.api.example 改）。
+# ============================================================================
+
+name: hybrid-api
+
+services:
+  # -------------------------------------------------------------------------
+  # nginx：对外 TLS 终结 + 反代到 go-api
+  # -------------------------------------------------------------------------
+  nginx:
+    image: registry.example.com/hybrid/nginx-api:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web         # 复用多阶段镜像；服务 A 只用其 nginx 层。
+      target: nginx-api                          # 仅取 nginx（不含前端 dist）的阶段。
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      # 注入到 /etc/nginx/templates/*.template（官方镜像启动期 envsubst 渲染）。
+      DOMAIN: "${DOMAIN:?set DOMAIN to your API hostname, e.g. api.example.com}"
+    volumes:
+      # 证书：运维放 fullchain.pem / privkey.pem 到 ./certs（docs/admin/05）。
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      go-api:
+        condition: service_started
+    networks:
+      - edge
+      - internal
+
+  # -------------------------------------------------------------------------
+  # go-api：后端（单静态二进制，内部 :8090）
+  # -------------------------------------------------------------------------
+  go-api:
+    image: registry.example.com/hybrid/go-api:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    expose:
+      - "8090"                         # 仅内网暴露，由 nginx 反代；不发布到宿主。
+    environment:
+      # —— HTTP ——
+      SERVER_ADDR: ":8090"
+      CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-}"   # 同源反代时通常留空；Console 跨域调用时填其域名。
+      # —— DB（MySQL 8）——
+      DB_DRIVER: "mysql"
+      DB_DSN: "${MYSQL_USER:-hybrid}:${MYSQL_PASSWORD:-hybrid}@tcp(mysql:3306)/${MYSQL_DATABASE:-hybrid_admin}?charset=utf8mb4&parseTime=True&loc=Local"
+      DB_AUTOMIGRATE: "${DB_AUTOMIGRATE:-true}"
+      DB_AUTOSEED: "${DB_AUTOSEED:-true}"
+      # 首次部署：DB_AUTOSEED=true 且渠道表为空时，自动从 SEED_DIR 导入 channels/*.csv
+      # 并把各渠道已有图标/启动页注册进库（经 /static → nginx）。SEED_DIR 默认 /app/seed
+      # （镜像内已 COPY channels + res），通常无需改。
+      SEED_DIR: "${SEED_DIR:-/app/seed}"
+      # —— 对象存储（服务 A 本地磁盘，图标/资源；APK 不走这里）——
+      STORAGE_KIND: "${STORAGE_KIND:-local}"
+      STORAGE_LOCAL_DIR: "/data/objects"
+      STORAGE_PUBLIC_URL: "${STORAGE_PUBLIC_URL:-/static}"
+      # —— JWT / 初始管理员 ——
+      # JWT_SECRET 留空 → 后端首启自动生成（ADR-0010 / docs/admin/06 §3）。
+      JWT_SECRET: "${JWT_SECRET:-}"
+      JWT_ISSUER: "${JWT_ISSUER:-hybrid-admin}"
+      BOOTSTRAP_ADMIN: "${BOOTSTRAP_ADMIN:-admin:admin12345}"
+      # 构建机长期静态令牌（ADR-0008 / 评审 S1）：非空时 /build/* 机器接口接受该 Bearer，
+      # 让 runner 常驻轮询不受 access token 过期影响。【必须与服务 B 的 HYBRID_RUNNER_TOKEN 相同】。
+      RUNNER_TOKEN: "${RUNNER_TOKEN:-}"
+      # —— 运行时配置端点 / 域名巡检 ——
+      APP_PROBE_PATH: "${APP_PROBE_PATH:-/healthz}"
+      APP_CONFIG_TTL_SECONDS: "${APP_CONFIG_TTL_SECONDS:-600}"
+      DOMAIN_PROBE_ENABLE: "${DOMAIN_PROBE_ENABLE:-true}"
+    volumes:
+      - api-data:/data                  # sqlite 兜底 / local 对象存储根。
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # -------------------------------------------------------------------------
+  # mysql：元数据库（跟随服务 A）
+  # -------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-change-me-root}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-hybrid_admin}"
+      MYSQL_USER: "${MYSQL_USER:-hybrid}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-change-me-app}"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # shell 形式在容器内引用 $MYSQL_ROOT_PASSWORD（容器 env），避免 compose 期插值告警。
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - internal
+
+# ---------------------------------------------------------------------------
+# 卷：DB / 后端数据
+# ---------------------------------------------------------------------------
+volumes:
+  mysql-data:
+  api-data:
+
+# ---------------------------------------------------------------------------
+# 网络：edge（对外，仅 nginx）/ internal（服务间，不发布端口）
+# ---------------------------------------------------------------------------
+networks:
+  edge:
+  internal:

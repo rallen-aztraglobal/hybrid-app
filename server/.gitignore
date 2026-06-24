@@ -1,0 +1,8 @@
+# 构建产物与运行期数据（ADR-0007）
+/bin/
+/data/
+*.db
+*.db-shm
+*.db-wal
+hybrid_admin.db
+smoke.db

@@ -1,0 +1,118 @@
+# ============================================================================
+# deploy/docker-compose.console.yml —— 服务 B「Console + 打包」(4C8G·运营)
+#   决策：ADR-0008（两套独立部署）/ ADR-0010（预构建镜像）/ docs/admin/05、06
+#
+# 拓扑（服务 B，docs/admin/05 §「服务 B」）：
+#   nginx         对外 TLS 终结 + 路由：
+#                   /       → web（React 静态 dist）
+#                   /api    → 反代到服务 A（API_BASE_URL）
+#                   /apks/  → 静态产物卷（与 build-runner 共享，供下载）
+#   web           React 静态 dist（内部 nginx 出站，仅 SPA 文件）
+#   build-runner  服务器端 Android 构建机（JDK17+SDK+hybrid-pack），keystore 已内置镜像
+#
+# 与服务 A 的关系：本服务不含 go-api/mysql；Console 的 /api 反代到服务 A，
+#   build-runner 从服务 A 领 build-job、APK 落本机 apks 卷供 nginx /apks/ 下载。
+#
+# 交付（ADR-0010）：我方 CI 用 build: 段构建并按 vX.Y.Z 推私有 registry；
+#   运维只 `docker compose -f docker-compose.console.yml pull && up -d`，永不 build。
+#   每个自建服务同时写 image:（运维 pull）与 build:（我方 CI build）。
+#
+# keystore（ADR-0008/0010 更新 + docs/admin/06 §4）：
+#   直接【烧进 build-runner 镜像】，运维零 keystore 操作；.env 无 keystore 项。
+#
+# 自测（只校验语法，不要 up）：
+#   docker compose -f deploy/docker-compose.console.yml config -q
+# 配置来自同目录 .env（拷 .env.console.example 改）。
+# ============================================================================
+
+name: hybrid-console
+
+services:
+  # -------------------------------------------------------------------------
+  # nginx：对外 TLS 终结 + 路由（/ → web、/api → 服务 A、/apks/ → 产物卷）
+  # -------------------------------------------------------------------------
+  nginx:
+    image: registry.example.com/hybrid/nginx-console:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: nginx-console                      # 仅取 Console 前置代理（不含 dist）的阶段。
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      # 注入到 /etc/nginx/templates/*.template（官方镜像启动期 envsubst 渲染）。
+      DOMAIN: "${DOMAIN:?set DOMAIN to your Console hostname, e.g. console.example.com}"
+      # /api 反代目标 = 服务 A 的对外地址（docs/admin/05 服务 B 必填）。
+      API_BASE_URL: "${API_BASE_URL:?set API_BASE_URL to service A, e.g. https://api.example.com}"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro              # 运维放 fullchain.pem / privkey.pem。
+      - apks:/srv/apks:ro                        # 产物卷只读出下载（与 build-runner 共享）。
+    depends_on:
+      web:
+        condition: service_started
+    networks:
+      - edge
+      - internal
+
+  # -------------------------------------------------------------------------
+  # web：React 静态 dist（内部出站，仅 SPA 文件；/api、/apks 由前置 nginx 处理）
+  # -------------------------------------------------------------------------
+  web:
+    image: registry.example.com/hybrid/web:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: web-dist                           # 只出 dist 的轻量 nginx。
+    restart: unless-stopped
+    expose:
+      - "80"                                      # 仅内网；前置 nginx upstream 指向它。
+    networks:
+      - internal
+
+  # -------------------------------------------------------------------------
+  # build-runner：服务器端 Android 构建机（ADR-0008）
+  #   = 跑在服务器上的 hybrid-pack；从服务 A 的 build-job 队列取活。
+  #   keystore 已在镜像构建期烧入（COPY + local.properties），运行时零注入。
+  # -------------------------------------------------------------------------
+  build-runner:
+    image: registry.example.com/hybrid/build-runner:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.builder
+      # keystore 与签名口令在我方 CI build 时经 build args 注入（见 06 §4 / Dockerfile.builder）。
+      # 运维 pull 已内置 keystore 的镜像，无需提供任何 build args。
+    restart: unless-stopped
+    environment:
+      # runner 找服务 A（领 build-job）。容器内默认走 edge 出网到 API_BASE_URL。
+      HYBRID_SERVER_URL: "${API_BASE_URL:?set API_BASE_URL to service A, e.g. https://api.example.com}"
+      HYBRID_RUNNER_TOKEN: "${HYBRID_RUNNER_TOKEN:-}"
+      # 仓库工作区与产物目录（与卷挂载点一致）。
+      BUILDER_WORKSPACE: "/workspace"
+      BUILDER_REPO_DIR: "/workspace/hybrid-app"
+      BUILDER_REPO_URL: "${BUILDER_REPO_URL:-}"
+      BUILDER_REPO_BRANCH: "${BUILDER_REPO_BRANCH:-}"
+      APKS_DIR: "/apks"
+      # 注意：无 KEYSTORE_* 变量——keystore 与 local.properties 已烧进镜像。
+    volumes:
+      - repo:/workspace                 # 仓库 checkout 卷。
+      - apks:/apks                      # 产物卷（与 nginx 共享，APK 落此供下载）。
+    networks:
+      - edge                            # 出网拉依赖 + 访问服务 A。
+      - internal
+    # 构建吃资源；本服务规格 4C8G（docs/admin/05）。如需多 runner 并行可 scale。
+
+# ---------------------------------------------------------------------------
+# 卷：产物（nginx 出下载 + build-runner 写）/ 仓库工作区
+# ---------------------------------------------------------------------------
+volumes:
+  apks:          # 构建产物（build-runner 写、nginx 出下载）。
+  repo:          # 构建机仓库工作区。
+
+# ---------------------------------------------------------------------------
+# 网络：edge（对外 + 出网）/ internal（服务间，不发布端口）
+# ---------------------------------------------------------------------------
+networks:
+  edge:          # 对外：nginx 发布 80/443；build-runner 借此出网 + 访问服务 A。
+  internal:      # 服务间：nginx ↔ web。
