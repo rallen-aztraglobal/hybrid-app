@@ -9,7 +9,6 @@ def localFile = rootProject.file("local.properties")
 if (localFile.exists()) {
     localFile.withInputStream { stream -> localProperties.load(stream) }
 }
-
 android {
     namespace 'com.hybrid.android'
     compileSdk 36
@@ -18,8 +17,8 @@ android {
         applicationId "com.bingoplus.bpom3410"
         minSdk 29
         targetSdk 36
-        versionCode 4
-        versionName "1.0.3"
+        versionCode 5
+        versionName "1.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a' // 只支持这两个架构
@@ -27,6 +26,30 @@ android {
     }
     flavorDimensions "channel"
     productFlavors {
+        bpom3413 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3413"
+            resValue "string", "app_name", "Bingo Plus Drop Ball"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761519582806016\""
+        }
+        bpom3412 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3412"
+            resValue "string", "app_name", "Bingo Plus Mega Bingo"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761518970437633\""
+        }
+        bpom3411 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpom3411"
+            resValue "string", "app_name", "Pacquiao Super Ace"
+            // 添加 AppsFlyer Key 和 Web 域名
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1146761518404206592\""
+        }
         bpom3410 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3410"
@@ -38,7 +61,7 @@ android {
         bpom3409 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3409"
-            resValue "string", "app_name", "Bingo Plus Live hub"
+            resValue "string", "app_name", "Bingo Plus Drop Ball"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761517187858432\""
@@ -46,7 +69,7 @@ android {
         bpom3408 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3408"
-            resValue "string", "app_name", "Bingo Plus Slot Master"
+            resValue "string", "app_name", "Bingo Plus Mega Bingo"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761516571295745\""
@@ -55,7 +78,7 @@ android {
         bpom3407 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3407"
-            resValue "string", "app_name", "Bingo Plus Exlusive"
+            resValue "string", "app_name", "Pacquiao Super Ace"
             // 添加 AppsFlyer Key 和 Web 域名
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761515996676096\""
@@ -119,7 +142,7 @@ android {
         bpom3447 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3447"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            resValue "string", "app_name", "Bingo Plus Drop Ball"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761540428496896\""
         }
@@ -127,7 +150,7 @@ android {
         bpom3446 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3446"
-            resValue "string", "app_name", "Bingo Plus - Jackpot Plus"
+            resValue "string", "app_name", "Bingo Plus Mega Bingo"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761539811934209\""
         }
@@ -135,7 +158,7 @@ android {
         bpom3445 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3445"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            resValue "string", "app_name", "Pacquiao Super Ace"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761539186982912\""
         }
@@ -151,7 +174,7 @@ android {
         bpom3443 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3443"
-            resValue "string", "app_name", "Bingo Plus - Mega Bingo"
+            resValue "string", "app_name", "Bingo Plus PH"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761537928691712\""
         }
@@ -159,15 +182,15 @@ android {
         bpom3442 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3442"
-            resValue "string", "app_name", "Bingo Plus - lucky spin"
+            resValue "string", "app_name", "Bingo Plus PH"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761537328906241\""
         }
 
         bpom3441 {
             dimension "channel"
-            applicationId "com.bingoplus.bpom3441"
-            resValue "string", "app_name", "Bingo Plus - lucky spin"
+            applicationId "com.bingoplus.bpom3441.hw"
+            resValue "string", "app_name", "Bingo Plus PH"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761536695566336\""
         }
@@ -175,7 +198,7 @@ android {
         bpom3440 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3440"
-            resValue "string", "app_name", "Bingo Plus - 30% Bonus"
+            resValue "string", "app_name", "Bingo Plus PH"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761536007700481\""
         }
@@ -183,7 +206,7 @@ android {
         bpom3439 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3439"
-            resValue "string", "app_name", "Bingo Plus Exlusive"
+            resValue "string", "app_name", "Bingo Plus Drop Ball"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761535399526400\""
         }
@@ -191,11 +214,24 @@ android {
         bpom3438 {
             dimension "channel"
             applicationId "com.bingoplus.bpom3438"
-            resValue "string", "app_name", "Bingo Plus Exlusive"
+            resValue "string", "app_name", "Bingo Plus Fortune Gems"
             buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
             buildConfigField "String", "PAL_CODE", "\"1146761534820712449\""
         }
-
+        bpcm01052 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpcm01052"
+            resValue "string", "app_name", "Fortune Gems Pacquiao"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1958126722894614528\""
+        }
+        bpcm01051 {
+            dimension "channel"
+            applicationId "com.bingoplus.bpcm01051"
+            resValue "string", "app_name", "Bingo Plus VIP"
+            buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
+            buildConfigField "String", "PAL_CODE", "\"1958126722424852480\""
+        }
     }
 
     signingConfigs {
@@ -238,7 +274,6 @@ dependencies {
     implementation libs.androidx.ui.tooling.preview
     implementation libs.androidx.material3
     implementation libs.androidx.fragment.ktx
-
     implementation libs.webview.interceptor
     implementation libs.af.android.sdk
     implementation libs.af.oaid

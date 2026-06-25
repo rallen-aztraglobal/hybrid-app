@@ -465,7 +465,7 @@ class WebViewActivity : ComponentActivity() {
 
     private fun replayUserApi() {
         lastUserApiJson?.let {
-            showToast("回到App，发起检测")
+            //showToast("回到App，发起检测")
             webView.evaluateJavascript("window.replayRequest(${it.quoted()})", null)
         }
     }
@@ -495,9 +495,9 @@ class WebViewActivity : ComponentActivity() {
             val firstDepositDate = firstDepositDateStr.toLocalDateOrNull()
             val registDate = registDateStr.toLocalDateOrNull()
             if (firstDepositFlag == null) {
-                showToast("首存状态已就绪：firstDepositFlag = $flag");
+                //showToast("首存状态已就绪：firstDepositFlag = $flag");
             } else if (firstDepositFlag == false) {
-                showToast("检测首存状态： firstDepositFlag = $flag 历史首存状态：$firstDepositFlag")
+                //showToast("检测首存状态： firstDepositFlag = $flag 历史首存状态：$firstDepositFlag")
             }
             if (firstDepositFlag == false && flag) {
                 val sameDay = firstDepositDate == registDate
@@ -514,7 +514,7 @@ class WebViewActivity : ComponentActivity() {
         }
 
         if (apiUrl.contains("billDetail")) {
-            showToast("拦截到billDetail接口响应： status = ${data.getInt("status")}")
+            //showToast("拦截到billDetail接口响应： status = ${data.getInt("status")}")
             if (firstDepositFlag == true && data.getInt("status") == 0) {
                 sendAFEvent("AddToCart")
             }
@@ -548,13 +548,13 @@ class WebViewActivity : ComponentActivity() {
                 override fun onSuccess() {
                     Log.d("Appsflyer", "Sent event SUCCESS: $eventName")
                     runOnUiThread {
-                        showToast("事件发送成功: $eventName")
+                        //showToast("事件发送成功: $eventName")
                     }
                 }
                 override fun onError(errorCode: Int, p1: String) {
                     Log.e("Appsflyer", "Sent event FAILED: $eventName, errorCode: $errorCode, message: $p1")
                     runOnUiThread {
-                        showToast("事件发送失败: $p1")
+                        //showToast("事件发送失败: $p1")
                     }
                 }
             }
