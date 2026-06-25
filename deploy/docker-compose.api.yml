@@ -89,6 +89,8 @@ services:
       # —— 运行时配置端点 / 域名巡检 ——
       APP_PROBE_PATH: "${APP_PROBE_PATH:-/healthz}"
       APP_CONFIG_TTL_SECONDS: "${APP_CONFIG_TTL_SECONDS:-600}"
+      # APK 运行时配置端点基址（烧进 bootstrap.json 的 configUrl；改域名不重打包的关键）。
+      APP_CONFIG_BASE_URL: "${APP_CONFIG_BASE_URL:-}"
       DOMAIN_PROBE_ENABLE: "${DOMAIN_PROBE_ENABLE:-true}"
     volumes:
       - api-data:/data                  # sqlite 兜底 / local 对象存储根。

@@ -40,6 +40,17 @@ func (m ManifestChannel) CSVLine() string {
 	return strings.Join([]string{m.FlavorName, m.ApplicationID, m.PalCode, m.AppName}, "|")
 }
 
+// appConfigBaseURL 返回烧进 bootstrap.json 的运行时配置端点基址。
+// APK 用 GET ${base}?appId=<applicationId> 拉「该渠道当前的 web 域名列表」（ADR-0002/0009）。
+// 优先 APP_CONFIG_BASE_URL（如 https://api.<域名>/api/app/config）；未设则回退对象存储前缀
+// （旧静态快照方案，但那样烧进 APK 的是相对地址、拉不到实时配置、改域名不热更）。
+func (s *Service) appConfigBaseURL() string {
+	if b := strings.TrimRight(strings.TrimSpace(s.cfg.AppConfigBaseURL), "/"); b != "" {
+		return b
+	}
+	return s.storage.PublicURL("app-config")
+}
+
 // BuildManifestForBrand 组装某品牌的构建 manifest。
 func (s *Service) BuildManifestForBrand(ctx context.Context, brandCode string) (*BuildManifest, error) {
 	brand, err := s.repo.GetBrandByCode(ctx, brandCode)
@@ -69,7 +80,7 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, brandCode string) (
 		Scheme:        brand.Scheme,
 		HMSEnabled:    brand.HMSEnabled,
 		BrandDomains:  brandDomains,
-		ConfigBaseURL: s.storage.PublicURL("app-config"),
+		ConfigBaseURL: s.appConfigBaseURL(),
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 	for i := range list {

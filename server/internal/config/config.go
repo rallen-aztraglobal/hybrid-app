@@ -57,6 +57,7 @@ type Config struct {
 	BootstrapAdmin    string // 启动时若无任何用户则建一个 admin，格式 user:password
 	DefaultProbePath  string // /api/app/config 返回的 probePath，默认 /healthz
 	AppConfigTTLSecs  int    // /api/app/config 的 ttlSeconds
+	AppConfigBaseURL  string // APK 烧录的运行时配置端点（APK 用 GET ${base}?appId= 拉域名列表）；空则回退对象存储前缀
 	DomainProbeEnable bool   // 是否启用 cron 域名巡检
 }
 
@@ -93,6 +94,10 @@ func Load() *Config {
 		BootstrapAdmin:   env("BOOTSTRAP_ADMIN", "admin:admin12345"),
 		DefaultProbePath: env("APP_PROBE_PATH", "/healthz"),
 		AppConfigTTLSecs: envInt("APP_CONFIG_TTL_SECONDS", 600),
+		// APK 运行时配置端点基址（烧进 bootstrap.json 的 configUrl）。
+		// 形如 https://api.example.com/api/app/config；APK 实际请求 ${base}?appId=<applicationId>。
+		// 留空 → 回退旧静态快照前缀（storage.PublicURL），但那样 APK 拉不到实时配置、无法热更域名。
+		AppConfigBaseURL: env("APP_CONFIG_BASE_URL", ""),
 
 		DomainProbeEnable: envBool("DOMAIN_PROBE_ENABLE", true),
 	}
