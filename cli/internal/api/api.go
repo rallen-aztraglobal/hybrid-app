@@ -260,6 +260,48 @@ func (c *Client) PostBuildRecord(ctx context.Context, rec manifest.BuildRecord) 
 	return out.ID, nil
 }
 
+// FetchGoogleServicesJSON 拉取指定品牌的合并 google-services.json：
+// GET /api/app/google-services?brand=<ap|bp|gp>
+//
+// 「有则拉、无则跳过」语义：
+//   - 后端返回 404 → 视为「该品牌尚未配置 FCM」，返回 (nil, nil)。
+//   - 后端返回其他 4xx/5xx → 同样宽容处理，返回 (nil, nil) 而非错误，
+//     以免 FCM 未就绪期间阻断 pull 流程（ADR-0012 第 6b 节）。
+//   - 成功则返回 JSON 字节，由调用方写到 app/google-services.json。
+func (c *Client) FetchGoogleServicesJSON(ctx context.Context, brand string) ([]byte, error) {
+	path := "/api/app/google-services?brand=" + url.QueryEscape(brand)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url(path), nil)
+	if err != nil {
+		return nil, fmt.Errorf("构造 google-services 请求失败: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		// 网络异常：宽容跳过，不阻断打包。
+		return nil, nil
+	}
+	defer resp.Body.Close()
+	// 404 或后端尚未实现该端点 → FCM 未配置，跳过。
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusNotImplemented {
+		return nil, nil
+	}
+	// 其他非 2xx → 也宽容跳过，记录在调用方日志中。
+	if resp.StatusCode >= 400 {
+		return nil, nil
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("读取 google-services.json 失败: %w", err)
+	}
+	if len(data) == 0 {
+		return nil, nil
+	}
+	return data, nil
+}
+
 // Ping 探测后台连通性（用于 doctor）。优先打健康端点，失败再退到根路径。
 func (c *Client) Ping(ctx context.Context) error {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)

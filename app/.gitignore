@@ -1,1 +1,3 @@
 /build
+# CLI pull 按品牌投放，不进 git（ADR-0012）
+google-services.json

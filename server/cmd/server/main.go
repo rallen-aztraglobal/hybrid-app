@@ -147,15 +147,26 @@ func runServer(cfg *config.Config, app *application) {
 
 	// 域名巡检 cron（ADR-0003，进程内）。
 	var c *cron.Cron
-	if cfg.DomainProbeEnable {
+	if cfg.DomainProbeEnable || cfg.PushCronEnable {
 		c = cron.New()
-		_, _ = c.AddFunc("@every 5m", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-			app.svc.RunDomainHealthScan(ctx)
-		})
+		if cfg.DomainProbeEnable {
+			_, _ = c.AddFunc("@every 5m", func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				app.svc.RunDomainHealthScan(ctx)
+			})
+			log.Printf("[cron] 域名巡检已启用（每 5 分钟）")
+		}
+		// 推送定时任务（ADR-0012）：每分钟扫到期的 scheduled 活动并触发发送。
+		if cfg.PushCronEnable {
+			_, _ = c.AddFunc("@every 1m", func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
+				defer cancel()
+				app.svc.RunScheduledCampaigns(ctx)
+			})
+			log.Printf("[cron] 推送定时任务已启用（每 1 分钟）")
+		}
 		c.Start()
-		log.Printf("[cron] 域名巡检已启用（每 5 分钟）")
 	}
 
 	// 启动 HTTP。

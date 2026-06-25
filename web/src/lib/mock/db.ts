@@ -8,6 +8,12 @@ import type {
   Channel,
   DomainEntry,
   DomainHealth,
+  PushAudience,
+  PushCampaign,
+  PushCampaignInput,
+  PushRecord,
+  PushSendResult,
+  PushStatus,
 } from '../types';
 import { BRAND_META, BRAND_ORDER } from '../brands';
 import { parseChannelsCsv } from '../csv';
@@ -151,6 +157,75 @@ function buildLogScript(job: BuildJob): string[] {
   return lines;
 }
 
+// =========================================================================
+// 推送管理 mock 数据（07-push.md）
+// =========================================================================
+
+let pushSeq = 10;
+
+const MOCK_PUSH_RECORDS: PushRecord[] = [
+  { applicationId: 'com.arenaplus.ap01018', sent: 3200, failed: 12, finishedAt: '2026-06-20T09:15:00Z' },
+  { applicationId: 'com.arenaplus.ap01034', sent: 1800, failed: 5, finishedAt: '2026-06-20T09:16:00Z' },
+  { applicationId: 'com.gamezone.gzmkt001', sent: 900, failed: 30, errorSample: 'UNREGISTERED token', finishedAt: '2026-06-20T09:17:00Z' },
+];
+
+let pushCampaigns: (PushCampaign & { records?: PushRecord[] })[] = [
+  {
+    id: '9',
+    name: '618 大促活动',
+    title: '618 专属福利来袭！',
+    body: '今日限时：充值满 100 送 20，点击领取优惠券，快来抢购吧！',
+    imageUrl: undefined,
+    deeplinkPath: '/promo/618',
+    extraData: { campaign_id: 'promo_618' },
+    targetAppIds: ['com.arenaplus.ap01018', 'com.arenaplus.ap01034', 'com.gamezone.gzmkt001'],
+    status: 'done',
+    sentAt: '2026-06-20T09:00:00Z',
+    totalDevices: 5900,
+    successCount: 5888,
+    failureCount: 12,
+    createdBy: 'Daly',
+    createdAt: '2026-06-19T14:30:00Z',
+    records: MOCK_PUSH_RECORDS,
+  },
+  {
+    id: '8',
+    name: '端午节问候',
+    title: '端午节快乐！',
+    body: '祝您和家人端午节快乐，游戏愉快！',
+    imageUrl: undefined,
+    deeplinkPath: undefined,
+    extraData: undefined,
+    targetAppIds: ['com.arenaplus.ap01018'],
+    status: 'done',
+    sentAt: '2026-06-10T09:00:00Z',
+    totalDevices: 3200,
+    successCount: 3195,
+    failureCount: 5,
+    createdBy: 'Daly',
+    createdAt: '2026-06-09T16:00:00Z',
+    records: [{ applicationId: 'com.arenaplus.ap01018', sent: 3195, failed: 5, finishedAt: '2026-06-10T09:05:00Z' }],
+  },
+  {
+    id: '7',
+    name: '新版本上线通知',
+    title: '新版本 1.0.3 已上线',
+    body: '本次更新优化了推送体验与域名切换速度，请及时更新。',
+    imageUrl: undefined,
+    deeplinkPath: '/update',
+    extraData: undefined,
+    targetAppIds: ['com.arenaplus.ap01018', 'com.arenaplus.ap01034'],
+    status: 'scheduled',
+    scheduledAt: '2026-07-01T10:00:00Z',
+    totalDevices: 0,
+    successCount: 0,
+    failureCount: 0,
+    createdBy: 'Daly',
+    createdAt: '2026-06-25T10:00:00Z',
+    records: [],
+  },
+];
+
 export const mockDb = {
   listBrands(): Brand[] {
     return BRAND_ORDER.map((code) => {
@@ -228,6 +303,122 @@ export const mockDb = {
     buildJobs = [job, ...buildJobs];
     jobLogScripts.set(id, { lines: buildLogScript(job), createdAt: Date.now(), job });
     return { ...job };
+  },
+
+  // -----------------------------------------------------------------------
+  // 推送管理（mock）
+  // -----------------------------------------------------------------------
+
+  /** 推送功能门控（前端 feature gate）：mock 默认 enabled=false 模拟「未配置」态。 */
+  getPushStatus(): PushStatus {
+    return { enabled: false, brands: { ap: false, bp: false, gp: false } };
+  },
+
+  listPushCampaigns(brand?: string): PushCampaign[] {
+    let list = pushCampaigns.map(({ records: _r, ...c }) => c as PushCampaign);
+    if (brand) {
+      // 按 targetAppIds 的 applicationId 前缀过滤（com.<brand>）
+      const prefixMap: Record<string, string> = { ap: 'com.arenaplus.', bp: 'com.bingoplus.', gp: 'com.gamezone.' };
+      const prefix = prefixMap[brand];
+      if (prefix) {
+        list = list.filter((c) => c.targetAppIds.some((id) => id.startsWith(prefix)));
+      }
+    }
+    return list;
+  },
+
+  getPushCampaign(id: string): (PushCampaign & { records: PushRecord[] }) | undefined {
+    const c = pushCampaigns.find((x) => x.id === id);
+    if (!c) return undefined;
+    return { ...c, records: c.records ?? [] };
+  },
+
+  createPushCampaign(input: PushCampaignInput): PushCampaign {
+    pushSeq += 1;
+    const c: PushCampaign & { records: PushRecord[] } = {
+      id: String(pushSeq),
+      ...input,
+      status: 'draft',
+      totalDevices: 0,
+      successCount: 0,
+      failureCount: 0,
+      createdBy: 'Daly',
+      createdAt: new Date().toISOString(),
+      records: [],
+    };
+    pushCampaigns = [c, ...pushCampaigns];
+    return { ...c };
+  },
+
+  updatePushCampaign(id: string, input: PushCampaignInput): PushCampaign {
+    const idx = pushCampaigns.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error('Campaign not found');
+    pushCampaigns[idx] = { ...pushCampaigns[idx], ...input };
+    const { records: _r, ...c } = pushCampaigns[idx];
+    return { ...c } as PushCampaign;
+  },
+
+  /**
+   * 模拟 POST /api/push/campaigns/:id/send，返回新结构 PushSendResult。
+   * dry-run：campaign 保持原状态（不改 DB），preview 带触达预估数。
+   * 真发(dryRun=false)：mock 将 campaign 改为 done 并回写统计，preview 无意义。
+   */
+  sendPushCampaign(id: string, dryRun: boolean): PushSendResult {
+    const idx = pushCampaigns.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error('Campaign not found');
+    const c = pushCampaigns[idx];
+
+    if (dryRun) {
+      // dry-run：campaign 原样返回（不写入），preview 带每 appId 的预估数
+      const byApp: Record<string, number> = {};
+      for (const appId of c.targetAppIds) {
+        byApp[appId] = 500 + Math.floor(Math.random() * 2500);
+      }
+      const totalDevices = Object.values(byApp).reduce((s, n) => s + n, 0);
+      const { records: _r, ...snapshot } = c;
+      return {
+        campaign: { ...snapshot } as PushCampaign,
+        dryRun: true,
+        preview: { totalDevices, byApp },
+      };
+    }
+
+    // 真发：更新 campaign 状态
+    const totalDevices = Math.max(c.totalDevices, 1000);
+    const updated: typeof c = {
+      ...c,
+      status: 'done',
+      sentAt: new Date().toISOString(),
+      totalDevices,
+      successCount: Math.floor(totalDevices * 0.95),
+      failureCount: Math.floor(totalDevices * 0.05),
+    };
+    pushCampaigns[idx] = updated;
+    const { records: _r, ...result } = updated;
+    return {
+      campaign: { ...result } as PushCampaign,
+      dryRun: false,
+    };
+  },
+
+  schedulePushCampaign(id: string, scheduledAt: string): PushCampaign {
+    const idx = pushCampaigns.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error('Campaign not found');
+    pushCampaigns[idx] = { ...pushCampaigns[idx], status: 'scheduled', scheduledAt };
+    const { records: _r, ...c } = pushCampaigns[idx];
+    return { ...c } as PushCampaign;
+  },
+
+  getPushAudience(appIds: string[]): PushAudience {
+    // mock：每个 appId 随机 500–3000 台设备
+    const byApp: Record<string, number> = {};
+    for (const id of appIds) {
+      byApp[id] = 500 + Math.floor(Math.random() * 2500);
+    }
+    return {
+      totalDevices: Object.values(byApp).reduce((s, n) => s + n, 0),
+      byApp,
+    };
   },
 
   /**

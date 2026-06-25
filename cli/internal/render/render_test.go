@@ -106,6 +106,9 @@ func (f *fixtureSource) Manifest(_ context.Context, _ string) (*manifest.Manifes
 func (f *fixtureSource) DownloadResZip(_ context.Context, _, _ string) ([]byte, error) {
 	return f.zip, nil
 }
+func (f *fixtureSource) FetchGoogleServicesJSON(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
 
 // fakeRepo 在临时目录构造一个最小仓库布局供渲染。
 func fakeRepo(t *testing.T) *repo.Repo {

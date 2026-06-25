@@ -4,7 +4,8 @@
  * 顶栏全局搜索（uiStore.search）联动过滤 flavor/包名/PAL_CODE/应用名。
  */
 import { useMemo, useState } from 'react';
-import { useArchiveChannel, useBrands, useChannels } from '@/hooks/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk, useArchiveChannel, useBrands, useChannels } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
 import { BRAND_META } from '@/lib/brands';
 import type { Channel, ChannelStatus } from '@/lib/types';
@@ -12,10 +13,26 @@ import { BrandTabs } from '@/components/BrandTabs';
 import { ChannelCard } from '@/components/ChannelCard';
 import { ChannelDrawer } from '@/components/ChannelDrawer';
 import { Button } from '@/components/ui';
-import { PlusIcon, RefreshIcon } from '@/components/icons';
+import { DownloadIcon, PlusIcon, RefreshIcon } from '@/components/icons';
+import { apkFileName } from '@/lib/text';
 import { cn } from '@/lib/cn';
 
 type Filter = 'all' | 'enabled' | 'disabled';
+
+/** 顺序触发整批最新 APK 下载（同源 /apks 直连，不占内存；浏览器首次会提示允许多文件下载）。 */
+function downloadAllApks(urls: string[]) {
+  urls.forEach((url, i) => {
+    setTimeout(() => {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = apkFileName(url);
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }, i * 350);
+  });
+}
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: '全部' },
@@ -25,8 +42,9 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 export function ChannelsPage() {
   const { data: brands } = useBrands();
-  const { data: channels, isLoading } = useChannels();
+  const { data: channels, isLoading, isFetching } = useChannels();
   const archive = useArchiveChannel();
+  const qc = useQueryClient();
 
   const currentBrand = useUiStore((s) => s.currentBrand);
   const setCurrentBrand = useUiStore((s) => s.setCurrentBrand);
@@ -58,6 +76,12 @@ export function ChannelsPage() {
     return list;
   }, [channels, currentBrand, activeFilter, search]);
 
+  // 当前可见渠道里「有最新成功包」的下载地址（用于一键下载全部）。
+  const apkUrls = useMemo(
+    () => visible.map((c) => c.latestApkUrl).filter((u): u is string => !!u),
+    [visible],
+  );
+
   return (
     <section>
       {brands && (
@@ -77,13 +101,24 @@ export function ChannelsPage() {
           ))}
         </div>
         <div className="ml-auto flex gap-[10px]">
+          {apkUrls.length > 0 && (
+            <Button
+              onClick={() => downloadAllApks(apkUrls)}
+              title="下载当前列表中所有渠道的最新 APK（浏览器会提示允许下载多个文件）"
+            >
+              <DownloadIcon />
+              下载全部最新包 ({apkUrls.length})
+            </Button>
+          )}
           <Button
-            onClick={() =>
-              alert('从后台同步到本地 CSV / res（hybrid-pack pull）\n\n这是 CLI 动作，后台仅作展示入口。')
-            }
+            onClick={() => {
+              void qc.invalidateQueries({ queryKey: qk.channels });
+              void qc.invalidateQueries({ queryKey: qk.brands });
+            }}
+            disabled={isFetching}
           >
             <RefreshIcon />
-            同步状态
+            {isFetching ? '刷新中…' : '刷新'}
           </Button>
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon />

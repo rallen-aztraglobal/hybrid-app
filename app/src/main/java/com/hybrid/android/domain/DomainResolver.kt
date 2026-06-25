@@ -51,7 +51,7 @@ class DomainResolver(
             return@withContext ResolveResult.NoNetwork
         }
 
-        // STEP1：三级取用 + lastGood 提队首。实时拉取成功即自更新缓存。
+        // STEP1：三级取用（实时 → 缓存 → bootstrap）。实时拉取成功即自更新缓存。顺序保持来源给出的（主在队首）。
         // ADR-0009：解析键用 appId（applicationId），不再用 palcode。
         val appIdForFetch = appId.ifEmpty { bootstrapAppId }
         val fallbackProbePath = store.readBootstrap()?.probePath ?: "/healthz"
@@ -65,10 +65,11 @@ class DomainResolver(
         }
         Log.d(tag, "STEP1 候选域名(${selection.domains.size}): ${selection.domains}")
 
-        // STEP2：并发探测，取「最先命中且校验通过」者。
-        val hit = probeAllPickFirst(selection.domains, selection.probePath)
+        // STEP2：主域名优先——先探主，命中即用；主挂才让备用并发 failover。
+        // 探测打根路径「/」（= WebView 实际加载的 domain/），不依赖 /healthz——
+        // 内容域名是第三方站，不保证有 /healthz（如 baidu.com/healthz=404 会被误判不可用）。
+        val hit = probePreferPrimary(selection.domains, "/")
         if (hit != null) {
-            store.writeLastGood(hit)
             val url = "$hit/?palcode=$palCode"
             Log.d(tag, "STEP2 命中 $hit → 加载 $url")
             return@withContext ResolveResult.Loadable(url, hit)
@@ -92,9 +93,26 @@ class DomainResolver(
     }
 
     /**
-     * STEP2 并发探测：同时探测全部域名，返回**最先命中且校验通过**者；全不命中返回 null。
-     * 各域名探测把结果投进 channel，主循环取最先到达的 HIT，并保留「主域名优先」语义——
-     * 即 lastGood/主域名已在 STEP1 提到队首，谁先命中谁胜出，加速首屏。
+     * STEP2 主域名优先：先单独探测队首（= console 配置的「主」域名），命中即用，确保「主」生效，
+     * 不被并发竞速里更快的备用域名抢占（修复：旧域名仍可用时改主不生效）。
+     * 主不可用（任何非 HIT）→ 备用并发竞速、最先命中者胜出，快速 failover。
+     */
+    private suspend fun probePreferPrimary(domains: List<String>, probePath: String): String? {
+        if (domains.isEmpty()) return null
+        val primary = domains.first()
+        val r = runCatching { prober.probe(primary, probePath) }.getOrDefault(ProbeError.OTHER)
+        if (r == ProbeError.HIT) {
+            Log.d(tag, "STEP2 主域名优先命中 $primary")
+            return primary
+        }
+        Log.d(tag, "STEP2 主域名 $primary 不可用($r)→ 备用并发 failover")
+        val backups = domains.drop(1)
+        return if (backups.isEmpty()) null else probeAllPickFirst(backups, probePath)
+    }
+
+    /**
+     * 备用域名并发探测：同时探测，返回**最先命中且校验通过**者；全不命中返回 null。
+     * 仅用于主域名失败后的快速 failover（主优先由 [probePreferPrimary] 保证）。
      */
     private suspend fun probeAllPickFirst(domains: List<String>, probePath: String): String? =
         coroutineScope {

@@ -26,7 +26,6 @@ class DomainResolverTest {
         cached: DomainConfig? = DomainConfig(
             listOf("https://main.com", "https://b1.com", "https://b2.com"), "/healthz"
         ),
-        lastGood: String? = null,
         bootstrap: BootstrapConfig? = BootstrapConfig(
             brand = "ap",
             appId = "com.arenaplus.ap01018",
@@ -37,11 +36,8 @@ class DomainResolverTest {
         ),
     ) = object : ConfigStore {
         var cachedV = cached
-        var lastGoodV = lastGood
         override fun readCachedConfig() = cachedV
         override fun writeCachedConfig(config: DomainConfig) { cachedV = config }
-        override fun readLastGood() = lastGoodV
-        override fun writeLastGood(domain: String) { lastGoodV = domain }
         override fun readBootstrap() = bootstrap
     }
 
@@ -128,8 +124,8 @@ class DomainResolverTest {
         val r = resolver(gate = true, prober = prober, store = st).resolve()
         assertTrue(r is ResolveResult.Loadable)
         assertEquals("https://b2.com", (r as ResolveResult.Loadable).domain)
-        // 命中后记 lastGood
-        assertEquals("https://b2.com", st.readLastGood())
+        // 主域名 main 先探（未命中）→ 备用并发 failover 命中 b2
+        assertTrue(prober.probedDomains.contains("https://main.com"))
     }
 
     @Test

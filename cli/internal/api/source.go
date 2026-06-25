@@ -16,6 +16,9 @@ type ManifestSource interface {
 	Manifest(ctx context.Context, brand string) (*manifest.Manifest, error)
 	// DownloadResZip 下载资源 zip；fixture 源对此通常返回「无资源」。
 	DownloadResZip(ctx context.Context, rawURL, expectedSHA string) ([]byte, error)
+	// FetchGoogleServicesJSON 拉取指定品牌的合并 google-services.json。
+	// 后端未配置 FCM 或文件不存在时返回 (nil, nil)——调用方负责跳过提示，不阻断流程。
+	FetchGoogleServicesJSON(ctx context.Context, brand string) ([]byte, error)
 }
 
 // 编译期断言：真实 Client 满足 ManifestSource。
@@ -58,4 +61,16 @@ func (f *FixtureSource) DownloadResZip(_ context.Context, rawURL, _ string) ([]b
 	}
 	// fixture 模式下无法访问对象存储时不报错，交由上层「跳过资源」。
 	return nil, nil
+}
+
+// FetchGoogleServicesJSON 对 fixture 源：检查 <dir>/google-services-<brand>.json 是否存在；
+// 存在则返回其内容（便于离线演练），不存在则返回 nil（模拟后端无配置的跳过行为）。
+func (f *FixtureSource) FetchGoogleServicesJSON(_ context.Context, brand string) ([]byte, error) {
+	p := filepath.Join(f.Dir, "google-services-"+brand+".json")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		// 文件不存在视为「未配置 FCM」，返回 nil 触发跳过提示。
+		return nil, nil
+	}
+	return data, nil
 }

@@ -13,6 +13,7 @@ import {
   GlobeIcon,
   GridIcon,
   LogoutIcon,
+  MegaphoneIcon,
   PackageIcon,
   SearchIcon,
   SettingsIcon,
@@ -29,6 +30,7 @@ interface NavItem {
 const META: Record<string, { title: string; crumb: string }> = {
   '/channels': { title: '渠道管理', crumb: '运营 / 按大渠道分组管理小渠道包' },
   '/domains': { title: '域名配置', crumb: '运营 / 主域名 + 备用域名 + 健康巡检' },
+  '/push': { title: '推送管理', crumb: '运营 / FCM 推送活动编辑、渠道批量发送、历史查看' },
   '/pack': { title: '打包中心', crumb: '交付 / 拉取后台配置并跨平台打包' },
   '/builds': { title: '构建记录', crumb: '交付 / CLI 回传的打包历史' },
   '/settings': { title: '系统设置', crumb: '系统 / 账号权限与探针配置' },
@@ -47,6 +49,7 @@ export function AppShell() {
   const items: NavItem[] = [
     { to: '/channels', label: '渠道管理', icon: GridIcon, group: '运营', badge: total || undefined },
     { to: '/domains', label: '域名配置', icon: GlobeIcon, group: '运营' },
+    { to: '/push', label: '推送管理', icon: MegaphoneIcon, group: '运营' },
     { to: '/pack', label: '打包中心', icon: PackageIcon, group: '交付' },
     { to: '/builds', label: '构建记录', icon: ClockIcon, group: '交付' },
     { to: '/settings', label: '系统设置', icon: SettingsIcon, group: '系统' },

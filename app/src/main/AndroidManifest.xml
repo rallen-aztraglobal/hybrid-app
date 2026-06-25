@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- FCM 推送：Android 13+（API 33+）需运行时动态申请；minSdk 29 需声明后才可在 33+ 动态申请 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -29,6 +31,17 @@
                 <action android:name="com.android.vending.INSTALL_REFERRER"/>
             </intent-filter>
         </receiver>
+        <!-- FCM 推送接收服务（见 com.hybrid.android.push.HybridMessagingService）。
+             exported=false：系统通过 intent-filter 分发，无需外部可直接启动。
+             无 google-services.json 时 Firebase 未初始化，onNewToken/onMessageReceived 均为 no-op。 -->
+        <service
+            android:name=".push.HybridMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- WebView 页面 -->
         <activity
             android:name=".WebViewActivity"

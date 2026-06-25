@@ -22,7 +22,7 @@ sealed class ResolveResult {
  * 除 [HIT] 外都意味着「试下一个」；全部非命中后由 STEP3 中立探针裁决文案。
  */
 enum class ProbeError {
-    /** HTTP 200 且证书 + 业务特征校验通过 —— 唯一的命中。 */
+    /** HTTP 2xx/3xx 且证书覆盖目标域名 —— 唯一的命中（证书=反劫持的密码学保证）。 */
     HIT,
 
     /** DNS 解析失败 / UnknownHostException —— 疑似域名问题（也可能没网，最终由 STEP3 区分）。 */
@@ -40,10 +40,10 @@ enum class ProbeError {
     /** HTTP 5xx —— 服务异常。 */
     HTTP_5XX,
 
-    /** HTTP 200 但业务特征 / 证书校验不符 —— 关键：可达但不是我们（ISP 劫持 / 门户页）。 */
+    /** 证书不覆盖目标域名 —— 关键：可达但不是我们（DNS 污染 / 中间人劫持到了别的服务器）。 */
     HIJACK,
 
-    /** 其它（非 200 的 3xx/4xx、解析异常等）。 */
+    /** 其它（4xx 如地区封锁 403、解析异常等）—— 该域名当前不可服务，试下一个。 */
     OTHER,
 }
 

@@ -19,3 +19,7 @@
 /web/node_modules/
 /web/dist/
 *.tsbuildinfo
+
+# 编辑器 / 工具临时产物
+/.vscode/
+/.kotlin/

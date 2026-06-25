@@ -4,7 +4,7 @@
   "brand": "ap",
   "appId": "",
   "palcode": "",
-  "configUrl": "https://config.hybrid-cdn.example/api/app/config",
+  "configUrl": "https://api.fortunegems-jackpot.online/api/app/config",
   "probePath": "/healthz",
   "defaultDomains": [
     "https://arenaplus.ph"

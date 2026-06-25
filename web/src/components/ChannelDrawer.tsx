@@ -10,11 +10,11 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { deriveApplicationId, type BrandMeta } from '@/lib/brands';
-import type { ChannelInput, DomainEntry } from '@/lib/types';
+import type { Channel, ChannelInput, DomainEntry } from '@/lib/types';
 import { useBrands, useChannels, useSaveChannel } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
 import { validateChannel, type FieldError } from '@/lib/validation';
-import { loadImageFile } from '@/lib/icon';
+import { loadImageFile, urlToDataUrl } from '@/lib/icon';
 import { cn } from '@/lib/cn';
 import { Button, Note, SectionHeading, Switch } from './ui';
 import { CloseIcon, InfoIcon, SaveCheckIcon } from './icons';
@@ -32,9 +32,24 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const { data: brands } = useBrands();
   const save = useSaveChannel();
 
+  // 后端下发的本品牌视图（含真实域名 / 包前缀）。
+  const brandView = brands?.find((b) => b.code === brandMeta.code);
+
   // ADR-0009：品牌包前缀（优先后端下发，回落 BRAND_META）。applicationId 据此派生。
-  const packagePrefix =
-    brands?.find((b) => b.code === brandMeta.code)?.packagePrefix ?? brandMeta.packagePrefix;
+  const packagePrefix = brandView?.packagePrefix ?? brandMeta.packagePrefix;
+
+  // 继承大渠道时展示的域名：优先后端**真实**配置；后端未加载到才回落静态兜底常量。
+  // （修复：原先恒用 brandMeta.fallbackDomains，导致后台只配 1 个也固定显示兜底的 2 个。）
+  const inheritedDomains = useMemo<DomainEntry[]>(() => {
+    const real = (brandView?.domains ?? []).filter((d) => d.url.trim());
+    if (real.length) return real.map((d) => ({ ...d }));
+    return brandMeta.fallbackDomains.map((url, i) => ({
+      position: i,
+      url,
+      enabled: true,
+      health: 'unknown' as const,
+    }));
+  }, [brandView, brandMeta.fallbackDomains]);
 
   const editing = target && target !== 'new' ? target.id : null;
   const editChannel = useMemo(
@@ -46,11 +61,16 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const [icon, setIcon] = useState<IconState>(emptyIconState());
   const [splash, setSplash] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
+  // 「从已有渠道复制」反馈：复制源名 + 图片抓取中标记
+  const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
+  const [copyingAssets, setCopyingAssets] = useState(false);
 
   // 打开/切换目标时初始化表单
   useEffect(() => {
     if (!target) return;
     setTouched(false);
+    setCopiedFrom(null);
+    setCopyingAssets(false);
     if (editChannel) {
       setForm({
         brandCode: editChannel.brandCode,
@@ -85,6 +105,15 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
 
   const canSave = errors.length === 0;
 
+  // 可复制的源渠道：本品牌、非归档，按 flavor 排序（新增模式才用）。
+  const copySources = useMemo<Channel[]>(
+    () =>
+      (channels ?? [])
+        .filter((c) => c.brandCode === brandMeta.code && c.status !== 'archived')
+        .sort((a, b) => a.flavorName.localeCompare(b.flavorName)),
+    [channels, brandMeta.code],
+  );
+
   function set<K extends keyof ChannelInput>(key: K, value: ChannelInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -96,6 +125,53 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       flavorName: flavor,
       applicationId: deriveApplicationId(f.brandCode, flavor, packagePrefix),
     }));
+  }
+
+  /**
+   * 从已有渠道复制（仅新增模式）：搬过来「可复用」项——应用名 / 域名配置（含继承开关）/
+   * 状态 / 备注 / 图标 / 启动图；但**留空唯一字段**（flavor、派生 applicationId、PAL_CODE），
+   * 强制用户填新值，从源头避免复制出重复脏数据（ADR-0009 唯一性护栏）。
+   * 图标/splash 必须抓成 dataURL 才能随新渠道真正上传（见 urlToDataUrl 注释）。
+   */
+  function copyFrom(src: Channel) {
+    setForm({
+      brandCode: brandMeta.code,
+      flavorName: '',
+      applicationId: '',
+      palCode: '',
+      appName: src.appName,
+      useBrandDomains: src.useBrandDomains,
+      domains: (src.domains ?? EMPTY_DOMAINS).map((d) => ({ ...d, health: 'unconfigured' })),
+      status: src.status === 'archived' ? 'enabled' : src.status,
+      remark: src.remark,
+    });
+    setTouched(false);
+    setCopiedFrom(`${src.flavorName}（${src.appName}）`);
+
+    const iconUrl = src.iconMasterUrl;
+    const splashUrl = src.splashUrl;
+    setIcon(emptyIconState());
+    setSplash(null);
+    if (!iconUrl && !splashUrl) return;
+
+    // 图标/splash 各抓一次源图转 dataURL；失败则仅作预览（提交时不上传，需用户重选）。
+    setCopyingAssets(true);
+    const jobs: Promise<unknown>[] = [];
+    if (iconUrl) {
+      jobs.push(
+        urlToDataUrl(iconUrl)
+          .then((d) => setIcon(emptyIconState(d)))
+          .catch(() => setIcon(emptyIconState(iconUrl))),
+      );
+    }
+    if (splashUrl) {
+      jobs.push(
+        urlToDataUrl(splashUrl)
+          .then((d) => setSplash(d))
+          .catch(() => setSplash(splashUrl)),
+      );
+    }
+    void Promise.allSettled(jobs).finally(() => setCopyingAssets(false));
   }
 
   async function onSplashFile(file: File) {
@@ -162,6 +238,39 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
 
         {/* 体 */}
         <div className="overflow-auto px-6 py-5 flex-1 flex flex-col gap-5">
+          {/* 0. 从已有渠道复制（仅新增模式）—— 选一个同品牌包，搬来可复用项再改改 */}
+          {!editing && copySources.length > 0 && (
+            <div className="flex items-center gap-[10px] p-[11px_13px] bg-panel-2 border border-line rounded-[10px]">
+              <div className="flex-none text-[12.5px] font-semibold text-ink-2 whitespace-nowrap">
+                从已有渠道复制
+              </div>
+              <select
+                className="field-input flex-1"
+                value=""
+                onChange={(e) => {
+                  const src = copySources.find((c) => c.id === e.target.value);
+                  if (src) copyFrom(src);
+                }}
+              >
+                <option value="">选择一个包，自动带入名称/域名/图标…</option>
+                {copySources.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.flavorName} · {c.appName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {!editing && copiedFrom && (
+            <Note>
+              <InfoIcon className="w-[17px] h-[17px] flex-none mt-0.5" style={{ color: 'var(--brand)' }} />
+              <div>
+                已从「{copiedFrom}」复制可复用项{copyingAssets && '（图标/启动图抓取中…）'}。
+                请填写本渠道的 <b>Flavor 名</b> 与 <b>PAL_CODE</b>（唯一字段不会被复制），其余按需修改。
+              </div>
+            </Note>
+          )}
+
           {/* 1. 基本信息 */}
           <div className="section-card">
             <SectionHeading num={1}>基本信息</SectionHeading>
@@ -247,16 +356,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
             </div>
 
             {form.useBrandDomains ? (
-              <DomainEditor
-                domains={brandMeta.fallbackDomains.map((url, i) => ({
-                  position: i,
-                  url,
-                  enabled: true,
-                  health: 'unknown',
-                }))}
-                onChange={() => {}}
-                disabled
-              />
+              <DomainEditor domains={inheritedDomains} onChange={() => {}} disabled />
             ) : (
               <>
                 <DomainEditor

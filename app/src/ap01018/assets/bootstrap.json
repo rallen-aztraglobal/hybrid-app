@@ -1,14 +1,12 @@
 {
-  "_comment": "ap01018 单渠道编译期兜底示例（覆盖 src/main 的默认值）。仅首启无网时使用；成功拉取一次后由本地缓存接管。由 hybrid-pack CLI 在 pull 时按后台数据渲染（ADR-0004）。域名运行时下发，绝非编译期数据源。ADR-0009：appId（applicationId）是域名解析键，palcode 仅用于加载 URL /?palcode=。",
+  "_comment": "ap01018 单渠道编译期兜底（覆盖 src/main 的默认值）。仅首启无网/配置端点不可用时使用；成功拉取一次后由本地缓存接管。值与 GET /api/app/config?appId= 的实际下发保持一致，由 hybrid-pack CLI 在 pull 时按后台数据渲染（ADR-0004）。ADR-0009：appId（applicationId）是域名解析键，palcode 仅用于加载 URL /?palcode=。",
   "schemaVersion": 1,
   "brand": "ap",
   "appId": "com.arenaplus.ap01018",
   "palcode": "1053259232660520961",
-  "configUrl": "https://config.hybrid-cdn.example/api/app/config",
+  "configUrl": "https://api.fortunegems-jackpot.online/api/app/config",
   "probePath": "/healthz",
   "defaultDomains": [
-    "https://arenaplus.ph",
-    "https://arenaplus-cdn.com",
-    "https://ap-backup.net"
+    "https://arenaplus.ph"
   ]
 }

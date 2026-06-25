@@ -130,17 +130,36 @@ body {
   }
 
   .chip {
-    @apply rounded-[9px] border px-[13px] py-[7px] text-[13px] font-medium transition;
+    @apply rounded-[9px] border px-[13px] py-[7px] text-[13px] font-medium transition cursor-pointer select-none;
     border-color: var(--line);
     background: var(--panel);
     color: var(--ink-2);
   }
-  .chip:hover {
+  /* 未选中态悬浮：浅底 + 描边略深，给出可点反馈 */
+  .chip:not(.chip-on):hover {
     background: var(--bg);
+    border-color: var(--ink-2);
+  }
+  /* 按下瞬时反馈 */
+  .chip:active {
+    transform: translateY(0.5px);
+  }
+  /* 键盘可达：仅键盘聚焦显示品牌色 ring，鼠标点击不留难看的默认轮廓 */
+  .chip:focus {
+    outline: none;
+  }
+  .chip:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
   }
   .chip-on {
     background: var(--ink);
     color: #fff;
     border-color: var(--ink);
+  }
+  /* 选中态悬浮：保持深色、轻微提亮，避免 .chip:hover 把它变浅导致白字看不清 */
+  .chip-on:hover {
+    background: var(--ink-2);
+    border-color: var(--ink-2);
   }
 }

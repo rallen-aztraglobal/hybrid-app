@@ -10,6 +10,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkRequest
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
@@ -26,18 +27,24 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
+import android.widget.TextView
+import android.view.Gravity
+import android.graphics.drawable.GradientDrawable
+import android.util.TypedValue
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import com.appsflyer.AFInAppEventType
 import com.appsflyer.AppsFlyerLib
 import com.appsflyer.attribution.AppsFlyerRequestListener
+import com.google.firebase.messaging.FirebaseMessaging
 import com.hybrid.android.brand.BrandHost
 import com.hybrid.android.brand.BrandStrategies
 import com.hybrid.android.brand.BrandStrategy
@@ -46,6 +53,9 @@ import com.hybrid.android.domain.DomainResolver
 import com.hybrid.android.domain.ErrorKind
 import com.hybrid.android.domain.ErrorView
 import com.hybrid.android.domain.ResolveResult
+import com.hybrid.android.push.HybridMessagingService
+import com.hybrid.android.push.PushBootstrap
+import com.hybrid.android.push.TokenRegistrar
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -56,6 +66,7 @@ import org.json.JSONObject
  */
 class WebViewActivity : ComponentActivity(), BrandHost {
     private lateinit var _webView: WebView
+    private lateinit var rootLayout: FrameLayout
     private lateinit var splashImageView: ImageView
     private lateinit var errorView: ErrorView
 
@@ -71,11 +82,25 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     private var lastFailoverAtMs = 0L
     private val failoverDebounceMs = 30_000L
 
+    /** 顶层路由「再按一次返回退出」：上次按返回的时刻 + 2s 窗口。 */
+    private var lastBackPressedAtMs = 0L
+    private val exitConfirmWindowMs = 2_000L
+    /** 居中的「再按一次退出」提示视图（自绘，避免 targetSdk≥30 时 Toast.setGravity 失效）。 */
+    private var exitHintView: TextView? = null
+    private val hideExitHint = Runnable { exitHintView?.visibility = View.GONE }
+
     /** 容灾结果是否已成功加载过页面（用于区分「首屏未出」与「运行中掉线」）。 */
     private var hasLoadedOnce = false
 
     /** 网络恢复监听只注册一次。 */
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    /**
+     * 推送通知点击时携带的相对 deeplink path（如 `/promo/618`）。
+     * 在 DomainResolver 解析出可用域名后，拼成完整 URL 并加载。
+     * 仅当本次启动/切换来自通知点击时才有值，否则为 null（加载正常首页）。
+     */
+    private var pendingPushPath: String? = null
 
     // ---- BrandHost ----
     override val context: Context get() = this
@@ -91,6 +116,10 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 推送通知点击时携带的相对 deeplink path（无通知点击则为 null）。
+        // 必须在 startResolve() 之前读取，解析完域名后再拼成完整 URL。
+        pendingPushPath = intent?.getStringExtra(HybridMessagingService.EXTRA_PUSH_PATH)
 
         // AppsFlyer 初始化 + 加载持久化归因状态（品牌差异）
         strategy.initTracking(this)
@@ -113,7 +142,7 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         }
 
         // 根容器
-        val rootLayout = FrameLayout(this).apply {
+        rootLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -135,6 +164,8 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             setBackgroundColor(Color.WHITE)
+            // 禁用边缘 overscroll 拉伸（Android 12+ 默认会把整页含 position:fixed 底部导航一起拉伸变形）。
+            overScrollMode = View.OVER_SCROLL_NEVER
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -153,8 +184,9 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         rootLayout.addView(errorView)
         setContentView(rootLayout)
 
-        // 沉浸式状态栏
+        // 沉浸式状态栏 + 品牌固定系统栏配色（加载期即生效，避免白闪）
         enterImmersiveMode()
+        applyBrandSystemBars()
 
         val settings: WebSettings = _webView.settings
         settings.javaScriptEnabled = true
@@ -191,9 +223,9 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
                 injectInterceptor()
-                window.decorView.systemUiVisibility =
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                // 状态栏/底部导航栏按品牌固定配色（GP 深色不露白、图标明暗自动反转）。
+                applyBrandSystemBars()
                 // 页面真正出来了：记一次成功，隐藏错误页/splash。
                 hasLoadedOnce = true
                 errorView.visibility = View.GONE
@@ -252,12 +284,57 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         // 加载首页：走域名容灾（运行时拉取 + 主→备用 + 区分域名故障/本机网络），不再编译期硬编码域名。
         startResolve()
 
+        // FCM：申请通知权限（Android 13+），主动触发一次 token 注册（补充 onNewToken 时序）。
+        requestNotificationPermissionIfNeeded()
+        triggerFcmTokenRegistrationIfAvailable()
+
         // 返回键
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (_webView.canGoBack()) _webView.goBack() else finish()
+                if (_webView.canGoBack()) {
+                    _webView.goBack()
+                    return
+                }
+                // 顶层路由：2s 内再按一次才退出，否则居中提示。
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressedAtMs <= exitConfirmWindowMs) {
+                    exitHintView?.removeCallbacks(hideExitHint)
+                    exitHintView?.visibility = View.GONE
+                    finish()
+                } else {
+                    lastBackPressedAtMs = now
+                    showExitHint()
+                }
             }
         })
+    }
+
+    /** 屏幕居中展示「再按一次退出」提示（自绘 toast，2s 后自动隐藏）。 */
+    private fun showExitHint() {
+        val density = resources.displayMetrics.density
+        val tv = exitHintView ?: TextView(this).apply {
+            text = "Press back again to exit"
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            val padH = (20 * density).toInt()
+            val padV = (12 * density).toInt()
+            setPadding(padH, padV, padH, padV)
+            background = GradientDrawable().apply {
+                cornerRadius = 24 * density
+                setColor(Color.parseColor("#CC000000"))
+            }
+            addContentView(
+                this,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply { gravity = Gravity.CENTER }
+            )
+            exitHintView = this
+        }
+        tv.visibility = View.VISIBLE
+        tv.removeCallbacks(hideExitHint)
+        tv.postDelayed(hideExitHint, exitConfirmWindowMs)
     }
 
     // ========================== 域名容灾接入 ==========================
@@ -273,7 +350,20 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                         splashImageView.alpha = 1f
                         splashImageView.visibility = View.VISIBLE
                     }
-                    _webView.loadUrl(r.url)
+                    // 推送点击深链：有 pendingPushPath 时用其覆盖加载 URL（相对 path + palcode）。
+                    // 域名来自 DomainResolver（运行时值），绝不编译期硬编码（守 ADR-0002）。
+                    val loadUrl = pendingPushPath
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { path ->
+                            val cleanPath = if (path.startsWith("/")) path else "/$path"
+                            "${r.domain}$cleanPath?palcode=${BuildConfig.PAL_CODE}"
+                                .also {
+                                    Log.d("HybridPush", "推送 deeplink 加载: $it")
+                                    strategy.onPushOpen(path, r.domain, this@WebViewActivity)
+                                }
+                        } ?: r.url
+                    pendingPushPath = null  // 消费后清空，防止 retryResolve 重复加载
+                    _webView.loadUrl(loadUrl)
                 }
                 ResolveResult.ServiceDown -> showErrorView(ErrorKind.SERVICE_DOWN) // B：域名/服务
                 ResolveResult.NoNetwork -> showErrorView(ErrorKind.NO_NETWORK)     // A：本机网络
@@ -341,6 +431,12 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
 
+    /** POST_NOTIFICATIONS（Android 13+）权限申请结果回调：结果仅记录日志，不影响启动流程。 */
+    private val requestNotificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            Log.d("HybridPush", "POST_NOTIFICATIONS 申请结果: $granted")
+        }
+
     private fun checkAndRequestPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
@@ -349,8 +445,64 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         }
     }
 
+    /**
+     * Android 13+（API 33）需要动态申请 POST_NOTIFICATIONS 权限。
+     * minSdk 29，仅在 33+ 设备上才需要申请；旧版本权限由安装时自动授予。
+     * 未配置 Firebase 时此函数仍安全（仅申请权限，不依赖 Firebase）。
+     */
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    /**
+     * 主动触发一次 FCM token 注册（首次启动 / token 轮换后 onNewToken 会自动触发，
+     * 此处是补充保险：确保 token 注册不依赖 onNewToken 回调的时序）。
+     * 仅当 Firebase 可用时才执行，否则 no-op。
+     */
+    private fun triggerFcmTokenRegistrationIfAvailable() {
+        if (!PushBootstrap.guard(this, "主动 token 注册")) return
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            if (token.isNotBlank()) {
+                lifecycleScope.launch {
+                    TokenRegistrar.register(this@WebViewActivity, token)
+                }
+            }
+        }.addOnFailureListener {
+            Log.w("HybridPush", "获取 FCM token 失败（已忽略）: ${it.message}")
+        }
+    }
+
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
+        setIntent(intent)  // 更新 Activity 的 intent，使 getIntent() 始终返回最新值
+
+        // 推送通知点击（Activity 已在前台/后台时）：有 push path 则经 DomainResolver 跳转。
+        val pushPath = intent?.getStringExtra(HybridMessagingService.EXTRA_PUSH_PATH)
+        if (!pushPath.isNullOrBlank()) {
+            Log.d("HybridPush", "onNewIntent 收到推送 path: $pushPath")
+            val domain = resolvedDomain
+            if (domain != null) {
+                // 已有解析好的域名：直接拼 URL 加载，无需重走容灾（域名已验活）
+                val cleanPath = if (pushPath.startsWith("/")) pushPath else "/$pushPath"
+                val url = "$domain$cleanPath?palcode=${BuildConfig.PAL_CODE}"
+                Log.d("HybridPush", "推送 deeplink（快路径）加载: $url")
+                strategy.onPushOpen(pushPath, domain, this)
+                _webView.loadUrl(url)
+            } else {
+                // 尚未完成首次解析（极少情况）：保存 path，下次 startResolve 消费
+                pendingPushPath = pushPath
+                startResolve()
+            }
+            return
+        }
+
+        // 普通系统 deeplink
         intent?.data?.let { strategy.onDeepLinkIntent(it, this) }
     }
 
@@ -371,6 +523,40 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
+    }
+
+    /**
+     * 按品牌固定状态栏 / 底部导航栏配色（图标明暗按亮度自动反转）：
+     *   - ap / bp（浅色站）→ 纯白
+     *   - gp（深色站）→ #1C1D27
+     * 各站页头/页脚是图片或动态色、采样不稳，故用与设计稿一致的固定值，且加载期就生效、无白闪。
+     */
+    private fun applyBrandSystemBars() {
+        val color = when (BuildConfig.BRAND) {
+            "gp" -> Color.parseColor("#1C1D27")
+            else -> Color.WHITE            // ap / bp 及其它浅色站
+        }
+        applySystemBarColors(color, color)
+    }
+
+    private fun applySystemBarColors(topColor: Int, bottomColor: Int) {
+        val top = topColor or 0xFF000000.toInt()
+        val bottom = bottomColor or 0xFF000000.toInt()
+        // 状态栏区域用 rootLayout 背景上色（MIUI 全屏 flag 下 statusBarColor 常不生效；
+        // rootLayout 在状态栏后面、必然渲染）。底部导航栏 navigationBarColor 可直接生效。
+        rootLayout.setBackgroundColor(top)
+        window.statusBarColor = top
+        window.navigationBarColor = bottom
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = isLightColor(top)       // 浅底→深色图标
+            isAppearanceLightNavigationBars = isLightColor(bottom)
+        }
+    }
+
+    /** 颜色亮度判断（感知加权）：> 0.6 视为浅色。 */
+    private fun isLightColor(c: Int): Boolean {
+        val luminance = (0.299 * Color.red(c) + 0.587 * Color.green(c) + 0.114 * Color.blue(c)) / 255.0
+        return luminance > 0.6
     }
 
     /** 注入接口拦截脚本（assets/interceptor.js）。 */
@@ -417,12 +603,18 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             object : AppsFlyerRequestListener {
                 override fun onSuccess() {
                     Log.d("Appsflyer", "Sent event SUCCESS: $eventName")
-                    runOnUiThread { showToast("事件发送成功: $eventName") }
+                    // Toast 仅在开启测试事件时展示，生产包静默发送
+                    if (BuildConfig.ENABLE_TEST_EVENTS) {
+                        runOnUiThread { showToast("事件发送成功: $eventName") }
+                    }
                 }
 
                 override fun onError(errorCode: Int, p1: String) {
                     Log.e("Appsflyer", "Sent event FAILED: $eventName, errorCode: $errorCode, message: $p1")
-                    runOnUiThread { showToast("事件发送失败: $p1") }
+                    // Toast 仅在开启测试事件时展示，生产包静默发送
+                    if (BuildConfig.ENABLE_TEST_EVENTS) {
+                        runOnUiThread { showToast("事件发送失败: $p1") }
+                    }
                 }
             }
         )

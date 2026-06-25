@@ -80,7 +80,7 @@ class ErrorView(context: Context) : FrameLayout(context) {
         }
 
         refreshButton = Button(context).apply {
-            text = "刷新"
+            text = "Refresh"
             isAllCaps = false
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -105,13 +105,13 @@ class ErrorView(context: Context) : FrameLayout(context) {
         when (kind) {
             ErrorKind.NO_NETWORK -> {
                 iconView.text = "📶" // 📶
-                titleView.text = "网络异常"
-                messageView.text = "请检查你的网络连接后重试"
+                titleView.text = "No Internet Connection"
+                messageView.text = "Please check your network connection and try again."
             }
             ErrorKind.SERVICE_DOWN -> {
                 iconView.text = "🛠" // 🛠
-                titleView.text = "服务暂时不可用"
-                messageView.text = "我们正在抢修，请稍后重试"
+                titleView.text = "Service Temporarily Unavailable"
+                messageView.text = "We're working on it. Please try again later."
             }
         }
     }

@@ -309,6 +309,9 @@ type mapSource struct{ m *manifest.Manifest }
 
 func (s mapSource) Manifest(_ context.Context, _ string) (*manifest.Manifest, error) { return s.m, nil }
 func (s mapSource) DownloadResZip(_ context.Context, _, _ string) ([]byte, error)    { return nil, nil }
+func (s mapSource) FetchGoogleServicesJSON(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
 
 // nopSource 是 pull 阶段不被触达时的占位 manifest 源（Once 空队列下不会调用）。
 type nopSource struct{}
@@ -317,6 +320,9 @@ func (nopSource) Manifest(_ context.Context, _ string) (*manifest.Manifest, erro
 	return &manifest.Manifest{}, nil
 }
 func (nopSource) DownloadResZip(_ context.Context, _, _ string) ([]byte, error) { return nil, nil }
+func (nopSource) FetchGoogleServicesJSON(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
 
 // writeSigningLocalProps 写一个含齐 4 个签名键 + keystore 文件的 local.properties。
 func writeSigningLocalProps(t *testing.T, r *repo.Repo) {

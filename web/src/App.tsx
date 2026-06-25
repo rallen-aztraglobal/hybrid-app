@@ -7,6 +7,7 @@ import { DomainsPage } from '@/pages/DomainsPage';
 import { PackPage } from '@/pages/PackPage';
 import { BuildsPage } from '@/pages/BuildsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { PushPage } from '@/pages/PushPage';
 
 /**
  * 路由：未登录强制跳 /login；登录后进入 AppShell（侧栏+顶栏）下的各业务页。
@@ -30,6 +31,7 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route path="/channels" element={<ChannelsPage />} />
         <Route path="/domains" element={<DomainsPage />} />
+        <Route path="/push" element={<PushPage />} />
         <Route path="/pack" element={<PackPage />} />
         <Route path="/builds" element={<BuildsPage />} />
         <Route path="/settings" element={<SettingsPage />} />

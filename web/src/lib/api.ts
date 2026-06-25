@@ -14,6 +14,11 @@ import type {
   ListResult,
   LoginResponse,
   ProbeResult,
+  PushAudience,
+  PushCampaign,
+  PushCampaignInput,
+  PushSendResult,
+  PushStatus,
 } from './types';
 import { mockDb } from './mock/db';
 import { BRAND_META } from './brands';
@@ -533,6 +538,110 @@ function safeParseArray(s: string | undefined): string[] {
 export function brandAccent(code: BrandCode): string {
   return BRAND_META[code].accentColor;
 }
+
+// =========================================================================
+// 推送管理（07-push.md）
+// =========================================================================
+export const pushApi = {
+  /** 功能门控：读 FCM 配置状态（feature gate）。 */
+  getStatus(): Promise<PushStatus> {
+    return withFallback(
+      () => request<PushStatus>('/push/status'),
+      () => mockDb.getPushStatus(),
+    );
+  },
+
+  /** 推送活动列表（按品牌过滤）。 */
+  listCampaigns(brand?: BrandCode): Promise<PushCampaign[]> {
+    const q = brand ? `?brand=${brand}` : '';
+    return withFallback(
+      () => request<PushCampaign[]>(`/push/campaigns${q}`),
+      () => mockDb.listPushCampaigns(brand),
+    );
+  },
+
+  /** 推送活动详情 + push_record 列表。 */
+  getCampaign(id: string): Promise<PushCampaign & { records: import('./types').PushRecord[] }> {
+    return withFallback(
+      () => request<PushCampaign & { records: import('./types').PushRecord[] }>(`/push/campaigns/${id}`),
+      () => {
+        const c = mockDb.getPushCampaign(id);
+        if (!c) throw new Error(`Campaign ${id} not found`);
+        return c;
+      },
+    );
+  },
+
+  /** 创建草稿活动。 */
+  createCampaign(input: PushCampaignInput): Promise<PushCampaign> {
+    return withFallback(
+      () => request<PushCampaign>('/push/campaigns', { method: 'POST', body: JSON.stringify(input) }),
+      () => mockDb.createPushCampaign(input),
+    );
+  },
+
+  /** 更新草稿活动。 */
+  updateCampaign(id: string, input: PushCampaignInput): Promise<PushCampaign> {
+    return withFallback(
+      () => request<PushCampaign>(`/push/campaigns/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+      () => mockDb.updatePushCampaign(id, input),
+    );
+  },
+
+  /** 立即发送（dryRun=true 时不实际发送，仅预演）。返回新响应结构 PushSendResult。 */
+  sendCampaign(id: string, dryRun = false): Promise<PushSendResult> {
+    return withFallback(
+      () => request<PushSendResult>(`/push/campaigns/${id}/send`, { method: 'POST', body: JSON.stringify({ dryRun }) }),
+      () => mockDb.sendPushCampaign(id, dryRun),
+    );
+  },
+
+  /** 定时发送。 */
+  scheduleCampaign(id: string, scheduledAt: string): Promise<PushCampaign> {
+    return withFallback(
+      () =>
+        request<PushCampaign>(`/push/campaigns/${id}/schedule`, {
+          method: 'POST',
+          body: JSON.stringify({ scheduledAt }),
+        }),
+      () => mockDb.schedulePushCampaign(id, scheduledAt),
+    );
+  },
+
+  /** 上传推送封面图（multipart）→ { url }。 */
+  async uploadImage(dataUrl: string): Promise<string> {
+    if (FORCE_MOCK) {
+      // mock：原样回返 dataUrl，演示用
+      return delay(dataUrl);
+    }
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const fd = new FormData();
+      fd.append('file', blob, 'push-cover.png');
+      const token = getToken();
+      const res = await fetch('/api/push/upload-image', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: fd,
+      });
+      if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+      const json = (await res.json()) as ApiEnvelope<{ url: string }>;
+      return json.data.url;
+    } catch (err) {
+      if (!shouldFallback(err)) throw err;
+      return delay(dataUrl);
+    }
+  },
+
+  /** 触达预估（发送前展示目标设备数）。 */
+  getAudience(appIds: string[]): Promise<PushAudience> {
+    const q = appIds.map((id) => encodeURIComponent(id)).join(',');
+    return withFallback(
+      () => request<PushAudience>(`/push/audience?appIds=${q}`),
+      () => mockDb.getPushAudience(appIds),
+    );
+  },
+};
 
 // ---------- 辅助：ChannelInput → Channel（mock 落库用） ----------
 function inputToChannel(input: ChannelInput): Channel {

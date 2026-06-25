@@ -32,6 +32,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	// 公开端点（APK / 探针）。
 	e.GET("/healthz", h.Healthz)
 	e.GET("/api/app/config", h.AppConfig)
+	// APK 推送 token 注册（公开，校验 appId 对应渠道存在，ADR-0012）。
+	e.POST("/api/app/push/register-token", h.RegisterPushToken)
+	// google-services.json 按品牌下发（公开，非机密；CLI/构建机消费，ADR-0012 §3/§5）。
+	e.GET("/api/app/google-services", h.GetGoogleServices)
 
 	// 鉴权端点（登录/刷新公开）。
 	e.POST("/api/auth/login", h.Login)
@@ -75,4 +79,17 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.POST("/build/records/:id/status", h.ReportBuildStatus, operator)
 	api.POST("/build/records/:id/logs", h.AppendBuildLog, operator)
 	api.POST("/build/records/:id/artifacts", h.AddBuildArtifact, operator)
+
+	// 推送管理（ADR-0012）。
+	api.GET("/push/status", h.GetPushStatus, viewer)
+	api.GET("/push/campaigns", h.ListPushCampaigns, viewer)
+	api.POST("/push/campaigns", h.CreatePushCampaign, operator)
+	api.GET("/push/campaigns/:id", h.GetPushCampaign, viewer)
+	api.PUT("/push/campaigns/:id", h.UpdatePushCampaign, operator)
+	api.POST("/push/campaigns/:id/send", h.SendPushCampaign, operator)
+	api.POST("/push/campaigns/:id/schedule", h.SchedulePushCampaign, operator)
+	api.POST("/push/upload-image", h.UploadPushImage, operator)
+	api.GET("/push/audience", h.GetPushAudience, viewer)
+	// google-services.json 上传（operator+；GET 公开已在上方注册）。
+	api.POST("/push/google-services", h.UploadGoogleServices, operator)
 }

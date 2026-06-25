@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// ============================================================================
+// 条件式 apply google-services 插件（feature gate，见 docs/admin/07-push.md §6b）：
+//   - 有 google-services.json → apply 插件（插件会解析 json 并注入 Firebase 项目 ID/ResValue）。
+//   - 无 google-services.json → 跳过 apply，构建照常进行，FCM 依赖仍加入但运行时探测后 no-op。
+// 这样拿到账号后只需丢入 json + 重打包即可激活，零改码（ADR-0002 / ADR-0004）。
+// 注意：必须在 plugins{} 块之外用 apply plugin: 写法，才能做运行时条件判断。
+// ============================================================================
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
+
 def localProperties = new Properties()
 def localFile = rootProject.file("local.properties")
 if (localFile.exists()) {
@@ -19,7 +30,7 @@ if (localFile.exists()) {
 // 新增小渠道 = CSV 加一行 + 在 app/src/<flavor>/ 放置 icon 与 splash 资源。
 // ============================================================================
 def brandConfig = [
-        ap: [domain: "https://arenaplus.ph", scheme: "gzone", hms: false],
+        ap: [domain: "https://arenaplus.ph", scheme: "arenaplus", hms: false],
         gp: [domain: "https://gzone.ph", scheme: "gzone", hms: false],
         bp: [domain: "https://www.bingoplus.com", scheme: "bingo", hms: true],
 ]
@@ -151,6 +162,16 @@ android {
     }
 }
 
+// firebase-common 传递引入 kotlinx-coroutines-play-services（最低需要 1.6.4），
+// 但 kotlinx-coroutines BOM 1.8.1 会把它强制升为 1.8.1，而该版本的 jar 在本地 Gradle
+// 缓存中不存在且 Maven Central 当前返回 403。
+// 强制升至已缓存的 1.9.0（兼容同主版本，仅 Firebase 内部用；我们的协程代码不直接依赖此库）。
+configurations.all {
+    resolutionStrategy {
+        force "org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0"
+    }
+}
+
 dependencies {
 
     implementation libs.androidx.core.ktx
@@ -173,6 +194,12 @@ dependencies {
     implementation libs.kotlinx.coroutines.android
     implementation libs.androidx.lifecycle.runtime.compose
     implementation libs.okhttp
+
+    // Firebase 推送（FCM）：依赖无条件加入（编译期始终在 classpath）；
+    // 运行时通过 PushBootstrap 探测 FirebaseApp.getApps() 来 no-op（无 google-services.json 时）。
+    // BOM 统一管理 Firebase 全家桶版本，firebase-messaging-ktx 不需要单独写版本号。
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.messaging
 
     // HMS / AppsFlyer OAID：仅 BP 品牌渠道集成（按 flavor 维度注入依赖）
     allChannels.findAll { brandConfig[it.brand].hms }.each { ch ->

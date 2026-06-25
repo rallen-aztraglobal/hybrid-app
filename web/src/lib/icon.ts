@@ -23,6 +23,25 @@ export interface LoadedImage {
   tooSmall: boolean;
 }
 
+/**
+ * 抓取一个图片 URL 并转成 dataURL。
+ * 用于「从已有渠道复制」：源渠道的图标/splash 是 /static 地址，而 api.ts 只上传
+ * `data:` 开头的图（见 channels/:id/icon 上传判断），故复制时必须先转成 dataURL，
+ * 新渠道才会真正带上图标，而非空图标。失败时由调用方回落到仅预览。
+ */
+export async function urlToDataUrl(url: string): Promise<string> {
+  if (url.startsWith('data:')) return url;
+  const res = await fetch(url, { credentials: 'same-origin' });
+  if (!res.ok) throw new Error(`抓取图片失败：HTTP ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('图片转码失败'));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
+}
+
 /** 读取 File 为 dataURL 并解出尺寸 + 校验。 */
 export function loadImageFile(file: File): Promise<LoadedImage> {
   return new Promise((resolve, reject) => {

@@ -240,3 +240,81 @@ export interface AppRuntimeConfig {
   configVersion: number;
   ttlSeconds: number;
 }
+
+// =========================================================================
+// 推送管理（07-push.md）
+// =========================================================================
+
+/** FCM 推送功能门控（GET /api/push/status）。 */
+export interface PushStatus {
+  enabled: boolean;
+  brands: Record<BrandCode, boolean>;
+}
+
+/** 推送活动状态机。 */
+export type PushCampaignStatus = 'draft' | 'scheduled' | 'sending' | 'done' | 'failed';
+
+/**
+ * 推送活动（对应后端 push_campaign 表）。
+ * id 类型与 Channel 等保持一致（后端数字主键，前端字符串化）。
+ */
+export interface PushCampaign {
+  id: string;
+  name: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  /** 相对 path，如 /promo/618；不含域名（ADR-0002）。 */
+  deeplinkPath?: string;
+  extraData?: Record<string, string>;
+  /** 目标渠道包 applicationId 集合。 */
+  targetAppIds: string[];
+  status: PushCampaignStatus;
+  scheduledAt?: string;
+  sentAt?: string;
+  totalDevices: number;
+  successCount: number;
+  failureCount: number;
+  createdBy?: string;
+  createdAt: string;
+}
+
+/** 推送活动创建/编辑载荷（POST/PUT /api/push/campaigns）。 */
+export interface PushCampaignInput {
+  name: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  deeplinkPath?: string;
+  extraData?: Record<string, string>;
+  targetAppIds: string[];
+}
+
+/** 单 applicationId 的发送结果汇总（GET /api/push/campaigns/:id → records）。 */
+export interface PushRecord {
+  applicationId: string;
+  sent: number;
+  failed: number;
+  errorSample?: string;
+  finishedAt?: string;
+}
+
+/** 触达预估（GET /api/push/audience?appIds=...）。 */
+export interface PushAudience {
+  totalDevices: number;
+  byApp: Record<string, number>;
+}
+
+/**
+ * POST /api/push/campaigns/:id/send 的响应体（envelope.data）。
+ * dry-run 时 campaign 保持原状态（draft），preview 带触达数；
+ * 真发时 campaign 状态变为 sending/done，preview 无意义（可忽略）。
+ */
+export interface PushSendResult {
+  campaign: PushCampaign;
+  dryRun: boolean;
+  preview?: {
+    totalDevices: number;
+    byApp: Record<string, number>;
+  };
+}

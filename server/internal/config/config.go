@@ -59,6 +59,17 @@ type Config struct {
 	AppConfigTTLSecs  int    // /api/app/config 的 ttlSeconds
 	AppConfigBaseURL  string // APK 烧录的运行时配置端点（APK 用 GET ${base}?appId= 拉域名列表）；空则回退对象存储前缀
 	DomainProbeEnable bool   // 是否启用 cron 域名巡检
+
+	// 推送功能（ADR-0012）。
+	// PUSH_ENABLED=true 才真正发送；缺少 service account 时门控拦截，campaign 留 draft。
+	PushEnabled     bool   // PUSH_ENABLED，默认 false
+	PushCronEnable  bool   // PUSH_CRON_ENABLE，默认 false；启用 @every 1m 定时扫描
+	FirebaseSAAP    string // FIREBASE_SA_AP：service account JSON 文件路径或 JSON 内容
+	FirebaseSABP    string // FIREBASE_SA_BP
+	FirebaseSAGP    string // FIREBASE_SA_GP
+	FirebaseProjectAP string // FIREBASE_PROJECT_AP：Firebase 项目 ID
+	FirebaseProjectBP string // FIREBASE_PROJECT_BP
+	FirebaseProjectGP string // FIREBASE_PROJECT_GP
 }
 
 // Load 从环境变量装配 Config，缺省值保证本机可零配置启动。
@@ -100,6 +111,16 @@ func Load() *Config {
 		AppConfigBaseURL: env("APP_CONFIG_BASE_URL", ""),
 
 		DomainProbeEnable: envBool("DOMAIN_PROBE_ENABLE", true),
+
+		// 推送功能（ADR-0012）。
+		PushEnabled:       envBool("PUSH_ENABLED", false),
+		PushCronEnable:    envBool("PUSH_CRON_ENABLE", false),
+		FirebaseSAAP:      env("FIREBASE_SA_AP", ""),
+		FirebaseSABP:      env("FIREBASE_SA_BP", ""),
+		FirebaseSAGP:      env("FIREBASE_SA_GP", ""),
+		FirebaseProjectAP: env("FIREBASE_PROJECT_AP", ""),
+		FirebaseProjectBP: env("FIREBASE_PROJECT_BP", ""),
+		FirebaseProjectGP: env("FIREBASE_PROJECT_GP", ""),
 	}
 	// JWT_SECRET 未设置时自动生成随机密钥：兑现 compose「留空→自动生成」的承诺，
 	// 同时去掉可被伪造的硬编码弱默认值（评审 S2）。注意：随机密钥重启后失效 → 需重新登录；

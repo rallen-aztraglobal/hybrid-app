@@ -38,4 +38,14 @@ interface BrandStrategy {
      * @param body     已解析的 response.body 对象
      */
     fun onApiResponse(apiUrl: String, fullJson: String, body: JSONObject, host: BrandHost)
+
+    /**
+     * 推送通知点击后回调（可选，默认空实现）。供各品牌定制点击归因（如 AppsFlyer 事件上报）。
+     * 在 WebViewActivity 经 DomainResolver 拿到可用域名并拼出完整 URL 之后调用。
+     *
+     * @param path   推送携带的相对 deeplink path（如 `/promo/618`），不含域名（守 ADR-0002）
+     * @param domain 当前 DomainResolver 解析出的可用域名（运行时值，非编译期常量）
+     * @param host   宿主 Activity 的回调接口
+     */
+    fun onPushOpen(path: String, domain: String, host: BrandHost) {}
 }

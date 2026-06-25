@@ -29,13 +29,6 @@ class PrefsConfigStore(private val context: Context) : ConfigStore {
         prefs.edit { putString(KEY_CACHED, config.toJson()) }
     }
 
-    override fun readLastGood(): String? =
-        prefs.getString(KEY_LAST_GOOD, null)?.takeIf { it.isNotBlank() }
-
-    override fun writeLastGood(domain: String) {
-        prefs.edit { putString(KEY_LAST_GOOD, domain) }
-    }
-
     override fun readBootstrap(): BootstrapConfig? = bootstrap
 
     /** configUrl / appId / palcode / brand 取用：编译期不变量，从 bootstrap 取（不在缓存里）。 */
@@ -48,7 +41,6 @@ class PrefsConfigStore(private val context: Context) : ConfigStore {
         private const val TAG = "DomainResolver"
         private const val PREFS = "domain_resolver"
         private const val KEY_CACHED = "cached_config"
-        private const val KEY_LAST_GOOD = "last_good"
         private const val BOOTSTRAP_ASSET = "bootstrap.json"
     }
 }

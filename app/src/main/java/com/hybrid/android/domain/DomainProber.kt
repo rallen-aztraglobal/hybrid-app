@@ -30,7 +30,9 @@ open class DomainProber(
     private val brand: String,
     perDomainTimeoutMs: Long = 2500,
     neutralTimeoutMs: Long = 2000,
-    fetchTimeoutMs: Long = 1200,
+    // 拉取运行时配置的超时：冷请求经 VPN/跨境（DNS+TLS+往返）易超过 1.2s 导致误判失败、
+    // 回落到兜底域名（甚至错品牌）。放宽到 3s（splash 期间无感），让 STEP1 稳定拿到真实配置。
+    fetchTimeoutMs: Long = 3000,
 ) {
     private val tag = "DomainResolver"
 
@@ -71,18 +73,23 @@ open class DomainProber(
 
     /**
      * STEP2：探测单个域名并校验「确实是我们的站点」。返回 [ProbeError]，[ProbeError.HIT] 即命中。
+     *
+     * 「确实是我们」的判据 = **HTTPS 证书覆盖目标域名**（[certMatchesDomain]）：这是密码学级别的反劫持保证——
+     * DNS 污染/中间人即便把域名解析到自己服务器，也拿不到该域名的合法证书（CA 不会签发），TLS 握手即失败。
+     * 因此**不再要求内容域名返回业务特征签名 JSON**——内容域名是第三方游戏站（SPA），不可能配合实现我们的
+     * `/healthz` 签名端点（它对任意路径都回 200 + HTML）。强行校验签名会把合法站点误判为劫持（见本次修复）。
+     * 命中条件收敛为：证书覆盖域名 + HTTP 2xx/3xx（站点确实在服务）。
      */
     open fun probe(domain: String, probePath: String): ProbeError {
         val url = domain.trimEnd('/') + ensureLeadingSlash(probePath)
         return try {
-            val req = Request.Builder().url(url).header("Accept", "application/json").get().build()
+            val req = Request.Builder().url(url).get().build()
             probeClient.newCall(req).execute().use { resp ->
                 val code = resp.code
                 when {
                     code in 500..599 -> ProbeError.HTTP_5XX
-                    code != 200 -> ProbeError.OTHER
+                    code !in 200..399 -> ProbeError.OTHER  // 4xx（含地区封锁 403）→ 该域名当前不可服务，试下一个
                     !certMatchesDomain(resp.handshake?.peerCertificates, domain) -> ProbeError.HIJACK
-                    !bodyMatchesSite(resp.body?.string()) -> ProbeError.HIJACK
                     else -> ProbeError.HIT
                 }
             }
@@ -139,9 +146,6 @@ open class DomainProber(
             neutralClient.newCall(req).execute().use { /* 忽略响应 */ }
         }.onFailure { Log.w(tag, "告警上报失败（已忽略，不影响 UI）: ${it.javaClass.simpleName}") }
     }
-
-    /** 业务特征校验：`{"ok":true,"brand":"<brand>"}`，brand 必须与本包一致。 */
-    private fun bodyMatchesSite(body: String?): Boolean = bodyMatchesSite(body, brand)
 
     /** 证书域名校验：证书链首张的 CN/SAN 是否覆盖目标 host（防 DNS 污染到劫持服务器）。 */
     private fun certMatchesDomain(certs: List<java.security.cert.Certificate>?, domain: String): Boolean {

@@ -1,6 +1,9 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    // google-services 插件声明：app/build.gradle 按条件（是否存在 google-services.json）选择是否 apply。
+    // 无 google-services.json 时整体构建不报错（feature gate，见 docs/admin/07-push.md §6b）。
+    alias(libs.plugins.google.services) apply false
 }

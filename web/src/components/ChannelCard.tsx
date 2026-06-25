@@ -84,20 +84,7 @@ export function ChannelCard({
           </span>
         </div>
         <div className="ml-auto flex gap-[6px] items-center">
-          {channel.latestApkUrl && (
-            <a
-              href={channel.latestApkUrl}
-              download={apkFileName(channel.latestApkUrl)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              title="下载该渠道最近一次成功构建的 APK"
-              className="inline-flex items-center gap-1 text-[11.5px] font-semibold px-[9px] py-[5px] rounded-lg border border-line bg-panel text-brand hover:bg-[rgba(99,102,241,.06)] transition"
-            >
-              <DownloadIcon className="w-[14px] h-[14px]" />
-              下载最新包
-            </a>
-          )}
+          {/* 编辑/归档：悬浮显现，靠左 */}
           <div className="flex gap-[6px] opacity-0 group-hover:opacity-100 transition">
             <MiniBtn title="编辑" onClick={onEdit}>
               <EditIcon className="w-[15px] h-[15px]" />
@@ -113,6 +100,21 @@ export function ChannelCard({
               <TrashIcon className="w-[15px] h-[15px]" />
             </MiniBtn>
           </div>
+          {/* 下载最新包：纯图标、固定在最右（小屏不挤文字）。tooltip 说明用途。 */}
+          {channel.latestApkUrl && (
+            <a
+              href={channel.latestApkUrl}
+              download={apkFileName(channel.latestApkUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="下载该渠道最近一次成功构建的 APK"
+              aria-label="下载最新包"
+              className="grid place-items-center w-[30px] h-[30px] rounded-lg border border-line bg-panel text-brand hover:bg-[rgba(99,102,241,.06)] transition"
+            >
+              <DownloadIcon className="w-[15px] h-[15px]" />
+            </a>
+          )}
         </div>
       </div>
     </div>

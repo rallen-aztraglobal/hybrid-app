@@ -20,14 +20,11 @@ class DomainListSelectorTest {
     /** 内存版 ConfigStore，记录写入便于断言「成功即更新缓存」。 */
     private class FakeStore(
         var cached: DomainConfig? = null,
-        var lastGood: String? = null,
         var bootstrap: BootstrapConfig? = null,
     ) : ConfigStore {
         var writeCount = 0
         override fun readCachedConfig() = cached
         override fun writeCachedConfig(config: DomainConfig) { cached = config; writeCount++ }
-        override fun readLastGood() = lastGood
-        override fun writeLastGood(domain: String) { lastGood = domain }
         override fun readBootstrap() = bootstrap
     }
 
@@ -99,28 +96,13 @@ class DomainListSelectorTest {
     }
 
     @Test
-    fun `lastGood 提到队首 但不改变其余顺序`() {
+    fun `顺序以来源为准 主在队首 不做重排`() {
         val store = FakeStore(
             cached = DomainConfig(listOf("https://main.com", "https://b1.com", "https://b2.com"), "/healthz"),
-            lastGood = "https://b2.com",
         )
         val sel = DomainListSelector(store).select { null }
-        // b2 提队首，main/b1 顺序不变
-        assertEquals(listOf("https://b2.com", "https://main.com", "https://b1.com"), sel.domains)
-    }
-
-    @Test
-    fun `lastGood 不在清单中 顺序不变`() {
-        val ordered = DomainListSelector.orderByLastGood(
-            listOf("https://a.com", "https://b.com"), "https://gone.com"
-        )
-        assertEquals(listOf("https://a.com", "https://b.com"), ordered)
-    }
-
-    @Test
-    fun `lastGood 为空 顺序不变`() {
-        val ordered = DomainListSelector.orderByLastGood(listOf("https://a.com", "https://b.com"), null)
-        assertEquals(listOf("https://a.com", "https://b.com"), ordered)
+        // 不再按 lastGood 重排：主域名 main 保持在队首，原序不变。
+        assertEquals(listOf("https://main.com", "https://b1.com", "https://b2.com"), sel.domains)
     }
 
     @Test

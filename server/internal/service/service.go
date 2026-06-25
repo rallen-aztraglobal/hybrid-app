@@ -16,11 +16,24 @@ type Service struct {
 	cfg     *config.Config
 	repo    *repo.Repo
 	storage storage.Storage
+	fcm     *FCMManager
 }
 
-// New 创建 Service。
+// New 创建 Service（同时初始化 FCM Manager，加载失败只警告不崩）。
 func New(cfg *config.Config, r *repo.Repo, st storage.Storage) *Service {
-	return &Service{cfg: cfg, repo: r, storage: st}
+	fcmMgr := NewFCMManager(
+		map[string]string{
+			"ap": cfg.FirebaseSAAP,
+			"bp": cfg.FirebaseSABP,
+			"gp": cfg.FirebaseSAGP,
+		},
+		map[string]string{
+			"ap": cfg.FirebaseProjectAP,
+			"bp": cfg.FirebaseProjectBP,
+			"gp": cfg.FirebaseProjectGP,
+		},
+	)
+	return &Service{cfg: cfg, repo: r, storage: st, fcm: fcmMgr}
 }
 
 // Error 是带 HTTP 状态码的业务错误，便于 handler 直接映射。

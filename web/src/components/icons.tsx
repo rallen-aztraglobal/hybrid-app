@@ -149,3 +149,30 @@ export const ShieldIcon = (p: IconProps) => (
     <path d="m9 12 2 2 4-4" />
   </svg>
 );
+
+/** 推送管理导航图标（喇叭/广播）。 */
+export const MegaphoneIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 11v2a4 4 0 0 0 4 4h1l2 4h2l-2-4h1a4 4 0 0 0 4-4v-2" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    <line x1="12" y1="3" x2="12" y2="5" />
+  </svg>
+);
+
+/** 发送箭头图标（推送发送按钮）。 */
+export const SendIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <line x1="22" y1="2" x2="11" y2="13" />
+    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+  </svg>
+);
+
+/** 日历图标（定时发送）。 */
+export const CalendarIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);

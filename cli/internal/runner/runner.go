@@ -185,27 +185,39 @@ func processJob(ctx context.Context, r *repo.Repo, be Backend, job *manifest.Bui
 	// 标记 running。
 	_ = be.UpdateJobStatus(ctx, job.ID, manifest.StatusRunning, "")
 
+	// 实时日志流：阶段标记 + gradle 输出按行节流回传，前端终端近实时滚动（ADR-0008）。
+	ls := newJobLogStreamer(ctx, be, job.ID)
+	defer ls.Close()
+	// step 同时写 runner 控制台（docker logs）与回传后端（前端终端）。
+	step := func(format string, a ...any) {
+		msg := fmt.Sprintf(format, a...)
+		opt.logf("%s", msg)
+		ls.line(msg)
+	}
+
 	// 1) pull：拉最新配置渲染回本地（构建机消费 source-of-truth，ADR-0004/0008）。
 	src, err := opt.manifestSource()
 	if err != nil {
 		fail(ctx, be, job.ID, "", err)
 		return err
 	}
-	opt.logf("  [#%d] pull %s ...", job.ID, job.Brand)
+	step("→ [#%d] pull %s ...", job.ID, job.Brand)
 	if _, err := render.Pull(ctx, r, src, job.Brand, render.Options{
-		Logf: func(f string, a ...any) { opt.logf("    "+f, a...) },
+		Logf: func(f string, a ...any) { step("    "+f, a...) },
 	}); err != nil {
 		fail(ctx, be, job.ID, "", fmt.Errorf("pull 失败: %w", err))
 		return err
 	}
 
-	// 2) gradlew assemble<Flavor>Release（+签名）。日志尾摘要随结果回传。
-	opt.logf("  [#%d] assemble %v (version=%s) ...", job.ID, job.Flavors, job.VersionName)
+	// 2) gradlew assemble<Flavor>Release（+签名）。stdout/stderr 实时回传 + 末尾摘要随结果回传。
+	step("→ [#%d] assemble %v (version=%s) ...", job.ID, job.Flavors, job.VersionName)
 	res, buildErr := opt.build(ctx, r, build.Options{
 		Flavors:          job.Flavors,
 		TestEvents:       job.TestEvents,
 		VersionName:      job.VersionName, // runner 用 job.versionName
 		CaptureTailLines: opt.tailLines(),
+		Stdout:           io.MultiWriter(os.Stdout, ls), // 控制台 + 前端终端
+		Stderr:           io.MultiWriter(os.Stderr, ls),
 	})
 	logTail := ""
 	if res != nil {
@@ -233,8 +245,8 @@ func processJob(ctx context.Context, r *repo.Repo, be Backend, job *manifest.Bui
 	}
 
 	// 4) 成功回传。
+	step("✓ [#%d] 完成，投递 %d 个 APK", job.ID, count)
 	_ = be.UpdateJobStatus(ctx, job.ID, manifest.StatusSuccess, logTail)
-	opt.logf("  [#%d] 完成，投递 %d 个 APK", job.ID, count)
 	return nil
 }
 

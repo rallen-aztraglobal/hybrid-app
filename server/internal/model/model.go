@@ -198,5 +198,10 @@ func AllModels() []any {
 		&BuildArtifact{},
 		&AdminUser{},
 		&AuditLog{},
+		// 推送功能（ADR-0012）
+		&PushDeviceToken{},
+		&PushCampaign{},
+		&PushCampaignTarget{},
+		&PushRecord{},
 	}
 }

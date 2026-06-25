@@ -284,7 +284,11 @@ function Terminal({
           <>
             <span className="text-[#64748b]"># hybrid-pack release --brand {brand}</span>
             <br />
-            {streaming ? '排队中…' : '等待开始…'}
+            {streaming ? (
+              '排队中…'
+            ) : (
+              <span className="text-[#64748b]">尚未发起打包 — 勾选渠道后点上方「开始打包」</span>
+            )}
           </>
         ) : (
           lines.map((l, i) => <TermLine key={i} text={l} />)

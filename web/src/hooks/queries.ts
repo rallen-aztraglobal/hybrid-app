@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { brandApi, buildApi, channelApi } from '@/lib/api';
-import type { BrandCode, BuildJobRequest, ChannelInput, DomainEntry } from '@/lib/types';
+import { brandApi, buildApi, channelApi, pushApi } from '@/lib/api';
+import type { BrandCode, BuildJobRequest, ChannelInput, DomainEntry, PushCampaignInput, PushSendResult } from '@/lib/types';
 
 /**
  * 服务端状态层（TanStack Query）。组件只消费这些 hook，不直接碰 api 模块，
@@ -14,6 +14,10 @@ export const qk = {
   channel: (id: string) => ['channels', id] as const,
   builds: (brand?: BrandCode) => ['builds', brand ?? 'all'] as const,
   buildLogs: (jobId: string) => ['builds', 'logs', jobId] as const,
+  pushStatus: ['push', 'status'] as const,
+  pushCampaigns: (brand?: BrandCode) => ['push', 'campaigns', brand ?? 'all'] as const,
+  pushCampaign: (id: string) => ['push', 'campaigns', id] as const,
+  pushAudience: (appIds: string[]) => ['push', 'audience', ...appIds.slice().sort()] as const,
 };
 
 export function useBrands() {
@@ -83,6 +87,76 @@ export function useSubmitBuildJob() {
     onSuccess: (job) => {
       void qc.invalidateQueries({ queryKey: qk.builds(job.brandCode) });
       void qc.invalidateQueries({ queryKey: qk.builds() });
+    },
+  });
+}
+
+// =========================================================================
+// 推送管理查询 hooks（07-push.md）
+// =========================================================================
+
+export function usePushStatus() {
+  return useQuery({ queryKey: qk.pushStatus, queryFn: pushApi.getStatus, staleTime: 60_000 });
+}
+
+export function usePushCampaigns(brand?: BrandCode) {
+  return useQuery({
+    queryKey: qk.pushCampaigns(brand),
+    queryFn: () => pushApi.listCampaigns(brand),
+  });
+}
+
+export function usePushCampaign(id: string | null) {
+  return useQuery({
+    queryKey: id ? qk.pushCampaign(id) : ['push', 'none'],
+    queryFn: () => pushApi.getCampaign(id!),
+    enabled: !!id,
+  });
+}
+
+export function usePushAudience(appIds: string[]) {
+  return useQuery({
+    queryKey: qk.pushAudience(appIds),
+    queryFn: () => pushApi.getAudience(appIds),
+    enabled: appIds.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+export function useSavePushCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: PushCampaignInput }) =>
+      id ? pushApi.updateCampaign(id, input) : pushApi.createCampaign(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['push', 'campaigns'] });
+    },
+  });
+}
+
+export function useSendPushCampaign() {
+  const qc = useQueryClient();
+  return useMutation<PushSendResult, Error, { id: string; dryRun?: boolean }>({
+    mutationFn: ({ id, dryRun }) => pushApi.sendCampaign(id, dryRun),
+    onSuccess: (result) => {
+      // dry-run 时 campaign 状态未变、历史列表不应出现新完成记录，不做 invalidate。
+      // 真发时刷新列表 + 详情，让状态更新可见。
+      if (!result.dryRun) {
+        void qc.invalidateQueries({ queryKey: ['push', 'campaigns'] });
+        void qc.invalidateQueries({ queryKey: qk.pushCampaign(result.campaign.id) });
+      }
+    },
+  });
+}
+
+export function useSchedulePushCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, scheduledAt }: { id: string; scheduledAt: string }) =>
+      pushApi.scheduleCampaign(id, scheduledAt),
+    onSuccess: (campaign) => {
+      void qc.invalidateQueries({ queryKey: ['push', 'campaigns'] });
+      void qc.invalidateQueries({ queryKey: qk.pushCampaign(campaign.id) });
     },
   });
 }

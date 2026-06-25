@@ -104,3 +104,10 @@ func (r *Repo) APKOutputDir(flavor string) string {
 func (r *Repo) AppBuildGradle() string {
 	return filepath.Join(r.Root, "app", "build.gradle")
 }
+
+// AppGoogleServicesJSON 返回 app/google-services.json 路径。
+// 该文件由 CLI pull 按品牌投放，供 google-services Gradle 插件构建期按 applicationId 匹配（ADR-0012）。
+// 不进 git（已加入 app/.gitignore）；FCM 未配置时该文件不存在，插件条件式 apply。
+func (r *Repo) AppGoogleServicesJSON() string {
+	return filepath.Join(r.Root, "app", "google-services.json")
+}
