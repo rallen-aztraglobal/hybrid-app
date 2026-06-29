@@ -1,0 +1,504 @@
+{
+  "project_info": {
+    "project_number": "187620058340",
+    "project_id": "hybrid-bp",
+    "storage_bucket": "hybrid-bp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:64368036ec7d054a9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpcm01051"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:af3061240262fc6e9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpcm01052"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:b720cb8c1ad3301d9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpcm01053"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:57298f2a357cd61a9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3401"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:38dca8d8d296da189e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3402"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:f5de07df451e19349e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3403"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:01190943e5129cc19e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3404"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:be247e2d73ce3ff69e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3405"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:78bc0a285560ee2c9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3406"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:d99feacfc8eee9ef9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3407"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:f1dacdadd6594d9b9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3408"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:2d18044df4b32e289e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3409"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:f0193053b791fbd69e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3410"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:266448c3be17ace49e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3411"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:6158a3d1830374069e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3412"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:012d91738dde25f79e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3413"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:08d7d3a978b4f6c49e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3438"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:f4a8feb59db57d7e9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3439"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:3ec8e19509f055ee9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3440"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:bd285a115da76ef89e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3441"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:914f66d4360d33309e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3442"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:54150d8285e96ebd9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3443"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:d98cf9463db3f5919e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3444"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:40ff048b4eb7409b9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3445"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:d77c2a0168ef5b2a9e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3446"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187620058340:android:3ee70cdd7be8ac419e38f1",
+        "android_client_info": {
+          "package_name": "com.bingoplus.bpom3447"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBtXdLWi1OH88TlWvnC1WiogITeYDxyEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

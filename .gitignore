@@ -23,15 +23,5 @@
 # 编辑器 / 工具临时产物
 /.vscode/
 /.kotlin/
-
-# === 机密：绝不进 git（ADR-0008）===
-# 部署机密专区：除 README 外全部忽略（keystore / SSH key / 部署配置 / FCM 私钥等）
-/deploy/secrets/*
-!/deploy/secrets/README.md
-# 兜底：任何位置的 FCM service account 私钥都不许进 git
-**/*firebase-adminsdk*.json
-**/firebase-sa-*.json
-# FCM 合并 google-services.json：非机密，但走后端分发，不入库
-/deploy/google-services/
 # firebase CLI 调试日志
 firebase-debug.log

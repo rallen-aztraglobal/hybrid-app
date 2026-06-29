@@ -1,0 +1,580 @@
+{
+  "project_info": {
+    "project_number": "980958555282",
+    "project_id": "hybrid-gp",
+    "storage_bucket": "hybrid-gp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:0158fcc812a78acdb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk042"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:4e1e7cefcf52b2ebb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk043"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:919c91b037d19708b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk044"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:018667d9fb0cd8ffb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk045"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:3fb33ef5dad397beb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk046"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:82897e8e392dececb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk047"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:fe83b2c020adf48eb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk048"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:2ed481d0c5157a4fb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk049"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:cc2d9acad3fe6762b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk050"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:ec5d2744bff9890db5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gpgzmkk051"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:04036e9780605c00b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket008"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:f205a52ab4b017bab5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket011"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:08c20cfd0616db23b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket014"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:6d5fd52324fde223b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket015"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:ffa9ddcad767c1cab5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket016"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:9b0213f0250f2ef8b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket017"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:bc7e43ac6bfb5df9b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket018"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:75808de1788b0097b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket019"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:e5b5271d6925678db5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket020"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:c0c4cfc6daae36f3b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket062"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:fcf8197907eaaee3b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket066"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:409752f8b168f7fbb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket068"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:a964a8e7536218fbb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket071"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:438717ea7bf744c8b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmarket075"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:2b43255e58d88319b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmkt026"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:f9e00ebaf054318bb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmkt028"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:e9238a0a2d310943b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmkt029"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:c42012d59644c64cb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmkt030"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:5c3d412df205d330b5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmkt031"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980958555282:android:3506781d7f085a2eb5ca4b",
+        "android_client_info": {
+          "package_name": "com.gamezone.gzmkt032"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHD07zNg7aWsMnrEitYSQh2lmVpuQUBco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
