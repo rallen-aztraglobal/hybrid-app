@@ -209,6 +209,15 @@ func processJob(ctx context.Context, r *repo.Repo, be Backend, job *manifest.Bui
 		return err
 	}
 
+	// 1b) 拉品牌 google-services.json → app/google-services.json（推送的编译期注入；ADR-0012 第 6b 节）。
+	// 「有则落地、无则跳过」，不阻断未启用推送的品牌；漏掉它会导致 google-services 插件不应用、
+	// APK 无 Firebase 配置、运行时拿不到 FCM token（与交互式 pull 命令保持一致，见 pull.go）。
+	if err := render.PullGoogleServices(ctx, r, src, job.Brand, render.Options{
+		Logf: func(f string, a ...any) { step("    "+f, a...) },
+	}); err != nil {
+		step("    警告: google-services.json 写入失败（%v），本次构建将无推送能力", err)
+	}
+
 	// 2) gradlew assemble<Flavor>Release（+签名）。stdout/stderr 实时回传 + 末尾摘要随结果回传。
 	step("→ [#%d] assemble %v (version=%s) ...", job.ID, job.Flavors, job.VersionName)
 	res, buildErr := opt.build(ctx, r, build.Options{

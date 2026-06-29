@@ -105,11 +105,15 @@ android {
         }
     }
 
-    // 小渠道资源按大渠道分目录存放：src/channels/<brand>/<flavor>/res
+    // 小渠道资源按大渠道分目录存放：src/channels/<brand>/<flavor>/{res,assets}
+    // assets 承载 CLI 按渠道渲染的 bootstrap.json（域名兜底 + configUrl）；不映射则 APK 只会
+    // 用 src/main 的通用默认 bootstrap（brand=ap、错误的首启兜底域名）。目录不存在时 Gradle 忽略，
+    // 该 flavor 自然回落 src/main/assets/bootstrap.json。
     sourceSets {
         allChannels.each { ch ->
             getByName(ch.name) {
                 res.srcDirs = ["src/channels/${ch.brand}/${ch.name}/res"]
+                assets.srcDirs = ["src/channels/${ch.brand}/${ch.name}/assets"]
             }
         }
     }

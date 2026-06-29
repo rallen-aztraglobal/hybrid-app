@@ -72,8 +72,24 @@ services:
       # 形如 https://api.<域名>/api/app/config；留空则 APK 只用编译期兜底域名、不热更。
       APP_CONFIG_BASE_URL: "${APP_CONFIG_BASE_URL:-}"
       DOMAIN_PROBE_ENABLE: "${DOMAIN_PROBE_ENABLE:-true}"
+      # ---- 推送（FCM HTTP v1）----
+      # 总开关默认开；缺私钥时后端门控自动 no-op（campaign 留 draft），开着也安全。
+      PUSH_ENABLED: "${PUSH_ENABLED:-true}"
+      PUSH_CRON_ENABLE: "${PUSH_CRON_ENABLE:-true}"
+      # service account 私钥（机密）：经下方 ./google-services 只读挂载进 /secrets。
+      # 私钥本身不写在此（compose 入 git），仅引用容器内路径；缺文件→该品牌跳过不发。
+      FIREBASE_SA_AP: "/secrets/hybrid-ap-firebase-adminsdk-fbsvc-d321c8a645.json"
+      FIREBASE_SA_BP: "/secrets/hybrid-bp-firebase-adminsdk-fbsvc-8d90186afa.json"
+      FIREBASE_SA_GP: "/secrets/hybrid-gp-firebase-adminsdk-fbsvc-4ceaedae3f.json"
+      # FIREBASE_SA_GP2 留空：gp 溢出项目暂无私钥，溢出包自动跳过（Skipped，不算失败）。
+      FIREBASE_PROJECT_AP: "hybrid-ap"
+      FIREBASE_PROJECT_BP: "hybrid-bp"
+      FIREBASE_PROJECT_GP: "hybrid-gp"
     volumes:
       - api-data:/data
+      # 私钥只读挂载：rsync 已把 deploy/google-services 同步上服务器，compose 在 deploy/ 下执行，
+      # 相对路径正好命中。文件 644 → 容器 nonroot(uid 65532) 可读。
+      - ./google-services:/secrets:ro
     depends_on:
       mysql:
         condition: service_healthy

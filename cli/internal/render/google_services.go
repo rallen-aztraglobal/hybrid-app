@@ -26,7 +26,14 @@ func PullGoogleServices(ctx context.Context, r *repo.Repo, src api.ManifestSourc
 		return nil
 	}
 	if len(data) == 0 {
-		// 后端无该文件 → 跳过提示，不阻断。
+		// 后端无该文件 → 跳过。但必须清理工作区可能残留的【上一品牌】google-services.json：
+		// 构建机工作区跨任务持久化，若先打 bp（落地 bp 配置）再打 gp（无配置），残留的 bp 文件会让
+		// google-services 插件按 bp 项目找 client，gp 包名不在其中而构建失败。清理后 gp 恢复无推送正常打包。
+		if !opt.DryRun {
+			if err := os.Remove(r.AppGoogleServicesJSON()); err != nil && !os.IsNotExist(err) {
+				opt.logf("  警告: 清理残留 google-services.json 失败（%v）", err)
+			}
+		}
 		opt.logf("  ⏭ 该品牌（%s）未配置 FCM，跳过 google-services.json（推送功能未启用）", brand)
 		return nil
 	}
