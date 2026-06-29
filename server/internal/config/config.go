@@ -67,9 +67,11 @@ type Config struct {
 	FirebaseSAAP    string // FIREBASE_SA_AP：service account JSON 文件路径或 JSON 内容
 	FirebaseSABP    string // FIREBASE_SA_BP
 	FirebaseSAGP    string // FIREBASE_SA_GP
+	FirebaseSAGP2   string // FIREBASE_SA_GP2：gp 溢出项目（超 Firebase 每项目 30 App 上限，gp 拆 hybrid-gp + hybrid-gp2）
 	FirebaseProjectAP string // FIREBASE_PROJECT_AP：Firebase 项目 ID
 	FirebaseProjectBP string // FIREBASE_PROJECT_BP
 	FirebaseProjectGP string // FIREBASE_PROJECT_GP
+	FirebaseProjectGP2 string // FIREBASE_PROJECT_GP2：gp 溢出项目 ID（缺失则 gp2 包跳过不发，no-op）
 }
 
 // Load 从环境变量装配 Config，缺省值保证本机可零配置启动。
@@ -118,9 +120,11 @@ func Load() *Config {
 		FirebaseSAAP:      env("FIREBASE_SA_AP", ""),
 		FirebaseSABP:      env("FIREBASE_SA_BP", ""),
 		FirebaseSAGP:      env("FIREBASE_SA_GP", ""),
+		FirebaseSAGP2:     env("FIREBASE_SA_GP2", ""),
 		FirebaseProjectAP: env("FIREBASE_PROJECT_AP", ""),
 		FirebaseProjectBP: env("FIREBASE_PROJECT_BP", ""),
 		FirebaseProjectGP: env("FIREBASE_PROJECT_GP", ""),
+		FirebaseProjectGP2: env("FIREBASE_PROJECT_GP2", ""),
 	}
 	// JWT_SECRET 未设置时自动生成随机密钥：兑现 compose「留空→自动生成」的承诺，
 	// 同时去掉可被伪造的硬编码弱默认值（评审 S2）。注意：随机密钥重启后失效 → 需重新登录；

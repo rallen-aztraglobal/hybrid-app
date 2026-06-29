@@ -15,8 +15,10 @@ import (
 	"github.com/hybrid-app/server/internal/storage"
 )
 
-// validBrands 当前支持的三个品牌 code。
-var validBrands = map[string]bool{"ap": true, "bp": true, "gp": true}
+// validBrands 当前支持的存储键：三个品牌 ap/bp/gp，外加 gp 溢出项目 gp2。
+// gp2 不是真品牌，是 gp 超 Firebase 每项目 30 App 上限后的第二个 Firebase 项目（hybrid-gp2），
+// 其 google-services.json 既供 gp2 那批 flavor 构建分发，也供后端发送路由判定（见 fcm_routing.go）。
+var validBrands = map[string]bool{"ap": true, "bp": true, "gp": true, "gp2": true}
 
 // googleServicesKey 返回对象存储 key（fcm/<brand>/google-services.json）。
 func googleServicesKey(brand string) string {

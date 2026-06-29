@@ -21,16 +21,20 @@ type Service struct {
 
 // New 创建 Service（同时初始化 FCM Manager，加载失败只警告不崩）。
 func New(cfg *config.Config, r *repo.Repo, st storage.Storage) *Service {
+	// gp 超 Firebase 每项目 30 App 上限被拆成 hybrid-gp + hybrid-gp2，故 FCM 客户端按
+	// 「路由键」而非纯品牌组织：ap/bp/gp 同名，外加 gp2 溢出项目。gp2 未配置则其包跳过不发。
 	fcmMgr := NewFCMManager(
 		map[string]string{
-			"ap": cfg.FirebaseSAAP,
-			"bp": cfg.FirebaseSABP,
-			"gp": cfg.FirebaseSAGP,
+			"ap":  cfg.FirebaseSAAP,
+			"bp":  cfg.FirebaseSABP,
+			"gp":  cfg.FirebaseSAGP,
+			"gp2": cfg.FirebaseSAGP2,
 		},
 		map[string]string{
-			"ap": cfg.FirebaseProjectAP,
-			"bp": cfg.FirebaseProjectBP,
-			"gp": cfg.FirebaseProjectGP,
+			"ap":  cfg.FirebaseProjectAP,
+			"bp":  cfg.FirebaseProjectBP,
+			"gp":  cfg.FirebaseProjectGP,
+			"gp2": cfg.FirebaseProjectGP2,
 		},
 	)
 	return &Service{cfg: cfg, repo: r, storage: st, fcm: fcmMgr}

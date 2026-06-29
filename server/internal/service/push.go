@@ -395,17 +395,21 @@ func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCa
 	}
 
 	type tokenJob struct {
-		brand string
-		token model.PushDeviceToken
+		routeKey string
+		token    model.PushDeviceToken
 	}
 
-	// 汇总所有 token 任务（按 brand 拆分）。
+	// 构建 applicationId → 路由键 映射（gp 拆分：gp2 溢出包路由到 gp2 项目）。
+	// 数据源是已上传的 fcm/gp2/google-services.json；未上传则索引为空、全部退回品牌路由。
+	appIndex := s.buildFCMAppIndex(ctx)
+
+	// 汇总所有 token 任务，逐 token 解析路由键（命中 gp2 索引→gp2，否则品牌 code）。
 	var jobs []tokenJob
-	// 以 applicationId → brand 建立映射（通过 token 的 brand_code 字段）。
 	for appID, tokens := range tokenMap {
 		_ = appID
 		for _, t := range tokens {
-			jobs = append(jobs, tokenJob{brand: t.BrandCode, token: t})
+			key := resolveFCMKey(appIndex, t.ApplicationID, t.BrandCode)
+			jobs = append(jobs, tokenJob{routeKey: key, token: t})
 		}
 	}
 
@@ -421,6 +425,7 @@ func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCa
 		token        string
 		err          error
 		unregistered bool
+		skipped      bool
 	}
 	resCh := make(chan sendRes, len(jobs))
 
@@ -436,12 +441,13 @@ func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCa
 					d[k] = v
 				}
 				d["palcode"] = j.token.PalCode
-				r := s.fcm.Send(ctx, j.brand, j.token.DeviceToken, c.Title, c.Body, c.ImageURL, d)
+				r := s.fcm.Send(ctx, j.routeKey, j.token.DeviceToken, c.Title, c.Body, c.ImageURL, d)
 				resCh <- sendRes{
 					appID:        j.token.ApplicationID,
 					token:        j.token.DeviceToken,
 					err:          r.Err,
 					unregistered: r.Unregistered,
+					skipped:      r.Skipped,
 				}
 			}
 		}()
@@ -449,10 +455,12 @@ func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCa
 	wg.Wait()
 	close(resCh)
 
-	// 汇总结果。
+	// 汇总结果。skipped（路由项目未配置，如 gp2 暂无私钥）单独计：不算 sent 也不算 failed，
+	// 不下线 token——保证 gp2 私钥就绪后这些设备能正常补发。
 	type appStat struct {
 		sent    int
 		failed  int
+		skipped int
 		errSamp string
 	}
 	stats := map[string]*appStat{}
@@ -461,9 +469,15 @@ func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCa
 		if _, ok := stats[r.appID]; !ok {
 			stats[r.appID] = &appStat{}
 		}
-		if r.err == nil {
+		switch {
+		case r.skipped:
+			stats[r.appID].skipped++
+			if stats[r.appID].errSamp == "" {
+				stats[r.appID].errSamp = "FCM 项目未配置，已跳过（如 gp2 暂无私钥）"
+			}
+		case r.err == nil:
 			stats[r.appID].sent++
-		} else {
+		default:
 			stats[r.appID].failed++
 			if stats[r.appID].errSamp == "" {
 				stats[r.appID].errSamp = r.err.Error()

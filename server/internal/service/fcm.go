@@ -115,14 +115,19 @@ type SendResult struct {
 	Err   error
 	// Unregistered=true 时 APK 端 token 已失效，应置 is_active=false。
 	Unregistered bool
+	// Skipped=true 表示该 token 所属路由项目未配置 FCM（如 gp 溢出项目 gp2 暂无私钥）：
+	// 不发送、不算失败、不下线 token——「在线但惰性」（ADR-0012 §6b）。
+	Skipped bool
 }
 
 // Send 向单个设备 token 发送 FCM 消息（HTTP v1）。
+// routeKey 为路由键（ap/bp/gp/gp2 等），通常等于品牌，gp 拆分后溢出包路由到 gp2。
 // 返回 SendResult；调用方在 worker pool 中汇总结果。
-func (m *FCMManager) Send(ctx context.Context, brand, token, title, body, imageURL string, data map[string]string) SendResult {
-	cli, ok := m.clients[brand]
+func (m *FCMManager) Send(ctx context.Context, routeKey, token, title, body, imageURL string, data map[string]string) SendResult {
+	cli, ok := m.clients[routeKey]
 	if !ok {
-		return SendResult{Token: token, Err: fmt.Errorf("品牌 %s FCM 未配置", brand)}
+		// 该路由项目未配置私钥（典型：gp2 尚无私钥）→ 跳过，不当失败处理。
+		return SendResult{Token: token, Skipped: true}
 	}
 
 	// 取 OAuth2 access token（自动缓存/刷新）。

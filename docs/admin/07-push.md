@@ -140,6 +140,15 @@ PUSH_CRON_ENABLE=true
 
 激活清单：① 建 3 个 Firebase 项目、各注册本品牌全部 flavor、导出合并 json；② 上传后台/交 CLI 分发；③ 服务端填私钥+projectId+`PUSH_ENABLED=true`；④ 重打一批带 json 的包。
 
+## 6c. gp 拆分（撞 Firebase 每项目 30 App 上限）
+
+gp 品牌 42 个渠道 > Firebase「每项目最多 30 个 App」硬上限（`429 RESOURCE_EXHAUSTED: Too many Apps on project`，提额需付费），故 gp 拆成两个 Firebase 项目：**hybrid-gp**（30）+ **hybrid-gp2**（溢出 12）。
+
+- **路由键**：FCM 发送不再纯按品牌，引入「路由键」ap/bp/gp/**gp2**。`fcm_routing.go` 读已上传的 `fcm/gp2/google-services.json`，把其 `client[].package_name` 建成 `applicationId → "gp2"` 索引；发送时命中索引走 gp2 项目，否则退回品牌 code（行为不变）。数据自维护，无需改库表。
+- **gp2 私钥暂缺的兼容**（当前状态）：`gp2` 未配 `FIREBASE_SA_GP2/FIREBASE_PROJECT_GP2` 时，路由到 gp2 的 token 返回 `SendResult.Skipped`——**不发、不算失败、不下线 token**（push_record 记 errorSample 说明）。即「超过 30 的那批包暂不发推送」。配上 gp2 私钥后这些设备自动恢复补发，零改码。
+- **存储/分发**：`fcm/gp2/google-services.json` 既供路由判定，也作 gp2 那批 flavor 的构建分发源（`validBrands` 已含 gp2）。CLI 按 flavor 路由到 gp 或 gp2 的 json 仍待做。
+- **新增配置**：`FIREBASE_SA_GP2`、`FIREBASE_PROJECT_GP2`（缺失即上面 no-op 行为）。
+
 ## 7. 里程碑（建议）
 
 | M | 内容 | 负责 agent |
