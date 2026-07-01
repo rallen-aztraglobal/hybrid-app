@@ -325,7 +325,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="基础 Flavor" required hint="不含商店后缀，选商店后自动拼接" error={errOf('flavorName')}>
+              <Field label="基础 Flavor" required error={errOf('flavorName')}>
                 <input
                   className="field-input mono"
                   placeholder="ap01060"
