@@ -19,6 +19,9 @@ import type {
   PushCampaignInput,
   PushSendResult,
   PushStatus,
+  Store,
+  StoreInput,
+  StoreUpdateInput,
 } from './types';
 import { mockDb } from './mock/db';
 import { BRAND_META } from './brands';
@@ -204,6 +207,8 @@ interface ChannelDTO {
   remark?: string;
   latestApkUrl?: string;
   updatedAt?: string;
+  storeId?: number | null;
+  store?: { id: number; code: string; name: string } | null;
 }
 function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
   const brandCode = (c.brandCode ?? c.brand?.code ?? brandHint ?? 'ap') as BrandCode;
@@ -224,6 +229,8 @@ function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
     remark: c.remark || undefined,
     latestApkUrl: c.latestApkUrl || undefined,
     updatedAt: c.updatedAt,
+    storeId: c.storeId ?? null,
+    store: c.store ?? null,
   };
 }
 
@@ -319,6 +326,7 @@ export const channelApi = {
             palCode: input.palCode.trim(),
             appName: input.appName.trim(),
             remark: input.remark ?? '',
+            storeId: input.storeId ?? null,
           }),
         });
         const ch = adaptChannel(created, input.brandCode);
@@ -336,6 +344,7 @@ export const channelApi = {
           method: 'PUT',
           body: JSON.stringify({
             // applicationId 派生只读：flavor 不可改（编辑态禁用），故不下发 flavorName/applicationId。
+            // storeId 同理：编辑态商店下拉禁用，不下发（避免误改导致包名/flavor 语义错位）。
             palCode: input.palCode.trim(),
             appName: input.appName.trim(),
             status: input.status,
@@ -355,6 +364,69 @@ export const channelApi = {
         await request<{ archived: boolean }>(`/channels/${id}`, { method: 'DELETE' });
       },
       () => mockDb.archiveChannel(id),
+    );
+  },
+};
+
+// =========================================================================
+// 应用商店（渠道包发布商店：华为 / 应用宝 / Google Play 等）
+// =========================================================================
+
+/** 进程内 mock 商店清单（后端未就绪时的演示态，不落库、刷新即重置）。 */
+let mockStores: Store[] = [];
+let mockStoreSeq = 1;
+
+export const storeApi = {
+  /** 全量商店（含 disabled），sort 升序。 */
+  list(): Promise<Store[]> {
+    return withFallback(
+      () => request<Store[]>('/stores'),
+      () => mockStores.slice().sort((a, b) => a.sort - b.sort),
+    );
+  },
+  create(input: StoreInput): Promise<Store> {
+    return withFallback(
+      () =>
+        request<Store>('/stores', {
+          method: 'POST',
+          body: JSON.stringify({ code: input.code.trim(), name: input.name.trim(), sort: input.sort ?? 0 }),
+        }),
+      () => {
+        const s: Store = {
+          id: mockStoreSeq++,
+          code: input.code.trim(),
+          name: input.name.trim(),
+          sort: input.sort ?? mockStores.length,
+          status: 'enabled',
+        };
+        mockStores = [...mockStores, s];
+        return s;
+      },
+    );
+  },
+  update(id: number, input: StoreUpdateInput): Promise<Store> {
+    return withFallback(
+      () =>
+        request<Store>(`/stores/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+      () => {
+        const idx = mockStores.findIndex((s) => s.id === id);
+        if (idx < 0) throw new ApiError('商店不存在', 404);
+        mockStores[idx] = { ...mockStores[idx], ...input };
+        return { ...mockStores[idx] };
+      },
+    );
+  },
+  remove(id: number): Promise<void> {
+    return withFallback(
+      async () => {
+        await request<{ deleted: boolean }>(`/stores/${id}`, { method: 'DELETE' });
+      },
+      () => {
+        mockStores = mockStores.filter((s) => s.id !== id);
+      },
     );
   },
 };
@@ -659,5 +731,6 @@ function inputToChannel(input: ChannelInput): Channel {
     iconMasterUrl: input.iconMasterDataUrl,
     splashUrl: input.splashDataUrl,
     remark: input.remark,
+    storeId: input.storeId ?? null,
   };
 }

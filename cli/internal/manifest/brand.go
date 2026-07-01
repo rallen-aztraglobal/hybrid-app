@@ -1,5 +1,7 @@
 package manifest
 
+import "strings"
+
 // 已知大渠道（品牌）元数据。
 //
 // 仅用于 CLI 的展示与校验（品牌名、顺序），与 app/build.gradle 的 brandConfig
@@ -29,13 +31,17 @@ func BrandPackagePrefix(code string) string {
 }
 
 // DeriveApplicationID 按 ADR-0009 派生 applicationId：<品牌包前缀>.<flavor>。
+// flavor 中的下划线会替换为点号，以支持商店包形如 "bpocmhuawei004_hw" 派生出
+// 点号分段的包名 "com.bingoplus.bpocmhuawei004.hw"（Gradle flavor 名不允许含
+// 点号，故用下划线表示分段）。老数据 flavor 本身不含下划线，替换后结果不变，
+// 向后兼容。
 // 品牌未知或 flavor 为空时返回空串（调用方据此判定无法派生）。
 func DeriveApplicationID(brand, flavor string) string {
 	prefix := brandPackagePrefix[brand]
 	if prefix == "" || flavor == "" {
 		return ""
 	}
-	return prefix + "." + flavor
+	return prefix + "." + strings.ReplaceAll(flavor, "_", ".")
 }
 
 // KnownBrands 返回受支持的品牌代码（有序）。

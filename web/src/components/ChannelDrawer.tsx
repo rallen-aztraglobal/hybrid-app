@@ -11,9 +11,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { deriveApplicationId, type BrandMeta } from '@/lib/brands';
 import type { Channel, ChannelInput, DomainEntry } from '@/lib/types';
-import { useBrands, useChannels, useSaveChannel } from '@/hooks/queries';
+import { useBrands, useChannels, useSaveChannel, useStores } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
-import { validateChannel, type FieldError } from '@/lib/validation';
+import { validateChannel, composeFlavor, type FieldError } from '@/lib/validation';
 import { loadImageFile, urlToDataUrl } from '@/lib/icon';
 import { cn } from '@/lib/cn';
 import { Button, Note, SectionHeading, Switch } from './ui';
@@ -30,7 +30,14 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const close = useUiStore((s) => s.closeDrawer);
   const { data: channels } = useChannels();
   const { data: brands } = useBrands();
+  const { data: stores } = useStores();
   const save = useSaveChannel();
+
+  // 表单可选商店：仅 enabled，按 sort 升序（停用的商店不应再被选用于新渠道）。
+  const storeOptions = useMemo(
+    () => (stores ?? []).filter((s) => s.status === 'enabled').slice().sort((a, b) => a.sort - b.sort),
+    [stores],
+  );
 
   // 后端下发的本品牌视图（含真实域名 / 包前缀）。
   const brandView = brands?.find((b) => b.code === brandMeta.code);
@@ -58,6 +65,10 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   );
 
   const [form, setForm] = useState<ChannelInput>(blankForm(brandMeta.code));
+  // 用户在表单里实际填写的「基础 flavor」（不含商店后缀）；form.flavorName 是合成值。
+  const [baseFlavor, setBaseFlavor] = useState('');
+  // 选中的商店 code（''  = 无/默认）。提交时据此在 stores 中查回 storeId。
+  const [storeCode, setStoreCode] = useState('');
   const [icon, setIcon] = useState<IconState>(emptyIconState());
   const [splash, setSplash] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
@@ -72,6 +83,11 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
     setCopiedFrom(null);
     setCopyingAssets(false);
     if (editChannel) {
+      // 编辑态：从存量 flavorName 反解出 base + 商店 code（base = flavorName 去掉尾部 `_`+code）。
+      const editStoreCode = editChannel.store?.code ?? '';
+      const derivedBase = editStoreCode ? stripStoreSuffix(editChannel.flavorName, editStoreCode) : editChannel.flavorName;
+      setBaseFlavor(derivedBase);
+      setStoreCode(editStoreCode);
       setForm({
         brandCode: editChannel.brandCode,
         flavorName: editChannel.flavorName,
@@ -82,10 +98,13 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
         domains: editChannel.domains ?? EMPTY_DOMAINS,
         status: editChannel.status,
         remark: editChannel.remark,
+        storeId: editChannel.storeId ?? null,
       });
       setIcon(emptyIconState(editChannel.iconMasterUrl ?? null));
       setSplash(editChannel.splashUrl ?? null);
     } else {
+      setBaseFlavor('');
+      setStoreCode('');
       setForm(blankForm(brandMeta.code));
       setIcon(emptyIconState());
       setSplash(null);
@@ -95,10 +114,12 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const open = target !== null;
 
   // 实时校验（含唯一性）。仅在用户触碰过后展示，避免初始就标红。
+  // baseFlavor 传给格式校验（避免合成 flavor 的下划线被误判非法）；
+  // form.flavorName 此时已是合成值，供唯一性/包名校验。
   const errors: Err[] = useMemo(() => {
     if (!open) return [];
-    return validateChannel(form, channels ?? [], editing ?? undefined);
-  }, [open, form, channels, editing]);
+    return validateChannel(form, channels ?? [], editing ?? undefined, baseFlavor);
+  }, [open, form, channels, editing, baseFlavor]);
 
   const errOf = (field: Err['field']): string | undefined =>
     touched ? errors.find((e) => e.field === field)?.message : undefined;
@@ -118,12 +139,30 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  /** flavor 变更时，同步派生只读 applicationId（ADR-0009：不手填）。 */
-  function setFlavor(flavor: string) {
+  /**
+   * 基础 flavor 变更时：与当前选中商店合成 flavor，同步派生只读 applicationId
+   * （ADR-0009：不手填；商店后缀方案：合成 flavor 里的下划线在派生包名时转点号）。
+   */
+  function setFlavor(nextBase: string) {
+    setBaseFlavor(nextBase);
+    const composed = composeFlavor(nextBase, storeCode);
     setForm((f) => ({
       ...f,
-      flavorName: flavor,
-      applicationId: deriveApplicationId(f.brandCode, flavor, packagePrefix),
+      flavorName: composed,
+      applicationId: deriveApplicationId(f.brandCode, composed, packagePrefix),
+    }));
+  }
+
+  /** 应用商店变更时：重新合成 flavor + 派生 applicationId。 */
+  function setStore(nextCode: string) {
+    setStoreCode(nextCode);
+    const composed = composeFlavor(baseFlavor, nextCode);
+    const store = storeOptions.find((s) => s.code === nextCode);
+    setForm((f) => ({
+      ...f,
+      flavorName: composed,
+      applicationId: deriveApplicationId(f.brandCode, composed, packagePrefix),
+      storeId: store ? store.id : null,
     }));
   }
 
@@ -134,6 +173,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
    * 图标/splash 必须抓成 dataURL 才能随新渠道真正上传（见 urlToDataUrl 注释）。
    */
   function copyFrom(src: Channel) {
+    setBaseFlavor('');
+    setStoreCode('');
     setForm({
       brandCode: brandMeta.code,
       flavorName: '',
@@ -144,6 +185,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       domains: (src.domains ?? EMPTY_DOMAINS).map((d) => ({ ...d, health: 'unconfigured' })),
       status: src.status === 'archived' ? 'enabled' : src.status,
       remark: src.remark,
+      storeId: null,
     });
     setTouched(false);
     setCopiedFrom(`${src.flavorName}（${src.appName}）`);
@@ -283,11 +325,11 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Flavor 名" required error={errOf('flavorName')}>
+              <Field label="基础 Flavor" required hint="不含商店后缀，选商店后自动拼接" error={errOf('flavorName')}>
                 <input
                   className="field-input mono"
                   placeholder="ap01060"
-                  value={form.flavorName}
+                  value={baseFlavor}
                   disabled={!!editing}
                   onChange={(e) => setFlavor(e.target.value)}
                 />
@@ -301,10 +343,34 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
                 />
               </Field>
             </div>
-            {/* ADR-0009：applicationId 由「品牌包前缀 + flavor」派生、只读展示，不手填、不查重歧义。 */}
+            <Field
+              label="应用商店"
+              hint="选中后自动把后缀拼进包名，如 _hw；不选则为默认包名"
+            >
+              <select
+                className="field-input"
+                value={storeCode}
+                disabled={!!editing}
+                onChange={(e) => setStore(e.target.value)}
+              >
+                <option value="">无（默认）</option>
+                {storeOptions.map((s) => (
+                  <option key={s.id} value={s.code}>
+                    {s.name}（{s.code}）
+                  </option>
+                ))}
+              </select>
+              {editing && (
+                <div className="mt-1 text-[11.5px] text-muted">
+                  已发布渠道不可更换商店（会改变 flavor/包名，等同换包）
+                </div>
+              )}
+            </Field>
+            {/* ADR-0009：applicationId 由「品牌包前缀 + flavor」派生、只读展示，不手填、不查重歧义。
+                商店后缀方案：合成 flavor（含 `_`）派生包名时下划线转点号。 */}
             <Field
               label="包名 applicationId"
-              hint="自动派生：品牌包前缀 + flavor（只读）"
+              hint="自动派生：品牌包前缀 + 合成 flavor（只读）"
             >
               <div className="flex items-center gap-2">
                 <input
@@ -315,7 +381,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
                   title="由品牌包前缀 + flavor 自动派生，不可手填（ADR-0009）"
                 />
                 <span className="text-[11px] text-muted font-mono whitespace-nowrap">
-                  {packagePrefix}.<b className="text-ink-2">{form.flavorName || '…'}</b>
+                  合成 flavor：<b className="text-ink-2">{form.flavorName || '…'}</b>
                 </span>
               </div>
               {errOf('applicationId') && (
@@ -496,5 +562,12 @@ function blankForm(brandCode: BrandMeta['code']): ChannelInput {
     useBrandDomains: true,
     domains: EMPTY_DOMAINS,
     status: 'enabled',
+    storeId: null,
   };
+}
+
+/** 反解基础 flavor：从存量合成 flavor 中去掉尾部 `_`+商店 code（编辑态回显用）。 */
+function stripStoreSuffix(flavorName: string, storeCode: string): string {
+  const suffix = `_${storeCode}`;
+  return flavorName.endsWith(suffix) ? flavorName.slice(0, -suffix.length) : flavorName;
 }

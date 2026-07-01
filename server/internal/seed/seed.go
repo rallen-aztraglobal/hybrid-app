@@ -71,6 +71,39 @@ func EnsureBrands(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
+// storeSeed 默认预置的应用商店清单（幂等：按 code 判重，已存在则跳过）。
+type storeSeed struct {
+	Code string
+	Name string
+	Sort int
+}
+
+var stores = []storeSeed{
+	{Code: "hw", Name: "华为", Sort: 1},
+	{Code: "xm", Name: "小米", Sort: 2},
+	{Code: "op", Name: "Oppo", Sort: 3},
+}
+
+// EnsureStores 幂等地建好默认的几个应用商店（按 code 判重，已存在则跳过）。
+func EnsureStores(ctx context.Context, db *gorm.DB) error {
+	for _, s := range stores {
+		var existing model.Store
+		err := db.WithContext(ctx).Where("code = ?", s.Code).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if err != gorm.ErrRecordNotFound {
+			return fmt.Errorf("查询商店 %s 失败: %w", s.Code, err)
+		}
+		store := model.Store{Code: s.Code, Name: s.Name, Sort: s.Sort, Status: model.StoreEnabled}
+		if err := db.WithContext(ctx).Create(&store).Error; err != nil {
+			return fmt.Errorf("创建商店 %s 失败: %w", s.Code, err)
+		}
+		log.Printf("[seed] 已创建应用商店 %s (%s)", s.Code, s.Name)
+	}
+	return nil
+}
+
 // EnsureBootstrapAdmin 在无任何账号时按 "user:password" 建一个 admin。
 func EnsureBootstrapAdmin(ctx context.Context, r *repo.Repo, spec string) error {
 	n, err := r.CountUsers(ctx)
@@ -106,7 +139,8 @@ type ImportReport struct {
 
 // ImportCSV 把某品牌的 channels/<brand>.csv 内容导入库（ADR-0009：appId 按 flavor 派生）。
 // 字段：flavorName|applicationId|palCode|appName。# 开头与空行跳过。
-//   - applicationId **不信任 CSV 值**：一律按 brand.PackagePrefix + "." + flavor 派生。
+//   - applicationId **不信任 CSV 值**：一律按 brand.DeriveApplicationID(flavor) 派生
+//     （PackagePrefix + "." + flavor，flavor 中的 "_" 会转成 "."，用于商店后缀分段）。
 //     CSV 里的 applicationId 列仅用于「与派生值比对」，不一致则记为 Corrected（如历史脏数据
 //     ap01035|com.arenaplus.ap01034 → 派生 com.arenaplus.ap01035，作独立渠道导入，不再跳过）。
 //   - pal_code 不再全局唯一（ADR-0009），允许跨品牌重复，不参与查重。

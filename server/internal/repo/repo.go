@@ -106,6 +106,84 @@ func (r *Repo) ReplaceBrandDomains(ctx context.Context, brandID uint64, domains 
 	})
 }
 
+// ---------- Store ----------
+
+// ListStores 返回全部应用商店（含 disabled），按 sort 升序。
+func (r *Repo) ListStores(ctx context.Context) ([]model.Store, error) {
+	var list []model.Store
+	if err := r.db.WithContext(ctx).Order("sort asc, id asc").Find(&list).Error; err != nil {
+		return nil, fmt.Errorf("查询应用商店失败: %w", err)
+	}
+	return list, nil
+}
+
+// GetStoreByID 按 id 取应用商店。
+func (r *Repo) GetStoreByID(ctx context.Context, id uint64) (*model.Store, error) {
+	var s model.Store
+	err := r.db.WithContext(ctx).First(&s, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询应用商店失败: %w", err)
+	}
+	return &s, nil
+}
+
+// GetStoreByCode 按 code 取应用商店。
+func (r *Repo) GetStoreByCode(ctx context.Context, code string) (*model.Store, error) {
+	var s model.Store
+	err := r.db.WithContext(ctx).Where("code = ?", code).First(&s).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询应用商店失败: %w", err)
+	}
+	return &s, nil
+}
+
+// CreateStore 新建应用商店。
+func (r *Repo) CreateStore(ctx context.Context, s *model.Store) error {
+	if err := r.db.WithContext(ctx).Create(s).Error; err != nil {
+		return fmt.Errorf("创建应用商店失败: %w", err)
+	}
+	return nil
+}
+
+// UpdateStoreFields 局部更新应用商店字段（code 不可通过此接口修改，调用方不应传入 code）。
+func (r *Repo) UpdateStoreFields(ctx context.Context, id uint64, fields map[string]any) error {
+	res := r.db.WithContext(ctx).Model(&model.Store{}).Where("id = ?", id).Updates(fields)
+	if res.Error != nil {
+		return fmt.Errorf("更新应用商店失败: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteStore 删除应用商店（调用方需先确认未被渠道引用）。
+func (r *Repo) DeleteStore(ctx context.Context, id uint64) error {
+	res := r.db.WithContext(ctx).Delete(&model.Store{}, id)
+	if res.Error != nil {
+		return fmt.Errorf("删除应用商店失败: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// CountChannelsByStore 返回引用某应用商店的渠道数量（用于删除前校验）。
+func (r *Repo) CountChannelsByStore(ctx context.Context, storeID uint64) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&model.Channel{}).Where("store_id = ?", storeID).Count(&n).Error; err != nil {
+		return 0, fmt.Errorf("统计商店引用渠道数失败: %w", err)
+	}
+	return n, nil
+}
+
 // ---------- Channel ----------
 
 // ChannelFilter 渠道列表筛选条件。
@@ -148,6 +226,7 @@ func (r *Repo) ListChannels(ctx context.Context, f ChannelFilter) ([]model.Chann
 	var list []model.Channel
 	if err := q.
 		Preload("Brand").
+		Preload("Store").
 		Preload("Domains", func(d *gorm.DB) *gorm.DB { return d.Order("position asc") }).
 		Order("channel.id asc").
 		Offset((f.Page - 1) * f.PageSize).Limit(f.PageSize).
@@ -157,11 +236,12 @@ func (r *Repo) ListChannels(ctx context.Context, f ChannelFilter) ([]model.Chann
 	return list, total, nil
 }
 
-// GetChannel 按 id 取渠道（含品牌与域名）。
+// GetChannel 按 id 取渠道（含品牌、商店与域名）。
 func (r *Repo) GetChannel(ctx context.Context, id uint64) (*model.Channel, error) {
 	var ch model.Channel
 	err := r.db.WithContext(ctx).
 		Preload("Brand").
+		Preload("Store").
 		Preload("Domains", func(d *gorm.DB) *gorm.DB { return d.Order("position asc") }).
 		First(&ch, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

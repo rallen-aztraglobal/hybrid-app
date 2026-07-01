@@ -19,8 +19,20 @@ const APPID_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/; // 反域名包名，�
 const PAL_RE = /^\d{6,}$/; // 现网 pal_code 都是长数字串
 
 /**
+ * 合成 flavor：基础 flavor + 可选商店后缀（下划线连接）。
+ * 无商店（storeCode 为空）时行为不变，等于基础 flavor。
+ */
+export function composeFlavor(baseFlavor: string, storeCode?: string | null): string {
+  const base = baseFlavor.trim();
+  const store = (storeCode ?? '').trim();
+  return store ? `${base}_${store}` : base;
+}
+
+/**
  * 唯一性校验：在「除自己以外」的现有渠道里查重。
  * ADR-0009：以 applicationId（派生）与 (brand, flavor) 为准；PAL_CODE 不查重。
+ * 注意：此处的 input.flavorName 须已是「合成 flavor」（含商店后缀），
+ * 以便与既有渠道的 flavorName 直接比对——同 base + 同 store 才算重复，不同 store 允许并存。
  * @param existing 当前全量渠道（含其它品牌——applicationId 全局唯一）
  * @param selfId   编辑场景下排除自身；新增传 undefined
  */
@@ -58,15 +70,21 @@ export function checkUniqueness(
   return errors;
 }
 
-/** 字段格式校验（必填 + 形态）。 */
-export function checkFormat(input: ChannelInput): FieldError[] {
+/**
+ * 字段格式校验（必填 + 形态）。
+ * @param baseFlavor 用户在表单里实际填写的「基础 flavor」（不含商店后缀）；
+ *   缺省时回落用 input.flavorName（无商店场景下二者相同，向后兼容）。
+ *   格式校验必须对**基础** flavor 做，而非合成 flavor——合成值含下划线，
+ *   会被 FLAVOR_RE（不允许下划线）误判为不合法。
+ */
+export function checkFormat(input: ChannelInput, baseFlavor?: string): FieldError[] {
   const errors: FieldError[] = [];
 
   if (!input.appName.trim()) {
     errors.push({ field: 'appName', message: '应用名称必填' });
   }
 
-  const flavor = input.flavorName.trim();
+  const flavor = (baseFlavor ?? input.flavorName).trim();
   if (!flavor) {
     errors.push({ field: 'flavorName', message: 'Flavor 名必填' });
   } else if (!FLAVOR_RE.test(flavor)) {
@@ -90,9 +108,17 @@ export function checkFormat(input: ChannelInput): FieldError[] {
   return errors;
 }
 
-/** 综合校验：格式 + 唯一性 + （未继承时）域名。返回去重后的错误列表。 */
-export function validateChannel(input: ChannelInput, existing: Channel[], selfId?: string): FieldError[] {
-  const errors = [...checkFormat(input), ...checkUniqueness(input, existing, selfId)];
+/**
+ * 综合校验：格式 + 唯一性 + （未继承时）域名。返回去重后的错误列表。
+ * @param baseFlavor 见 checkFormat；input.flavorName 此时应已是合成 flavor（供唯一性/包名校验）。
+ */
+export function validateChannel(
+  input: ChannelInput,
+  existing: Channel[],
+  selfId?: string,
+  baseFlavor?: string,
+): FieldError[] {
+  const errors = [...checkFormat(input, baseFlavor), ...checkUniqueness(input, existing, selfId)];
   if (!input.useBrandDomains) {
     const de = validateDomains(input.domains ?? []);
     if (de.length) {

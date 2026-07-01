@@ -131,10 +131,13 @@ func TestCreateChannelValidation(t *testing.T) {
 	ctx := context.Background()
 
 	bad := []CreateChannelInput{
-		{BrandCode: "ap", FlavorName: "ap_01", PalCode: "1", AppName: "A"},  // flavor 含下划线
-		{BrandCode: "ap", FlavorName: "01ap", PalCode: "1", AppName: "A"},   // flavor 以数字开头（非法包名片段）
-		{BrandCode: "ap", FlavorName: "", PalCode: "1", AppName: "A"},       // flavor 空
-		{BrandCode: "zz", FlavorName: "zz01", PalCode: "1", AppName: "A"},   // 品牌不存在
+		{BrandCode: "ap", FlavorName: "01ap", PalCode: "1", AppName: "A"},    // flavor 以数字开头（非法包名片段）
+		{BrandCode: "ap", FlavorName: "ap_01ap", PalCode: "1", AppName: "A"}, // 分段以数字开头（商店后缀分段非法）
+		{BrandCode: "ap", FlavorName: "ap01_", PalCode: "1", AppName: "A"},   // 尾随下划线（空段）
+		{BrandCode: "ap", FlavorName: "_ap01", PalCode: "1", AppName: "A"},   // 前导下划线（空段）
+		{BrandCode: "ap", FlavorName: "ap__01", PalCode: "1", AppName: "A"},  // 连续下划线（空段）
+		{BrandCode: "ap", FlavorName: "", PalCode: "1", AppName: "A"},        // flavor 空
+		{BrandCode: "zz", FlavorName: "zz01", PalCode: "1", AppName: "A"},    // 品牌不存在
 	}
 	for i, in := range bad {
 		if _, err := svc.CreateChannel(ctx, in); err == nil {
@@ -478,6 +481,140 @@ func TestLatestApkOnlyFromSuccess(t *testing.T) {
 		t.Errorf("failed 构建的产物不应被取到，实际 %+v", latest)
 	}
 }
+
+// TestDeriveApplicationIDStoreSuffix 验证商店后缀 flavor（<base>_<storeCode>）派生出点号分段 appId，
+// 且老数据（flavor 无下划线）派生结果不变（向后兼容）。
+func TestDeriveApplicationIDStoreSuffix(t *testing.T) {
+	svc, r := newTestService(t)
+	ctx := context.Background()
+
+	store, err := svc.CreateStore(ctx, CreateStoreInput{Code: "hw", Name: "华为"})
+	if err != nil {
+		t.Fatalf("创建商店失败: %v", err)
+	}
+
+	// 老数据：flavor 无下划线，appId 不变。
+	old, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bpocmhuawei004", PalCode: "P1", AppName: "老渠道",
+	})
+	if err != nil {
+		t.Fatalf("创建老渠道失败: %v", err)
+	}
+	if old.ApplicationID != "com.bingoplus.bpocmhuawei004" {
+		t.Errorf("老数据 appId 应不变，实际 %q", old.ApplicationID)
+	}
+
+	// 商店包：flavor = <base>_<storeCode> → appId 点号分段。
+	ch, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bpocmhuawei004_hw", PalCode: "P2", AppName: "商店渠道", StoreID: &store.ID,
+	})
+	if err != nil {
+		t.Fatalf("创建商店渠道失败: %v", err)
+	}
+	if ch.ApplicationID != "com.bingoplus.bpocmhuawei004.hw" {
+		t.Errorf("商店渠道 appId 应为点号分段，实际 %q", ch.ApplicationID)
+	}
+	if ch.StoreID == nil || *ch.StoreID != store.ID {
+		t.Errorf("渠道应记录 storeId=%d，实际 %+v", store.ID, ch.StoreID)
+	}
+
+	// flavor 后缀与所选商店不一致应被拒。
+	xm, err := svc.CreateStore(ctx, CreateStoreInput{Code: "xm", Name: "小米"})
+	if err != nil {
+		t.Fatalf("创建商店失败: %v", err)
+	}
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bpocmhuawei004_hw2", PalCode: "P3", AppName: "X", StoreID: &xm.ID,
+	}); err == nil {
+		t.Error("flavor 后缀与所选商店不一致应被拒绝")
+	}
+
+	// 停用商店后不能新建渠道。
+	if _, err := svc.UpdateStore(ctx, xm.ID, UpdateStoreInput{Status: strPtr(model.StoreDisabled)}); err != nil {
+		t.Fatalf("停用商店失败: %v", err)
+	}
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bpocmhuawei005_xm", PalCode: "P4", AppName: "X", StoreID: &xm.ID,
+	}); err == nil {
+		t.Error("已停用商店不应允许新建渠道")
+	}
+
+	// 列表应带回 store 关联（Preload）。
+	list, _, err := r.ListChannels(ctx, repo.ChannelFilter{BrandCode: "bp"})
+	if err != nil {
+		t.Fatalf("列渠道失败: %v", err)
+	}
+	found := false
+	for i := range list {
+		if list[i].FlavorName == "bpocmhuawei004_hw" {
+			found = true
+			if list[i].Store == nil || list[i].Store.Code != "hw" {
+				t.Errorf("渠道列表应预加载 store，实际 %+v", list[i].Store)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("未找到商店渠道")
+	}
+}
+
+// TestStoreCRUDAndUniqueness 验证应用商店 CRUD、code 唯一性与「被引用不可删除」。
+func TestStoreCRUDAndUniqueness(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	st, err := svc.CreateStore(ctx, CreateStoreInput{Code: "HW", Name: "华为", Sort: 1})
+	if err != nil {
+		t.Fatalf("创建商店失败: %v", err)
+	}
+	if st.Code != "hw" {
+		t.Errorf("code 应规范化为小写，实际 %q", st.Code)
+	}
+
+	// 重复 code（大小写不敏感）应被拒。
+	if _, err := svc.CreateStore(ctx, CreateStoreInput{Code: "hw", Name: "华为2"}); err == nil {
+		t.Error("重复 code 应被拒绝")
+	}
+
+	// 非法 code。
+	bad := []string{"1hw", "H W", "", "hw-1"}
+	for _, c := range bad {
+		if _, err := svc.CreateStore(ctx, CreateStoreInput{Code: c, Name: "X"}); err == nil {
+			t.Errorf("code %q 应被拒绝", c)
+		}
+	}
+
+	// 更新 name/sort/status。
+	updated, err := svc.UpdateStore(ctx, st.ID, UpdateStoreInput{Name: strPtr("华为应用市场"), Sort: intPtr(5)})
+	if err != nil {
+		t.Fatalf("更新商店失败: %v", err)
+	}
+	if updated.Name != "华为应用市场" || updated.Sort != 5 || updated.Code != "hw" {
+		t.Errorf("更新结果不符: %+v", updated)
+	}
+
+	// 被渠道引用后不可删除。
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01018_hw", PalCode: "P1", AppName: "A", StoreID: &st.ID,
+	}); err != nil {
+		t.Fatalf("创建渠道失败: %v", err)
+	}
+	if err := svc.DeleteStore(ctx, st.ID); err == nil {
+		t.Error("已被引用的商店不应可删除")
+	}
+
+	// 未被引用的商店可以删除。
+	other, err := svc.CreateStore(ctx, CreateStoreInput{Code: "op", Name: "Oppo"})
+	if err != nil {
+		t.Fatalf("创建商店失败: %v", err)
+	}
+	if err := svc.DeleteStore(ctx, other.ID); err != nil {
+		t.Errorf("未被引用的商店应可删除: %v", err)
+	}
+}
+
+func strPtr(s string) *string { return &s }
+func intPtr(i int) *int       { return &i }
 
 // sanitizeDBName 把测试名转成合法的内存库名（去掉 / 等）。
 func sanitizeDBName(s string) string {

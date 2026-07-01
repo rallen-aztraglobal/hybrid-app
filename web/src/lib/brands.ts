@@ -68,11 +68,14 @@ export function isBrandCode(s: string): s is BrandCode {
 /**
  * 派生 applicationId（ADR-0009 的核心规则）：`<品牌包前缀>.<flavor>`。
  * 表单只读展示、提交时附带；从构造上保证「applicationId 后缀 == flavor」、全局唯一。
+ *
+ * 应用商店后缀支持：flavor 形如 `base_storeCode`（下划线连接合成 flavor 中的商店后缀）时，
+ * 派生包名把下划线替换为点号，即 `<prefix>.base.storeCode`（无下划线时行为不变）。
  * @param prefix 优先用后端下发的 brand.packagePrefix；缺省回落到 BRAND_META。
  */
 export function deriveApplicationId(brand: BrandCode, flavor: string, prefix?: string): string {
   const base = (prefix && prefix.trim()) || BRAND_META[brand].packagePrefix;
-  const f = flavor.trim();
+  const f = flavor.trim().replace(/_/g, '.');
   return f ? `${base}.${f}` : '';
 }
 

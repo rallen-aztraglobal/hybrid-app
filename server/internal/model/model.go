@@ -4,6 +4,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 )
 
@@ -12,6 +13,12 @@ const (
 	ChannelEnabled  = "enabled"
 	ChannelDisabled = "disabled"
 	ChannelArchived = "archived"
+)
+
+// 应用商店状态枚举。
+const (
+	StoreEnabled  = "enabled"
+	StoreDisabled = "disabled"
 )
 
 // 账号角色枚举（RBAC）。
@@ -50,8 +57,10 @@ type Brand struct {
 
 // DeriveApplicationID 按 ADR-0009 从品牌包前缀与 flavor 派生 applicationId：<package_prefix>.<flavor>。
 // 这是 applicationId 唯一的事实来源——不信任外部传入值。
+// 商店后缀支持：flavor 中的 "_" 会被转换为 "."，使商店包 flavor（如 <base>_<storeCode>）
+// 派生出点号分段的 appId（如 prefix.<base>.<storeCode>）。老数据 flavor 无下划线时结果不变（向后兼容）。
 func (b *Brand) DeriveApplicationID(flavor string) string {
-	return b.PackagePrefix + "." + flavor
+	return b.PackagePrefix + "." + strings.ReplaceAll(flavor, "_", ".")
 }
 
 func (Brand) TableName() string { return "brand" }
@@ -85,6 +94,11 @@ type Channel struct {
 	Remark          string `gorm:"column:remark;type:varchar(255)" json:"remark"`
 	CreatedBy       uint64 `gorm:"column:created_by" json:"createdBy"`
 
+	// StoreID 可选：渠道所属应用商店（华为/小米/Oppo 等）。非空时 flavor 形如 <base>_<store.Code>，
+	// applicationId 据此派生出点号分段（见 Brand.DeriveApplicationID）。
+	StoreID *uint64 `gorm:"column:store_id;index" json:"storeId,omitempty"`
+	Store   *Store  `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 
@@ -107,6 +121,20 @@ type ChannelDomain struct {
 }
 
 func (ChannelDomain) TableName() string { return "channel_domain" }
+
+// Store 应用商店（华为/小米/Oppo 等）。code 全局唯一、小写字母数字，一旦使用（被渠道引用）即不可改，
+// 因为它已进入 applicationId 分段（见 Brand.DeriveApplicationID）。
+type Store struct {
+	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	Code      string    `gorm:"column:code;type:varchar(16);not null;uniqueIndex" json:"code"`
+	Name      string    `gorm:"column:name;type:varchar(64);not null" json:"name"`
+	Sort      int       `gorm:"column:sort;not null;default:0" json:"sort"`
+	Status    string    `gorm:"column:status;type:varchar(16);not null;default:enabled" json:"status"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+}
+
+func (Store) TableName() string { return "store" }
 
 // DomainHealth 域名健康巡检结果（仅监控展示，不直接决定 APK 行为）。
 type DomainHealth struct {
@@ -191,6 +219,7 @@ func AllModels() []any {
 	return []any{
 		&Brand{},
 		&BrandDomain{},
+		&Store{},
 		&Channel{},
 		&ChannelDomain{},
 		&DomainHealth{},

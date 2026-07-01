@@ -53,6 +53,12 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.GET("/brands/:code/domains", h.GetBrandDomains, viewer)
 	api.PUT("/brands/:code/domains", h.SetBrandDomains, operator)
 
+	// 应用商店（渠道 store 后缀，见 CLAUDE.md 商店后缀功能）。
+	api.GET("/stores", h.ListStores, viewer)
+	api.POST("/stores", h.CreateStore, operator)
+	api.PUT("/stores/:id", h.UpdateStore, operator)
+	api.DELETE("/stores/:id", h.DeleteStore, operator)
+
 	// 小渠道 CRUD。
 	api.GET("/channels", h.ListChannels, viewer)
 	api.POST("/channels", h.CreateChannel, operator)

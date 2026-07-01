@@ -58,12 +58,22 @@ export function ChannelCard({
           <div className="font-bold text-[14.5px] truncate" title={channel.appName}>
             {channel.appName}
           </div>
-          <span
-            className="inline-block mt-1 text-[11.5px] font-mono px-2 py-0.5 rounded-md"
-            style={{ color: 'var(--brand-ink)', background: 'rgba(99,102,241,.1)' }}
-          >
-            {channel.flavorName}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            <span
+              className="inline-block text-[11.5px] font-mono px-2 py-0.5 rounded-md"
+              style={{ color: 'var(--brand-ink)', background: 'rgba(99,102,241,.1)' }}
+            >
+              {channel.flavorName}
+            </span>
+            {channel.store?.name && (
+              <span
+                className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md text-[#92681a] bg-[#fef3c7]"
+                title={`应用商店：${channel.store.name}`}
+              >
+                {channel.store.name}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

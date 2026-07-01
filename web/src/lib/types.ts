@@ -74,14 +74,44 @@ export interface ProbeResult {
   note?: string;
 }
 
+/**
+ * 应用商店（渠道包发布到的应用商店，如华为/应用宝/Google Play 等）。
+ * 对应后端 model.Store。code 一经创建不可改（作为 flavor 后缀参与包名派生）。
+ */
+export interface Store {
+  id: number;
+  /** 商店代号，拼入 flavor 后缀（如 hw）；创建后不可改 */
+  code: string;
+  name: string;
+  /** 展示排序，越小越靠前 */
+  sort: number;
+  status: 'enabled' | 'disabled';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** 新增商店入参（POST /api/stores）。 */
+export interface StoreInput {
+  code: string;
+  name: string;
+  sort?: number;
+}
+
+/** 编辑商店入参（PUT /api/stores/:id）；code 不可改故不在此列。 */
+export interface StoreUpdateInput {
+  name?: string;
+  sort?: number;
+  status?: Store['status'];
+}
+
 /** 小渠道（一个 Gradle product flavor）。对应后端 model.Channel。 */
 export interface Channel {
   /** 后端数字主键（字符串化）；mock 模式下为 `<brand>-<flavor>` */
   id: string;
   brandCode: BrandCode;
-  /** Gradle flavor 名，如 ap01018 */
+  /** Gradle flavor 名，如 ap01018；带应用商店后缀时形如 `bpocmhuawei004_hw` */
   flavorName: string;
-  /** 包名，全局唯一；ADR-0009 由 品牌包前缀 + flavor 派生 */
+  /** 包名，全局唯一；ADR-0009 由 品牌包前缀 + flavor 派生（flavor 中的下划线会转为点号） */
   applicationId: string;
   /** URL 参数 /?palcode=，编译期烧录；ADR-0009：不再全局唯一、不再作解析键 */
   palCode: string;
@@ -98,6 +128,10 @@ export interface Channel {
   /** ADR-0008：该子渠道最近一次成功构建的 APK 下载地址（后端 latestApkUrl）。 */
   latestApkUrl?: string;
   updatedAt?: string;
+  /** 关联应用商店主键（可空 = 无商店/默认）。 */
+  storeId?: string | number | null;
+  /** 关联应用商店（后端下发的精简视图，供列表展示商店标签）。 */
+  store?: { id: string | number; code: string; name: string } | null;
 }
 
 /**
@@ -111,8 +145,9 @@ export interface Channel {
  */
 export interface ChannelInput {
   brandCode: BrandCode;
+  /** 合成 flavor（基础 flavor + 可选 `_`+商店 code）；提交给后端的 flavorName。 */
   flavorName: string;
-  /** 派生只读（packagePrefix + '.' + flavorName）；提交时仍带上供后端校验一致性 */
+  /** 派生只读（packagePrefix + '.' + flavorName，下划线转点号）；提交时仍带上供后端校验一致性 */
   applicationId: string;
   palCode: string;
   appName: string;
@@ -123,6 +158,8 @@ export interface ChannelInput {
   iconMasterDataUrl?: string;
   splashDataUrl?: string;
   remark?: string;
+  /** 应用商店主键（可空 = 无商店/默认）。 */
+  storeId?: string | number | null;
 }
 
 /**

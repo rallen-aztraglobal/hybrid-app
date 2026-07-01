@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { brandApi, buildApi, channelApi, pushApi } from '@/lib/api';
-import type { BrandCode, BuildJobRequest, ChannelInput, DomainEntry, PushCampaignInput, PushSendResult } from '@/lib/types';
+import { brandApi, buildApi, channelApi, pushApi, storeApi } from '@/lib/api';
+import type {
+  BrandCode,
+  BuildJobRequest,
+  ChannelInput,
+  DomainEntry,
+  PushCampaignInput,
+  PushSendResult,
+  StoreInput,
+  StoreUpdateInput,
+} from '@/lib/types';
 
 /**
  * 服务端状态层（TanStack Query）。组件只消费这些 hook，不直接碰 api 模块，
@@ -18,6 +27,7 @@ export const qk = {
   pushCampaigns: (brand?: BrandCode) => ['push', 'campaigns', brand ?? 'all'] as const,
   pushCampaign: (id: string) => ['push', 'campaigns', id] as const,
   pushAudience: (appIds: string[]) => ['push', 'audience', ...appIds.slice().sort()] as const,
+  stores: ['stores'] as const,
 };
 
 export function useBrands() {
@@ -42,6 +52,11 @@ export function useBrandDomains(code: BrandCode) {
 
 export function useBuildJobs(brand?: BrandCode) {
   return useQuery({ queryKey: qk.builds(brand), queryFn: () => buildApi.listJobs(brand) });
+}
+
+/** 应用商店清单（含 disabled）。渠道表单只取 enabled 项，设置页展示全部。 */
+export function useStores() {
+  return useQuery({ queryKey: qk.stores, queryFn: storeApi.list });
 }
 
 // ---------- mutations ----------
@@ -76,6 +91,38 @@ export function useSaveBrandDomains(code: BrandCode) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.brandDomains(code) });
       void qc.invalidateQueries({ queryKey: qk.brands });
+    },
+  });
+}
+
+// ---------- 应用商店 mutations ----------
+
+export function useCreateStore() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: StoreInput) => storeApi.create(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.stores });
+    },
+  });
+}
+
+export function useUpdateStore() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number; input: StoreUpdateInput }) => storeApi.update(id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.stores });
+    },
+  });
+}
+
+export function useDeleteStore() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => storeApi.remove(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.stores });
     },
   });
 }

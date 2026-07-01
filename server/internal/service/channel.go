@@ -12,11 +12,12 @@ import (
 // CreateChannelInput 新增渠道入参。
 // applicationId 不在入参里：按 ADR-0009 由 <品牌包前缀>.<flavor> 派生，不信任外部传入。
 type CreateChannelInput struct {
-	BrandCode  string `json:"brandCode" validate:"required"`
-	FlavorName string `json:"flavorName" validate:"required"`
-	PalCode    string `json:"palCode" validate:"required"`
-	AppName    string `json:"appName" validate:"required"`
-	Remark     string `json:"remark"`
+	BrandCode  string  `json:"brandCode" validate:"required"`
+	FlavorName string  `json:"flavorName" validate:"required"`
+	PalCode    string  `json:"palCode" validate:"required"`
+	AppName    string  `json:"appName" validate:"required"`
+	Remark     string  `json:"remark"`
+	StoreID    *uint64 `json:"storeId"`
 }
 
 // UpdateChannelInput 修改渠道入参（指针字段表示可选更新）。
@@ -67,6 +68,24 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 		return nil, errBadRequest(fmt.Sprintf("品牌 %q 不存在", in.BrandCode))
 	}
 
+	// 若指定了应用商店，校验其存在且已启用；并要求 flavor 以 "_"+store.Code 结尾，
+	// 保证派生出的 applicationId 分段与所选商店一致。
+	if in.StoreID != nil {
+		store, err := s.repo.GetStoreByID(ctx, *in.StoreID)
+		if err != nil {
+			return nil, errBadRequest(fmt.Sprintf("应用商店 id=%d 不存在", *in.StoreID))
+		}
+		if store.Status != model.StoreEnabled {
+			return nil, errBadRequest(fmt.Sprintf("应用商店 %q 已停用，不能新建渠道", store.Name))
+		}
+		if !strings.HasSuffix(in.FlavorName, "_"+store.Code) {
+			return nil, errBadRequest(fmt.Sprintf("flavor 后缀与所选商店不一致（应以 _%s 结尾）", store.Code))
+		}
+	} else if strings.Contains(in.FlavorName, "_") {
+		// 下划线仅用于商店后缀分段；未选商店时不应出现，避免派生出无商店归属的点号包名。
+		return nil, errBadRequest("未选择应用商店时 flavor 不能包含下划线")
+	}
+
 	// applicationId 派生（事实来源），不信任输入。
 	appID := brand.DeriveApplicationID(in.FlavorName)
 
@@ -92,6 +111,7 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 		Status:          model.ChannelEnabled,
 		UseBrandDomains: true,
 		Remark:          in.Remark,
+		StoreID:         in.StoreID,
 	}
 	if err := s.repo.CreateChannel(ctx, ch); err != nil {
 		return nil, err
@@ -122,9 +142,24 @@ func (s *Service) UpdateChannel(ctx context.Context, id uint64, in UpdateChannel
 		return nil, errBadRequest("flavorName 不能为空")
 	}
 	if !looksLikeFlavor(newFlavor) {
-		return nil, errBadRequest(fmt.Sprintf("flavorName %q 非法（仅允许字母和数字）", newFlavor))
+		return nil, errBadRequest(fmt.Sprintf("flavorName %q 非法（仅允许字母、数字，可用下划线分段）", newFlavor))
 	}
 	newAppID := brand.DeriveApplicationID(newFlavor)
+
+	// flavor 变更时，保持 flavor 与所属商店的一致性（前端编辑态已禁用 flavor/商店，此处兜底直连 API 的场景）。
+	if newFlavor != ch.FlavorName {
+		if ch.StoreID != nil {
+			store, err := s.repo.GetStoreByID(ctx, *ch.StoreID)
+			if err != nil {
+				return nil, errBadRequest(fmt.Sprintf("渠道关联的应用商店 id=%d 不存在", *ch.StoreID))
+			}
+			if !strings.HasSuffix(newFlavor, "_"+store.Code) {
+				return nil, errBadRequest(fmt.Sprintf("flavor 后缀与所属商店不一致（应以 _%s 结尾）", store.Code))
+			}
+		} else if strings.Contains(newFlavor, "_") {
+			return nil, errBadRequest("未关联应用商店的渠道 flavor 不能包含下划线")
+		}
+	}
 
 	// 仅当 flavor（从而 appId）实际变化时做唯一性检查（排除自身）。
 	if newFlavor != ch.FlavorName {
@@ -202,25 +237,42 @@ func (in *CreateChannelInput) validate() error {
 	if in.BrandCode == "" || in.FlavorName == "" || in.PalCode == "" || in.AppName == "" {
 		return errBadRequest("brandCode / flavorName / palCode / appName 均为必填")
 	}
-	// flavor 仅允许字母数字（与 Gradle flavor 命名一致，避免生成非法 task 名 / 非法包名后缀）。
+	// flavor 仅允许字母数字与下划线分段（下划线用于商店后缀，如 <base>_<storeCode>）。
 	if !looksLikeFlavor(in.FlavorName) {
-		return errBadRequest(fmt.Sprintf("flavorName %q 非法（仅允许字母和数字）", in.FlavorName))
+		return errBadRequest(fmt.Sprintf("flavorName %q 非法（仅允许字母、数字，可用下划线分段）", in.FlavorName))
 	}
 	return nil
 }
 
+// looksLikeFlavor 校验 flavor 命名：按 "_" 分段，每段须匹配 ^[a-zA-Z][a-zA-Z0-9]*$
+// （即段首字母、其余字母数字），不允许空段（含前导/尾随/连续下划线）。
+// 下划线用于承载商店后缀（<base>_<storeCode>），派生 appId 时会被转换为 "."（见 Brand.DeriveApplicationID）。
+// 老数据（无下划线）天然只有一段，规则退化为原先「仅字母数字、段首非数字」，向后兼容。
 func looksLikeFlavor(s string) bool {
 	if s == "" {
 		return false
 	}
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
+	segs := strings.Split(s, "_")
+	for _, seg := range segs {
+		if !looksLikeFlavorSegment(seg) {
+			return false
+		}
+	}
+	return true
+}
+
+// looksLikeFlavorSegment 校验单个分段：^[a-zA-Z][a-zA-Z0-9]*$。
+func looksLikeFlavorSegment(seg string) bool {
+	if seg == "" {
+		return false
+	}
+	for i := 0; i < len(seg); i++ {
+		ch := seg[i]
 		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
 			return false
 		}
 	}
-	// 段首不能是数字（Java 包名规则：appId 末段 == flavor，需可作合法包名片段）。
-	if s[0] >= '0' && s[0] <= '9' {
+	if seg[0] >= '0' && seg[0] <= '9' {
 		return false
 	}
 	return true

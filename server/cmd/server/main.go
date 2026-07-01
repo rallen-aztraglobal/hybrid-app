@@ -96,6 +96,9 @@ func build(cfg *config.Config) (*application, error) {
 		if err := seed.EnsureBrands(ctx, db); err != nil {
 			return nil, err
 		}
+		if err := seed.EnsureStores(ctx, db); err != nil {
+			return nil, err
+		}
 		if err := seed.EnsureBootstrapAdmin(ctx, r, cfg.BootstrapAdmin); err != nil {
 			return nil, err
 		}
