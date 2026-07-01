@@ -13,7 +13,7 @@ import { useChannels, useCreateStore, useDeleteStore, useStores, useUpdateStore 
 import { BRAND_META } from '@/lib/brands';
 import type { Store } from '@/lib/types';
 import { ApiError } from '@/lib/api';
-import { Button, Note, Switch } from '@/components/ui';
+import { Button, Note, Select, Switch } from '@/components/ui';
 import { EditIcon, InfoIcon, PlusIcon, ShieldIcon, TrashIcon } from '@/components/icons';
 import { cn } from '@/lib/cn';
 
@@ -359,21 +359,19 @@ function RuntimePreview() {
         域名不在前端硬编码——实时拉取失败才回落缓存 / 兜底（ADR-0002 / ADR-0009）。
       </p>
       <div className="flex gap-2 mb-3">
-        <select
-          className="field-input mono flex-1"
+        <Select
+          className="mono flex-1"
           value={channelId}
-          onChange={(e) => {
-            setChannelId(e.target.value);
+          placeholder="选择渠道（applicationId）…"
+          onChange={(v) => {
+            setChannelId(v);
             setResult(null);
           }}
-        >
-          <option value="">选择渠道（applicationId）…</option>
-          {options.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.applicationId} · {BRAND_META[c.brandCode].name} · {c.appName}
-            </option>
-          ))}
-        </select>
+          options={options.map((c) => ({
+            value: c.id,
+            label: `${c.applicationId} · ${BRAND_META[c.brandCode].name} · ${c.appName}`,
+          }))}
+        />
         <Button variant="primary" onClick={preview} disabled={busy || !selected}>
           {busy ? '解析中…' : '解析'}
         </Button>

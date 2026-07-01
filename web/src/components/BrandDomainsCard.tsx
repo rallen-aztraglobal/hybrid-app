@@ -30,61 +30,49 @@ export function BrandDomainsCard({ brand }: { brand: Brand }) {
 
   return (
     <div className="section-card" style={{ borderLeft: `3px solid ${brand.accentColor}` }}>
-      <h3 className="flex items-center gap-2 text-[13px] font-bold text-ink mb-[14px]">
-        <span
-          className="grid place-items-center w-[22px] h-[22px] rounded-md text-white text-[12px]"
-          style={{ background: brand.accentColor }}
-        >
-          {brand.name[0]}
-        </span>
-        {brand.name} · 品牌默认域名
-        <span className="font-normal text-muted text-[11.5px] ml-1.5">
-          该品牌 {brand.channelCount} 个渠道默认继承
-        </span>
-        {brand.hmsEnabled && (
-          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1d4ed8]">
-            HMS / OAID
+      <div className="flex items-start gap-2 mb-[14px]">
+        <h3 className="flex items-center gap-2 text-[13px] font-bold text-ink">
+          <span
+            className="grid place-items-center w-[22px] h-[22px] rounded-md text-white text-[12px]"
+            style={{ background: brand.accentColor }}
+          >
+            {brand.name[0]}
           </span>
-        )}
-      </h3>
+          {brand.name} · 品牌默认域名
+          <span className="font-normal text-muted text-[11.5px] ml-1.5">
+            该品牌 {brand.channelCount} 个渠道默认继承
+          </span>
+        </h3>
+        <div className="ml-auto flex items-center gap-2">
+          {brand.hmsEnabled && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1d4ed8]">
+              HMS / OAID
+            </span>
+          )}
+          <Button
+            variant="primary"
+            className="text-[12px]"
+            disabled={save.isPending || errors.length > 0}
+            onClick={onSave}
+          >
+            {save.isPending ? '下发中…' : saved ? '✓ 已下发' : '保存并下发'}
+          </Button>
+        </div>
+      </div>
 
       <DomainEditor domains={domains} onChange={setDomains} />
 
       {errors.length > 0 && (
-        <div className="mb-2 text-[12px] text-down">
+        <div className="mt-2 text-[12px] text-down">
           {errors.map((e, i) => (
             <div key={i}>• {e}</div>
           ))}
         </div>
       )}
 
-      <div className="flex gap-[10px] mt-2 items-center">
-        <Button
-          className="text-[12px]"
-          onClick={() =>
-            setDomains((d) => {
-              const used = new Set(d.map((x) => x.position));
-              let pos = 1;
-              while (used.has(pos) && pos <= 3) pos++;
-              if (pos > 3) return d;
-              return [...d, { position: pos, url: '', enabled: true, health: 'unconfigured' }];
-            })
-          }
-        >
-          + 添加备用域名
-        </Button>
-        <Button
-          variant="primary"
-          className="text-[12px]"
-          disabled={save.isPending || errors.length > 0}
-          onClick={onSave}
-        >
-          {save.isPending ? '下发中…' : saved ? '✓ 已下发' : '保存并下发'}
-        </Button>
-        {saved && (
-          <span className="text-[12px] text-muted">已生成 CDN 配置快照，APK 下次启动生效</span>
-        )}
-      </div>
+      {saved && (
+        <div className="mt-2 text-[12px] text-muted">已生成 CDN 配置快照，APK 下次启动生效</div>
+      )}
     </div>
   );
 }

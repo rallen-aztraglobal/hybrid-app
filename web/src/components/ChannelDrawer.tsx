@@ -16,7 +16,7 @@ import { useUiStore } from '@/store/uiStore';
 import { validateChannel, composeFlavor, type FieldError } from '@/lib/validation';
 import { loadImageFile, urlToDataUrl } from '@/lib/icon';
 import { cn } from '@/lib/cn';
-import { Button, Note, SectionHeading, Switch } from './ui';
+import { Button, Note, SectionHeading, Select, Switch } from './ui';
 import { CloseIcon, InfoIcon, SaveCheckIcon } from './icons';
 import { IconNineGrid, emptyIconState, type IconState } from './IconNineGrid';
 import { DomainEditor } from './DomainEditor';
@@ -286,21 +286,19 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               <div className="flex-none text-[12.5px] font-semibold text-ink-2 whitespace-nowrap">
                 从已有渠道复制
               </div>
-              <select
-                className="field-input flex-1"
+              <Select
+                className="flex-1"
                 value=""
-                onChange={(e) => {
-                  const src = copySources.find((c) => c.id === e.target.value);
+                placeholder="选择一个包，自动带入名称/域名/图标…"
+                onChange={(v) => {
+                  const src = copySources.find((c) => c.id === v);
                   if (src) copyFrom(src);
                 }}
-              >
-                <option value="">选择一个包，自动带入名称/域名/图标…</option>
-                {copySources.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.flavorName} · {c.appName}
-                  </option>
-                ))}
-              </select>
+                options={copySources.map((c) => ({
+                  value: c.id,
+                  label: `${c.flavorName} · ${c.appName}`,
+                }))}
+              />
             </div>
           )}
           {!editing && copiedFrom && (
@@ -347,19 +345,16 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               label="应用商店"
               hint="选中后自动把后缀拼进包名，如 _hw；不选则为默认包名"
             >
-              <select
-                className="field-input"
+              <Select
                 value={storeCode}
                 disabled={!!editing}
-                onChange={(e) => setStore(e.target.value)}
-              >
-                <option value="">无（默认）</option>
-                {storeOptions.map((s) => (
-                  <option key={s.id} value={s.code}>
-                    {s.name}（{s.code}）
-                  </option>
-                ))}
-              </select>
+                placeholder="无（默认）"
+                onChange={(v) => setStore(v)}
+                options={[
+                  { value: '', label: '无（默认）' },
+                  ...storeOptions.map((s) => ({ value: s.code, label: `${s.name}（${s.code}）` })),
+                ]}
+              />
               {editing && (
                 <div className="mt-1 text-[11.5px] text-muted">
                   已发布渠道不可更换商店（会改变 flavor/包名，等同换包）

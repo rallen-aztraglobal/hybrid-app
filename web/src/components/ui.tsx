@@ -2,7 +2,15 @@
  * 通用 UI 原子组件 —— 复刻 docs/admin/ui/index.html 的 .btn / .switch / .hdot / .hp
  * / .app-icon 等视觉，组件化复用。样式走 index.css 的 @layer components + 行内变量。
  */
-import { forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useRef,
+  useState,
+  type AnchorHTMLAttributes,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from 'react';
 import { cn } from '@/lib/cn';
 import type { DomainHealth } from '@/lib/types';
 import { iconGradient } from '@/lib/brands';
@@ -28,6 +36,142 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     </button>
   );
 });
+
+// ---------- Select（自定义下拉，替代浏览器原生 <select>，与 field-input 同风格）----------
+export interface SelectOption {
+  value: string;
+  label: ReactNode;
+}
+interface SelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+}
+export function Select({ value, onChange, options, placeholder, disabled, className }: SelectProps) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const pick = (v: string) => {
+    onChange(v);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!open) {
+              setOpen(true);
+              setActive(options.findIndex((o) => o.value === value));
+            } else if (e.key === 'ArrowDown') {
+              setActive((i) => Math.min(options.length - 1, i + 1));
+            } else if (active >= 0) {
+              pick(options[active].value);
+            }
+          } else if (e.key === 'ArrowUp' && open) {
+            e.preventDefault();
+            setActive((i) => Math.max(0, i - 1));
+          }
+        }}
+        className={cn(
+          'field-input flex items-center justify-between gap-2 text-left',
+          disabled && 'opacity-50 cursor-not-allowed',
+          !disabled && 'cursor-pointer',
+          className,
+        )}
+      >
+        <span className={cn('truncate', !selected && 'text-muted')}>
+          {selected ? selected.label : placeholder ?? '请选择…'}
+        </span>
+        <svg
+          className={cn('w-4 h-4 flex-none transition-transform text-ink-2', open && 'rotate-180')}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute z-50 left-0 right-0 mt-1 max-h-[280px] overflow-y-auto rounded-[10px] border bg-white py-1 shadow-[0_12px_28px_-8px_rgba(0,0,0,0.25)]"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          {options.length === 0 && (
+            <li className="px-3 py-[9px] text-[13px] text-muted select-none">无可选项</li>
+          )}
+          {options.map((o, i) => {
+            const isSel = o.value === value;
+            return (
+              <li
+                key={o.value}
+                role="option"
+                aria-selected={isSel}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(o.value)}
+                className={cn(
+                  'flex items-center justify-between gap-2 px-3 py-[9px] text-[13px] cursor-pointer',
+                  (active === i || isSel) && 'bg-panel-2',
+                  isSel ? 'font-semibold' : 'text-ink',
+                )}
+                style={isSel ? { color: 'var(--brand)' } : undefined}
+              >
+                <span className="truncate">{o.label}</span>
+                {isSel && (
+                  <svg
+                    className="w-4 h-4 flex-none"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 // ---------- IconButton ----------
 export function IconButton({
