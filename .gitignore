@@ -29,3 +29,6 @@ firebase-debug.log
 # 离线交付（zip）+ release.sh rsync 上服务器即可，部署不依赖 git。
 # 仅忽略含 private_key 的 adminsdk 文件；非机密的 google-services-*.json 仍跟踪，供打包烧入 APK。
 deploy/google-services/*firebase-adminsdk*
+# 全局兜底：任何位置的 adminsdk 私钥都不进 git（含 deploy/hybrid-fcm-service-accounts/）。
+*firebase-adminsdk*
+deploy/hybrid-fcm-service-accounts/
