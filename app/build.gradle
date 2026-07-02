@@ -13,6 +13,23 @@ plugins {
 // ============================================================================
 if (file("google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
+
+    // FCM 按 flavor 自动开关（把上面的 feature gate 从「品牌粒度」细化到「flavor 粒度」）：
+    //   - flavor 的 applicationId 在 google-services.json 里有对应 client → 正常处理，走 FCM。
+    //   - 不在（如华为等商店包 com.xxx.yyy.hw、或尚未在 Firebase 注册的渠道）→ 禁用该 flavor 的
+    //     processXxxGoogleServices 任务，构建照常，运行时 FirebaseApp 探测不到而 no-op。
+    // 这样「配了就走 FCM、没配就跳过」，无需为每个商店/华为包白占 Firebase 每项目 30 App 名额。
+    def gsConfiguredPackages = new groovy.json.JsonSlurper()
+            .parse(file("google-services.json"))
+            .client
+            .collect { it.client_info.android_client_info.package_name }
+            .toSet()
+    android.applicationVariants.all { variant ->
+        if (!gsConfiguredPackages.contains(variant.applicationId)) {
+            def gsTaskName = "process${variant.name.capitalize()}GoogleServices"
+            tasks.matching { it.name == gsTaskName }.configureEach { it.enabled = false }
+        }
+    }
 }
 
 def localProperties = new Properties()
