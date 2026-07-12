@@ -56,6 +56,7 @@ import com.hybrid.android.domain.ResolveResult
 import com.hybrid.android.push.HybridMessagingService
 import com.hybrid.android.push.PushBootstrap
 import com.hybrid.android.push.TokenRegistrar
+import com.hybrid.android.track.AdjustBootstrap
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -123,6 +124,8 @@ class WebViewActivity : ComponentActivity(), BrandHost {
 
         // AppsFlyer 初始化 + 加载持久化归因状态（品牌差异）
         strategy.initTracking(this)
+        // Adjust 归因初始化（feature gate，未绑定 App Token 时 no-op，见 ADR-0013）
+        AdjustBootstrap.init(this)
 
         // 安装事件（仅首次），可选的测试事件由打包开关 ENABLE_TEST_EVENTS 控制
         val prefs = getSharedPreferences("af_install", Context.MODE_PRIVATE)
@@ -596,6 +599,8 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     }
 
     override fun sendAFEvent(eventName: String) {
+        // Adjust 同源 fan-out：与 AppsFlyer 共用同一批事件；未绑定 App Token 时 no-op（ADR-0013）。
+        AdjustBootstrap.trackEvent(eventName, eventValues)
         AppsFlyerLib.getInstance().logEvent(
             this,
             eventName,

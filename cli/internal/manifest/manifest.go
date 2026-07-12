@@ -47,6 +47,25 @@ type Channel struct {
 	ResZipURL string `json:"resZipUrl,omitempty"`
 	// ResZipSHA256 res.zip 的 sha256 校验和（十六进制），用于校验下载完整性。
 	ResZipSHA256 string `json:"resZipSha256,omitempty"`
+	// AdjustAppToken Adjust 归因 App Token（ADR-0013 / docs/admin/08-adjust.md §2）。
+	// 空串 = 未在 Console 给该渠道绑定 Adjust，CLI 渲染 adjust-tokens.json 时跳过此渠道，
+	// 打包出的 flavor 运行时 AdjustBootstrap 全程 no-op（不集成、不发事件）。
+	AdjustAppToken string `json:"adjustAppToken,omitempty"`
+	// AdjustEvents Adjust 事件 name → token 的映射，由后台解析「上传的事件 CSV
+	// （token,name,unique）」得到（unique 列已在后台丢弃）。CLI 不再解析，原样透传进
+	// adjust-tokens.json 的 events 字段。AdjustAppToken 为空时该字段无意义（可为空）。
+	AdjustEvents map[string]string `json:"adjustEvents,omitempty"`
+}
+
+// AdjustTokenEntry 是 app/adjust-tokens.json 中单个 applicationId 对应的 Adjust 配置
+// （ADR-0013 §3 / docs/admin/08-adjust.md §3）。
+//
+// 键用 applicationId（ADR-0009 唯一标识）；app/build.gradle 的自包含旁路块按
+// `variant.applicationId` 查表取 appToken/events 注入 BuildConfig，字段名
+// appToken/events 需与该 Groovy 消费逻辑保持一致，不可改名。
+type AdjustTokenEntry struct {
+	AppToken string            `json:"appToken"`
+	Events   map[string]string `json:"events"`
 }
 
 // EffectiveDomains 返回该渠道实际生效的域名清单：

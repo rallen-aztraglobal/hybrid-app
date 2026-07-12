@@ -15,3 +15,5 @@
 | [0009](./0009-channel-identity-appid.md) | 渠道身份：applicationId 派生且唯一；PAL_CODE 不唯一、域名解析键改 appId | 已采纳（更正 0002） |
 | [0010](./0010-delivery-prebuilt-images.md) | 交付模型：预构建镜像，运维仅运行 + 配域名/SSL | 已采纳（更正 0008） |
 | [0011](./0011-first-deploy-seed.md) | 首次部署初始化：烧录 res + 首启自动注册（否决 init.sql） | 已采纳 |
+| [0012](./0012-push-fcm.md) | Firebase 推送（FCM）集成与按品牌项目拆分 | 已采纳 |
+| [0013](./0013-adjust-attribution.md) | Adjust 归因：按 flavor 绑定即启用、未绑定则休眠 | 提议 |

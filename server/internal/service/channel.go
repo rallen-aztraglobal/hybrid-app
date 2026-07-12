@@ -11,23 +11,34 @@ import (
 
 // CreateChannelInput 新增渠道入参。
 // applicationId 不在入参里：按 ADR-0009 由 <品牌包前缀>.<flavor> 派生，不信任外部传入。
+//
+// AdjustAppToken/AdjustEvents（ADR-0013）：JSON 字段名 adjustAppToken / adjustEvents，
+// 与本结构体其余字段一致走 camelCase。二者均可选——空 App Token 表示该渠道未绑定 Adjust（合法状态）。
 type CreateChannelInput struct {
-	BrandCode  string  `json:"brandCode" validate:"required"`
-	FlavorName string  `json:"flavorName" validate:"required"`
-	PalCode    string  `json:"palCode" validate:"required"`
-	AppName    string  `json:"appName" validate:"required"`
-	Remark     string  `json:"remark"`
-	StoreID    *uint64 `json:"storeId"`
+	BrandCode      string            `json:"brandCode" validate:"required"`
+	FlavorName     string            `json:"flavorName" validate:"required"`
+	PalCode        string            `json:"palCode" validate:"required"`
+	AppName        string            `json:"appName" validate:"required"`
+	Remark         string            `json:"remark"`
+	StoreID        *uint64           `json:"storeId"`
+	AdjustAppToken string            `json:"adjustAppToken"`
+	AdjustEvents   map[string]string `json:"adjustEvents"`
 }
 
 // UpdateChannelInput 修改渠道入参（指针字段表示可选更新）。
 // 无 applicationId：改 flavor 会自动重新派生 appId；palCode 可自由编辑（不再唯一）。
+//
+// AdjustAppToken/AdjustEvents 同样是指针字段（未传 = 不改动）：
+//   - AdjustAppToken 传空字符串 → 显式解绑 Adjust；
+//   - AdjustEvents 传 nil/空对象 → 清空事件表。
 type UpdateChannelInput struct {
-	FlavorName *string `json:"flavorName"`
-	PalCode    *string `json:"palCode"`
-	AppName    *string `json:"appName"`
-	Status     *string `json:"status"`
-	Remark     *string `json:"remark"`
+	FlavorName     *string            `json:"flavorName"`
+	PalCode        *string            `json:"palCode"`
+	AppName        *string            `json:"appName"`
+	Status         *string            `json:"status"`
+	Remark         *string            `json:"remark"`
+	AdjustAppToken *string            `json:"adjustAppToken"`
+	AdjustEvents   *map[string]string `json:"adjustEvents"`
 }
 
 // ListChannels 列表查询，并为每条渠道填充 latestApkUrl（按 flavor 取最近成功构建产物，ADR-0008）。
@@ -63,6 +74,14 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
+	adjustToken, err := normalizeAdjustAppToken(in.AdjustAppToken)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAdjustEvents(in.AdjustEvents); err != nil {
+		return nil, err
+	}
+
 	brand, err := s.repo.GetBrandByCode(ctx, in.BrandCode)
 	if err != nil {
 		return nil, errBadRequest(fmt.Sprintf("品牌 %q 不存在", in.BrandCode))
@@ -112,6 +131,8 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 		UseBrandDomains: true,
 		Remark:          in.Remark,
 		StoreID:         in.StoreID,
+		AdjustAppToken:  adjustToken,
+		AdjustEvents:    model.AdjustEvents(in.AdjustEvents),
 	}
 	if err := s.repo.CreateChannel(ctx, ch); err != nil {
 		return nil, err
@@ -200,6 +221,25 @@ func (s *Service) UpdateChannel(ctx context.Context, id uint64, in UpdateChannel
 		}
 		ch.Status = st
 	}
+	// AdjustAppToken：传空字符串表示显式解绑 Adjust（ADR-0013）。
+	if in.AdjustAppToken != nil {
+		tok, err := normalizeAdjustAppToken(*in.AdjustAppToken)
+		if err != nil {
+			return nil, err
+		}
+		ch.AdjustAppToken = tok
+	}
+	// AdjustEvents：传 nil/空对象清空事件表。
+	if in.AdjustEvents != nil {
+		if err := validateAdjustEvents(*in.AdjustEvents); err != nil {
+			return nil, err
+		}
+		if len(*in.AdjustEvents) == 0 {
+			ch.AdjustEvents = nil
+		} else {
+			ch.AdjustEvents = model.AdjustEvents(*in.AdjustEvents)
+		}
+	}
 
 	if err := s.repo.UpdateChannel(ctx, ch); err != nil {
 		return nil, err
@@ -276,4 +316,35 @@ func looksLikeFlavorSegment(seg string) bool {
 		return false
 	}
 	return true
+}
+
+// maxAdjustAppTokenLen 与 channel.adjust_app_token 列定义 VARCHAR(64) 对齐（ADR-0013）。
+const maxAdjustAppTokenLen = 64
+
+// normalizeAdjustAppToken 校验并规范化 Adjust App Token：去空白；超长拒绝；
+// 空字符串是合法值（表示未绑定/解绑），归一化为 nil（对应 DB NULL）。
+func normalizeAdjustAppToken(raw string) (*string, error) {
+	tok := strings.TrimSpace(raw)
+	if tok == "" {
+		return nil, nil
+	}
+	if len(tok) > maxAdjustAppTokenLen {
+		return nil, errBadRequest(fmt.Sprintf("adjustAppToken 长度不能超过 %d", maxAdjustAppTokenLen))
+	}
+	return &tok, nil
+}
+
+// validateAdjustEvents 校验 adjustEvents 的形状：要么为空，要么是 string→string 的 JSON 对象
+// （类型层面已由 JSON 反序列化到 map[string]string 保证；这里补业务侧校验：key/value 不允许空白）。
+// server 不解析上传的 Adjust CSV，也不理解具体的事件 name/token 含义，只做这层最基础的形状校验。
+func validateAdjustEvents(m map[string]string) error {
+	for k, v := range m {
+		if strings.TrimSpace(k) == "" {
+			return errBadRequest("adjustEvents 的事件名（key）不能为空")
+		}
+		if strings.TrimSpace(v) == "" {
+			return errBadRequest(fmt.Sprintf("adjustEvents[%q] 的 token 不能为空", k))
+		}
+	}
+	return nil
 }

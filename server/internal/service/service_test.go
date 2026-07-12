@@ -613,6 +613,185 @@ func TestStoreCRUDAndUniqueness(t *testing.T) {
 	}
 }
 
+// TestCreateChannelWithAdjustBinding 验证创建渠道时可一并绑定 Adjust App Token + 事件表，
+// 且 CRUD 详情与 CLI 配置下发接口（BuildManifestForBrand）都原样带出（ADR-0013 §2/§5）。
+func TestCreateChannelWithAdjustBinding(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	ch, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode:      "gp",
+		FlavorName:     "gpgzmkk042",
+		PalCode:        "PAL1",
+		AppName:        "GameZone",
+		AdjustAppToken: " abc123xyz ", // 前后空白应被 trim
+		AdjustEvents: map[string]string{
+			"Login":    "wzb3fb",
+			"Purchase": "gyuu2f",
+		},
+	})
+	if err != nil {
+		t.Fatalf("创建渠道失败: %v", err)
+	}
+	if ch.AdjustAppToken == nil || *ch.AdjustAppToken != "abc123xyz" {
+		t.Fatalf("adjustAppToken 应为 abc123xyz（已 trim），实际 %+v", ch.AdjustAppToken)
+	}
+	if len(ch.AdjustEvents) != 2 || ch.AdjustEvents["Login"] != "wzb3fb" || ch.AdjustEvents["Purchase"] != "gyuu2f" {
+		t.Fatalf("adjustEvents 应原样存储，实际 %+v", ch.AdjustEvents)
+	}
+
+	// 详情接口（DB 往返后）应仍能读出。
+	got, err := svc.GetChannel(ctx, ch.ID)
+	if err != nil {
+		t.Fatalf("取详情失败: %v", err)
+	}
+	if got.AdjustAppToken == nil || *got.AdjustAppToken != "abc123xyz" {
+		t.Errorf("详情 adjustAppToken 应为 abc123xyz，实际 %+v", got.AdjustAppToken)
+	}
+	if len(got.AdjustEvents) != 2 {
+		t.Errorf("详情 adjustEvents 应有 2 条，实际 %+v", got.AdjustEvents)
+	}
+
+	// CLI 配置下发接口（manifest）应原样带出。
+	m, err := svc.BuildManifestForBrand(ctx, "gp")
+	if err != nil {
+		t.Fatalf("manifest 失败: %v", err)
+	}
+	if len(m.Channels) != 1 {
+		t.Fatalf("应有 1 个渠道，实际 %d", len(m.Channels))
+	}
+	mc := m.Channels[0]
+	if mc.AdjustAppToken != "abc123xyz" {
+		t.Errorf("manifest adjustAppToken 应为 abc123xyz，实际 %q", mc.AdjustAppToken)
+	}
+	if len(mc.AdjustEvents) != 2 || mc.AdjustEvents["Login"] != "wzb3fb" {
+		t.Errorf("manifest adjustEvents 应原样带出，实际 %+v", mc.AdjustEvents)
+	}
+}
+
+// TestCreateChannelWithoutAdjustBinding 验证未绑定 Adjust 是合法状态：token/events 均为空。
+func TestCreateChannelWithoutAdjustBinding(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	ch, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01018", PalCode: "PAL1", AppName: "A",
+	})
+	if err != nil {
+		t.Fatalf("创建渠道失败: %v", err)
+	}
+	if ch.AdjustAppToken != nil {
+		t.Errorf("未绑定时 adjustAppToken 应为空，实际 %+v", ch.AdjustAppToken)
+	}
+	if len(ch.AdjustEvents) != 0 {
+		t.Errorf("未绑定时 adjustEvents 应为空，实际 %+v", ch.AdjustEvents)
+	}
+
+	m, err := svc.BuildManifestForBrand(ctx, "ap")
+	if err != nil {
+		t.Fatalf("manifest 失败: %v", err)
+	}
+	if len(m.Channels) != 1 || m.Channels[0].AdjustAppToken != "" {
+		t.Errorf("未绑定渠道 manifest 的 adjustAppToken 应为空: %+v", m.Channels)
+	}
+}
+
+// TestUpdateChannelAdjustBindAndUnbind 验证更新可绑定/解绑 Adjust；未传字段不应误改动（部分更新语义）。
+func TestUpdateChannelAdjustBindAndUnbind(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	ch, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01018", PalCode: "PAL1", AppName: "A",
+	})
+	if err != nil {
+		t.Fatalf("创建渠道失败: %v", err)
+	}
+
+	// 绑定。
+	token := "tok123"
+	events := map[string]string{"Login": "wzb3fb"}
+	updated, err := svc.UpdateChannel(ctx, ch.ID, UpdateChannelInput{
+		AdjustAppToken: &token,
+		AdjustEvents:   &events,
+	})
+	if err != nil {
+		t.Fatalf("绑定 Adjust 失败: %v", err)
+	}
+	if updated.AdjustAppToken == nil || *updated.AdjustAppToken != token {
+		t.Fatalf("绑定后 adjustAppToken 应为 %q，实际 %+v", token, updated.AdjustAppToken)
+	}
+	if len(updated.AdjustEvents) != 1 {
+		t.Fatalf("绑定后 adjustEvents 应有 1 条，实际 %+v", updated.AdjustEvents)
+	}
+
+	// 只改 remark，不传 adjust 字段：不应影响已绑定的 Adjust 配置。
+	remark := "改个备注"
+	untouched, err := svc.UpdateChannel(ctx, ch.ID, UpdateChannelInput{Remark: &remark})
+	if err != nil {
+		t.Fatalf("更新备注失败: %v", err)
+	}
+	if untouched.AdjustAppToken == nil || *untouched.AdjustAppToken != token {
+		t.Errorf("未传 adjust 字段时不应清空已绑定 token，实际 %+v", untouched.AdjustAppToken)
+	}
+	if len(untouched.AdjustEvents) != 1 {
+		t.Errorf("未传 adjust 字段时不应清空已绑定事件表，实际 %+v", untouched.AdjustEvents)
+	}
+
+	// 显式传空字符串 / 空对象 → 解绑。
+	empty := ""
+	emptyEvents := map[string]string{}
+	unbound, err := svc.UpdateChannel(ctx, ch.ID, UpdateChannelInput{
+		AdjustAppToken: &empty,
+		AdjustEvents:   &emptyEvents,
+	})
+	if err != nil {
+		t.Fatalf("解绑 Adjust 失败: %v", err)
+	}
+	if unbound.AdjustAppToken != nil {
+		t.Errorf("解绑后 adjustAppToken 应为空，实际 %+v", unbound.AdjustAppToken)
+	}
+	if len(unbound.AdjustEvents) != 0 {
+		t.Errorf("解绑后 adjustEvents 应为空，实际 %+v", unbound.AdjustEvents)
+	}
+}
+
+// TestAdjustEventsValidationRejectsBadShape 验证 adjustEvents 的形状校验：
+// 空 key / 空 value 均应被拒绝（要么整体为空，要么是干净的 string→string 对象）。
+func TestAdjustEventsValidationRejectsBadShape(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	cases := []map[string]string{
+		{"": "wzb3fb"},  // 空事件名
+		{"Login": ""},   // 空 token
+		{" ": "wzb3fb"}, // 空白事件名
+	}
+	for i, events := range cases {
+		_, err := svc.CreateChannel(ctx, CreateChannelInput{
+			BrandCode: "ap", FlavorName: "ap0101" + string(rune('a'+i)), PalCode: "P", AppName: "A",
+			AdjustEvents: events,
+		})
+		if err == nil {
+			t.Errorf("用例 %d（events=%v）应被拒绝", i, events)
+		}
+	}
+}
+
+// TestAdjustAppTokenTooLong 验证 adjustAppToken 超过列宽 VARCHAR(64) 应被拒绝。
+func TestAdjustAppTokenTooLong(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	tooLong := strings.Repeat("a", 65)
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01018", PalCode: "P", AppName: "A",
+		AdjustAppToken: tooLong,
+	}); err == nil {
+		t.Error("超长 adjustAppToken 应被拒绝")
+	}
+}
+
 func strPtr(s string) *string { return &s }
 func intPtr(i int) *int       { return &i }
 

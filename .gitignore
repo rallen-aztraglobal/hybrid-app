@@ -19,6 +19,10 @@
 /web/node_modules/
 /web/dist/
 *.tsbuildinfo
+# app/adjust-tokens.json 由 CLI pull/build 渲染（ADR-0013），与 app/google-services.json 同一
+# 逻辑（App Token 非机密、随 APK 分发，但属渲染产物不进 git）。google-services.json 的忽略规则
+# 在 app/.gitignore（归 app/ 目录代理维护），此文件同属 app/ 但按多代理目录边界改在此处归口忽略。
+/app/adjust-tokens.json
 
 # 编辑器 / 工具临时产物
 /.vscode/

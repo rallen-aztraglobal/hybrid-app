@@ -23,16 +23,23 @@ type BuildManifest struct {
 }
 
 // ManifestChannel 单个渠道的全量信息。
+//
+// AdjustAppToken/AdjustEvents（ADR-0013 / docs/admin/08-adjust.md §5）：原样带出该渠道的 Adjust 绑定，
+// 供 CLI pull/build 渲染 app/adjust-tokens.json（键=applicationId）；JSON 字段名 adjustAppToken /
+// adjustEvents，与渠道 CRUD API 及本结构体其余字段一致走 camelCase。空 token 表示该渠道未绑定 Adjust，
+// CLI 侧应据此跳过、不写入 adjust-tokens.json（保持依赖恒在 classpath、按 flavor 探测开关的心智）。
 type ManifestChannel struct {
-	FlavorName     string   `json:"flavorName"`
-	ApplicationID  string   `json:"applicationId"`
-	PalCode        string   `json:"palCode"`
-	AppName        string   `json:"appName"`
-	Status         string   `json:"status"`
-	EffectiveDomains []string `json:"effectiveDomains"` // 合并继承后的域名（写 bootstrap.json 兜底）
-	ResZipURL      string   `json:"resZipUrl"`        // 资源 zip 地址（CLI 下载解压到 flavor 目录）
-	SplashURL      string   `json:"splashUrl"`
-	ConfigSnapshotURL string `json:"configSnapshotUrl"` // 该渠道的 CDN 配置快照地址
+	FlavorName        string            `json:"flavorName"`
+	ApplicationID     string            `json:"applicationId"`
+	PalCode           string            `json:"palCode"`
+	AppName           string            `json:"appName"`
+	Status            string            `json:"status"`
+	EffectiveDomains  []string          `json:"effectiveDomains"` // 合并继承后的域名（写 bootstrap.json 兜底）
+	ResZipURL         string            `json:"resZipUrl"`        // 资源 zip 地址（CLI 下载解压到 flavor 目录）
+	SplashURL         string            `json:"splashUrl"`
+	ConfigSnapshotURL string            `json:"configSnapshotUrl"` // 该渠道的 CDN 配置快照地址
+	AdjustAppToken    string            `json:"adjustAppToken,omitempty"`
+	AdjustEvents      map[string]string `json:"adjustEvents,omitempty"`
 }
 
 // CSVLine 渲染成与现有 channels/*.csv 字节级兼容的一行：flavor|applicationId|palCode|appName。
@@ -89,6 +96,10 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, brandCode string) (
 		if err != nil {
 			return nil, err
 		}
+		adjustToken := ""
+		if ch.AdjustAppToken != nil {
+			adjustToken = *ch.AdjustAppToken
+		}
 		out.Channels = append(out.Channels, ManifestChannel{
 			FlavorName:        ch.FlavorName,
 			ApplicationID:     ch.ApplicationID,
@@ -99,6 +110,8 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, brandCode string) (
 			ResZipURL:         ch.IconSetURL,
 			SplashURL:         ch.SplashURL,
 			ConfigSnapshotURL: s.SnapshotURL(ch.ApplicationID),
+			AdjustAppToken:    adjustToken,
+			AdjustEvents:      map[string]string(ch.AdjustEvents),
 		})
 	}
 	return out, nil

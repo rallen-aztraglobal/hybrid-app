@@ -178,6 +178,10 @@ type serverManifest struct {
 		AppName          string   `json:"appName"`
 		EffectiveDomains []string `json:"effectiveDomains"`
 		ResZipURL        string   `json:"resZipUrl"`
+		// Adjust 归因（ADR-0013）：后端 manifest 带出，转换时必须一并拷进 manifest.Channel，
+		// 否则 renderAdjustTokens 拿不到 token → 误判「无渠道绑定」跳过 adjust-tokens.json。
+		AdjustAppToken string            `json:"adjustAppToken"`
+		AdjustEvents   map[string]string `json:"adjustEvents"`
 	} `json:"channels"`
 }
 
@@ -206,6 +210,8 @@ func (c *Client) Manifest(ctx context.Context, brand string) (*manifest.Manifest
 			UseBrandDomains: false, // 后端已给出合并后的 effectiveDomains
 			Domains:         ch.EffectiveDomains,
 			ResZipURL:       ch.ResZipURL,
+			AdjustAppToken:  ch.AdjustAppToken,
+			AdjustEvents:    ch.AdjustEvents,
 		})
 	}
 	return m, nil

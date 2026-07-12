@@ -99,6 +99,14 @@ type Channel struct {
 	StoreID *uint64 `gorm:"column:store_id;index" json:"storeId,omitempty"`
 	Store   *Store  `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 
+	// AdjustAppToken / AdjustEvents：Adjust 归因绑定（ADR-0013 / docs/admin/08-adjust.md §2）。
+	// 均可空 = 该渠道未绑定 Adjust（合法状态，打包时不集成、不发事件）。
+	// JSON 字段名 adjustAppToken / adjustEvents 与本结构体其余字段一致走 camelCase；
+	// DB 列名 adjust_app_token / adjust_events 保持 snake_case（gorm column 标签，见下）不变。
+	// AdjustAppToken 用指针：列允许 NULL，指针可原生对应 NULL/无值，避免历史行 NULL 的扫描问题。
+	AdjustAppToken *string      `gorm:"column:adjust_app_token;type:varchar(64)" json:"adjustAppToken,omitempty"`
+	AdjustEvents   AdjustEvents `gorm:"column:adjust_events;type:text" json:"adjustEvents,omitempty"`
+
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 

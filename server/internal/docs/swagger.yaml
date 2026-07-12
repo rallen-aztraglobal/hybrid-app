@@ -117,6 +117,12 @@ definitions:
     type: object
   github_com_hybrid-app_server_internal_service.CreateChannelInput:
     properties:
+      adjustAppToken:
+        type: string
+      adjustEvents:
+        additionalProperties:
+          type: string
+        type: object
       appName:
         type: string
       brandCode:
@@ -127,14 +133,34 @@ definitions:
         type: string
       remark:
         type: string
+      storeId:
+        type: integer
     required:
     - appName
     - brandCode
     - flavorName
     - palCode
     type: object
+  github_com_hybrid-app_server_internal_service.CreateStoreInput:
+    properties:
+      code:
+        type: string
+      name:
+        type: string
+      sort:
+        type: integer
+    required:
+    - code
+    - name
+    type: object
   github_com_hybrid-app_server_internal_service.ManifestChannel:
     properties:
+      adjustAppToken:
+        type: string
+      adjustEvents:
+        additionalProperties:
+          type: string
+        type: object
       appName:
         type: string
       applicationId:
@@ -159,6 +185,27 @@ definitions:
       status:
         type: string
     type: object
+  github_com_hybrid-app_server_internal_service.PushCampaignInput:
+    properties:
+      body:
+        type: string
+      deeplinkPath:
+        type: string
+      extraData:
+        additionalProperties:
+          type: string
+        type: object
+      imageUrl:
+        type: string
+      name:
+        type: string
+      targetAppIds:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+    type: object
   github_com_hybrid-app_server_internal_service.ReportBuildStatusInput:
     properties:
       logExcerpt:
@@ -171,6 +218,12 @@ definitions:
     type: object
   github_com_hybrid-app_server_internal_service.UpdateChannelInput:
     properties:
+      adjustAppToken:
+        type: string
+      adjustEvents:
+        additionalProperties:
+          type: string
+        type: object
       appName:
         type: string
       flavorName:
@@ -179,6 +232,15 @@ definitions:
         type: string
       remark:
         type: string
+      status:
+        type: string
+    type: object
+  github_com_hybrid-app_server_internal_service.UpdateStoreInput:
+    properties:
+      name:
+        type: string
+      sort:
+        type: integer
       status:
         type: string
     type: object
@@ -207,6 +269,30 @@ definitions:
     properties:
       refreshToken:
         type: string
+    type: object
+  internal_handler.registerTokenReq:
+    properties:
+      appId:
+        type: string
+      model:
+        type: string
+      palcode:
+        type: string
+      platform:
+        type: string
+      token:
+        type: string
+    type: object
+  internal_handler.scheduleCampaignReq:
+    properties:
+      scheduledAt:
+        description: ISO8601
+        type: string
+    type: object
+  internal_handler.sendCampaignReq:
+    properties:
+      dryRun:
+        type: boolean
     type: object
   internal_handler.setChannelDomainsReq:
     properties:
@@ -263,6 +349,55 @@ paths:
       summary: 运行时配置（APK 公开消费，强缓存）— 返回该渠道最新域名清单 + 探测端点
       tags:
       - app
+  /api/app/google-services:
+    get:
+      description: 返回该品牌合并的 google-services.json 原始 JSON 字节（非 Envelope）。未上传则 404；CLI
+        据此判断「未配置 FCM 跳过」。
+      parameters:
+      - description: 品牌 code：ap | bp | gp
+        in: query
+        name: brand
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 原始 JSON 内容
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      summary: 下载品牌 google-services.json（公开端点，非机密，CLI/构建机消费）
+      tags:
+      - app
+  /api/app/push/register-token:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: token 注册请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.registerTokenReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      summary: APK 上报 FCM 设备 token（公开端点）
+      tags:
+      - push
   /api/auth/login:
     post:
       consumes:
@@ -854,6 +989,317 @@ paths:
       summary: 上传 splash 源图
       tags:
       - icon
+  /api/push/audience:
+    get:
+      parameters:
+      - description: 逗号分隔的 applicationId 列表
+        in: query
+        name: appIds
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 预估目标活跃设备数（viewer）
+      tags:
+      - push
+  /api/push/campaigns:
+    get:
+      parameters:
+      - description: 按品牌 code 筛选
+        in: query
+        name: brand
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 推送活动列表（viewer）
+      tags:
+      - push
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 活动内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.PushCampaignInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 创建推送活动草稿（operator）
+      tags:
+      - push
+  /api/push/campaigns/{id}:
+    get:
+      parameters:
+      - description: 活动 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 推送活动详情（viewer）
+      tags:
+      - push
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 活动 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.PushCampaignInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 修改推送活动草稿（operator，仅 draft 可改）
+      tags:
+      - push
+  /api/push/campaigns/{id}/schedule:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 活动 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 定时时间 ISO8601
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.scheduleCampaignReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 设置推送活动定时发送（operator）
+      tags:
+      - push
+  /api/push/campaigns/{id}/send:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 活动 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: dryRun 标志
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.sendCampaignReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 立即发送推送活动（operator）；dryRun=true 走完统计但不真发
+      tags:
+      - push
+  /api/push/google-services:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 接受 multipart file 字段 "file" 或 raw JSON body；校验 project_info/client
+        后存入 Storage（key=fcm/<brand>/google-services.json）。
+      parameters:
+      - description: 品牌 code：ap | bp | gp
+        in: query
+        name: brand
+        required: true
+        type: string
+      - description: google-services.json 文件（multipart）
+        in: formData
+        name: file
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 上传品牌合并 google-services.json（operator+）
+      tags:
+      - push
+  /api/push/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: FCM 配置状态（viewer）
+      tags:
+      - push
+  /api/push/upload-image:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: 图片文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 上传推送图片（operator）
+      tags:
+      - push
+  /api/stores:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 应用商店列表（含停用，按 sort 升序）
+      tags:
+      - stores
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 商店字段
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.CreateStoreInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 新增应用商店（code 全局唯一，创建后不可改）
+      tags:
+      - stores
+  /api/stores/{id}:
+    delete:
+      parameters:
+      - description: 商店 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 删除应用商店（已被渠道引用则拒绝，返回 409，请改为停用）
+      tags:
+      - stores
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 商店 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 可选更新字段
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hybrid-app_server_internal_service.UpdateStoreInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 修改应用商店（仅 name/sort/status；code 不可改）
+      tags:
+      - stores
   /healthz:
     get:
       description: 返回约定 JSON {"ok":true,"brand":"ap","v":1}。带 ?brand= 时回显品牌，供按品牌校验。

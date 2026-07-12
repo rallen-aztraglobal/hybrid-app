@@ -32,6 +32,26 @@ if (file("google-services.json").exists()) {
     }
 }
 
+// ============================================================================
+// Adjust 按 flavor 自动开关（对齐上面 FCM 的 feature gate，见 docs/admin/08-adjust.md §4.2 / ADR-0013）：
+//   adjust-tokens.json 里该 applicationId 有非空 appToken → 注入 BuildConfig，运行时真集成、发事件；
+//   不在（未在 Console 绑定 Adjust）→ token 留空，运行时 AdjustBootstrap 探测为空后全程 no-op。
+//   依赖恒在 classpath（同 firebase-messaging），仅靠 token 是否为空决定「集成/跳过」，零改码激活。
+// 自包含旁路块，不动 loadChannels/productFlavors 一行（护栏 ADR-0004）。
+// ============================================================================
+if (file("adjust-tokens.json").exists()) {
+    def adjustCfg = new groovy.json.JsonSlurper().parse(file("adjust-tokens.json"))
+    android.applicationVariants.all { variant ->
+        def entry = adjustCfg[variant.applicationId]
+        if (entry?.appToken) {
+            def events = groovy.json.JsonOutput.toJson(entry.events ?: [:])
+                    .replace('\\', '\\\\').replace('"', '\\"')
+            variant.buildConfigField "String", "ADJUST_APP_TOKEN", "\"${entry.appToken}\""
+            variant.buildConfigField "String", "ADJUST_EVENT_MAP", "\"${events}\""
+        }
+    }
+}
+
 def localProperties = new Properties()
 def localFile = rootProject.file("local.properties")
 if (localFile.exists()) {
@@ -103,6 +123,10 @@ android {
         // 所有渠道共用的配置
         buildConfigField "String", "AF_DEV_KEY", "\"fXoKsKQwxPCRdhD8CD8q6F\""
         buildConfigField "boolean", "ENABLE_TEST_EVENTS", "${enableTestEvents}"
+        // Adjust 兜底默认（未绑定渠道保持这两个值）：保证字段对所有 flavor 都存在、编译安全；
+        // 上面的 adjust-tokens.json 旁路块会在变体级覆盖（变体级 buildConfigField 优先于默认级）。
+        buildConfigField "String", "ADJUST_APP_TOKEN", "\"\""
+        buildConfigField "String", "ADJUST_EVENT_MAP", "\"{}\""
     }
 
     flavorDimensions "channel"
@@ -221,6 +245,12 @@ dependencies {
     // BOM 统一管理 Firebase 全家桶版本，firebase-messaging-ktx 不需要单独写版本号。
     implementation platform(libs.firebase.bom)
     implementation libs.firebase.messaging
+
+    // Adjust 归因（ADR-0013）：依赖无条件加入（同 firebase-messaging），运行时由 AdjustBootstrap
+    // 探测 BuildConfig.ADJUST_APP_TOKEN 是否为空来 no-op（未在 adjust-tokens.json 绑定的 flavor）。
+    // installreferrer 提供 Play 安装来源归因；GAID 复用已有的 gms.play.services.ads.identifier。
+    implementation libs.adjust.android
+    implementation libs.installreferrer
 
     // HMS / AppsFlyer OAID：仅 BP 品牌渠道集成（按 flavor 维度注入依赖）
     allChannels.findAll { brandConfig[it.brand].hms }.each { ch ->

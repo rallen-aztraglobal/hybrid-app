@@ -42,13 +42,14 @@ func (o Options) logf(format string, args ...any) {
 
 // Result 汇总一次渲染产生的变更。
 type Result struct {
-	Brand          string
-	CSVChanged     bool
-	ChannelCount   int
-	ResWritten     int // 成功解压资源的 flavor 数
-	ResSkipped     int // 无资源地址 / 跳过的 flavor 数
-	BootstrapCount int
-	Conflicts      []csvio.Conflict
+	Brand            string
+	CSVChanged       bool
+	ChannelCount     int
+	ResWritten       int // 成功解压资源的 flavor 数
+	ResSkipped       int // 无资源地址 / 跳过的 flavor 数
+	BootstrapCount   int
+	AdjustBoundCount int // 已绑定 Adjust App Token 并写入 adjust-tokens.json 的渠道数（ADR-0013）
+	Conflicts        []csvio.Conflict
 }
 
 // Pull 渲染单个品牌的 manifest 到本地文件。
@@ -149,6 +150,14 @@ func RenderManifest(ctx context.Context, r *repo.Repo, src api.ManifestSource, m
 		}
 		res.ResWritten++
 	}
+
+	// 4) 渲染 app/adjust-tokens.json（ADR-0013 §3）：只收录已绑定 Adjust App Token 的渠道，
+	//    键=applicationId（ADR-0009 派生值）。与 CSV/bootstrap.json 同一次 pull 落地。
+	boundCount, err := renderAdjustTokens(r, m.Brand, m.Channels, opt)
+	if err != nil {
+		return res, err
+	}
+	res.AdjustBoundCount = boundCount
 
 	return res, nil
 }

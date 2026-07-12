@@ -56,3 +56,10 @@
 -keep class com.bun.lib.** { *; }
 # coolpad
 -keep class com.coolpad.deviceidsupport.** { *; }
+
+# Adjust 归因（ADR-0013）
+-keep class com.adjust.sdk.** { *; }
+-keep class com.google.android.gms.common.ConnectionResult { int SUCCESS; }
+-keep class com.google.android.gms.ads.identifier.AdvertisingIdClient { *; }
+-keep class com.google.android.gms.ads.identifier.AdvertisingIdClient$Info { *; }
+-keep public class com.android.installreferrer.** { *; }

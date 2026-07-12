@@ -20,6 +20,8 @@ import { Button, Note, SectionHeading, Select, Switch } from './ui';
 import { CloseIcon, InfoIcon, SaveCheckIcon } from './icons';
 import { IconNineGrid, emptyIconState, type IconState } from './IconNineGrid';
 import { DomainEditor } from './DomainEditor';
+import { AdjustSection } from './AdjustSection';
+import { Field } from './FormField';
 
 type Err = FieldError;
 
@@ -99,6 +101,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
         status: editChannel.status,
         remark: editChannel.remark,
         storeId: editChannel.storeId ?? null,
+        adjustAppToken: editChannel.adjustAppToken ?? '',
+        adjustEvents: editChannel.adjustEvents ?? {},
       });
       setIcon(emptyIconState(editChannel.iconMasterUrl ?? null));
       setSplash(editChannel.splashUrl ?? null);
@@ -237,6 +241,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       iconMasterDataUrl: icon.master ?? undefined,
       splashDataUrl: splash ?? undefined,
       domains: form.useBrandDomains ? undefined : form.domains,
+      adjustAppToken: form.adjustAppToken?.trim() ?? '',
+      adjustEvents: form.adjustEvents ?? {},
     };
     await save.mutateAsync({ id: editing ?? undefined, input: payload });
     close();
@@ -438,6 +444,22 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               </div>
             </Note>
           </div>
+
+          {/* 5. Adjust 归因 */}
+          <div className="section-card">
+            <SectionHeading num={5}>
+              Adjust 归因{' '}
+              <span className="font-normal text-muted text-[11.5px]">
+                · 填 App Token + 上传事件 CSV 才集成，未填不启用
+              </span>
+            </SectionHeading>
+            <AdjustSection
+              appToken={form.adjustAppToken ?? ''}
+              onAppTokenChange={(v) => set('adjustAppToken', v)}
+              events={form.adjustEvents ?? {}}
+              onEventsChange={(v) => set('adjustEvents', v)}
+            />
+          </div>
         </div>
 
         {/* 脚 */}
@@ -459,31 +481,6 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
 }
 
 // ---------- 子组件 ----------
-function Field({
-  label,
-  required,
-  hint,
-  error,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  hint?: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mb-[13px] last:mb-0">
-      <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">
-        {label} {required && <span className="text-down">*</span>}{' '}
-        {hint && <span className="font-normal text-muted text-[11.5px]">{hint}</span>}
-      </label>
-      {children}
-      {error && <div className="mt-1 text-[12px] text-down">{error}</div>}
-    </div>
-  );
-}
-
 function SplashDrop({
   value,
   onFile,
@@ -558,6 +555,8 @@ function blankForm(brandCode: BrandMeta['code']): ChannelInput {
     domains: EMPTY_DOMAINS,
     status: 'enabled',
     storeId: null,
+    adjustAppToken: '',
+    adjustEvents: {},
   };
 }
 

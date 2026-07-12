@@ -25,6 +25,9 @@ robolectric = "4.16.1"
 # Firebase 推送（FCM）
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
+# Adjust 归因（ADR-0013）：依赖恒在 classpath，按 flavor 是否绑定 App Token 决定运行时是否真正集成。
+adjustAndroid = "5.4.1"
+installReferrer = "2.2"
 
 [libraries]
 af-android-sdk = { module = "com.appsflyer:af-android-sdk", version.ref = "afAndroidSdk" }
@@ -61,6 +64,11 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 # 使用非 -ktx 变体避免引入 kotlinx-coroutines-play-services 这一额外传递依赖（与项目既有协程版本隔离更干净）。
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+
+# Adjust 归因：无条件加入 classpath（同 firebase-messaging），运行时由 AdjustBootstrap 探测 token 是否为空。
+# GAID 采集复用已有的 gms-play-services-ads-identifier；installreferrer 用于 Play 安装来源归因。
+adjust-android = { module = "com.adjust.sdk:adjust-android", version.ref = "adjustAndroid" }
+installreferrer = { module = "com.android.installreferrer:installreferrer", version.ref = "installReferrer" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

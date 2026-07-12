@@ -7,6 +7,10 @@
  *  - 渠道 id 为数字主键（channels.go 路径参数），前端统一以字符串持有
  *  - 构建：ADR-0008 的「打包任务」(build job) + 日志流 + 单 APK 下载 + 渠道最新包
  *  - 身份：ADR-0009 的 applicationId 由 品牌包前缀 + flavor 派生
+ *  - Adjust 归因（08-adjust.md / ADR-0013）：Channel/ChannelInput 新增
+ *    `adjustAppToken` / `adjustEvents` 两个可空字段，随渠道保存接口一起提交。
+ *    **待办**：server 的 CreateChannelInput/UpdateChannelInput OpenAPI 契约尚未收录
+ *    这两个字段（本文件手写先行带上，等后端补齐并重新生成 OpenAPI 后对齐/替换）。
  *
  * 后端 OpenAPI 就绪后（server 暴露 /swagger/doc.json），可用 `openapi-typescript`
  * 生成 `src/lib/api/schema.d.ts` 替换本文件；当前手写以保证编译期类型安全。
@@ -132,6 +136,16 @@ export interface Channel {
   storeId?: string | number | null;
   /** 关联应用商店（后端下发的精简视图，供列表展示商店标签）。 */
   store?: { id: string | number; code: string; name: string } | null;
+  /**
+   * Adjust App Token（08-adjust.md / ADR-0013）。空/未设置 = 该渠道未绑定 Adjust，
+   * 打包时不集成、不发任何 Adjust 事件。非机密，随 APK 分发。
+   */
+  adjustAppToken?: string;
+  /**
+   * Adjust 事件映射 `{ 事件name: token }`，由前端解析 Adjust 导出的事件 CSV
+   * （`token,name,unique`，`unique` 列丢弃）得到。server 只存不解析（见 CLAUDE.md 跨层契约）。
+   */
+  adjustEvents?: Record<string, string>;
 }
 
 /**
@@ -160,6 +174,10 @@ export interface ChannelInput {
   remark?: string;
   /** 应用商店主键（可空 = 无商店/默认）。 */
   storeId?: string | number | null;
+  /** Adjust App Token；空字符串 = 不启用（见 Channel.adjustAppToken 注释）。 */
+  adjustAppToken?: string;
+  /** Adjust 事件映射 `{ name: token }`（见 Channel.adjustEvents 注释）。 */
+  adjustEvents?: Record<string, string>;
 }
 
 /**

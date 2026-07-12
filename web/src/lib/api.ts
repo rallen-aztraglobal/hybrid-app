@@ -209,6 +209,12 @@ interface ChannelDTO {
   updatedAt?: string;
   storeId?: number | null;
   store?: { id: number; code: string; name: string } | null;
+  /**
+   * Adjust 归因（08-adjust.md / ADR-0013）。**待办**：server 的 Create/UpdateChannelInput
+   * OpenAPI 契约尚未收录这两个字段，此处先行手写对接，后端补齐并重新生成 OpenAPI 后需对齐/替换。
+   */
+  adjustAppToken?: string | null;
+  adjustEvents?: Record<string, string> | null;
 }
 function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
   const brandCode = (c.brandCode ?? c.brand?.code ?? brandHint ?? 'ap') as BrandCode;
@@ -231,6 +237,8 @@ function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
     updatedAt: c.updatedAt,
     storeId: c.storeId ?? null,
     store: c.store ?? null,
+    adjustAppToken: c.adjustAppToken || undefined,
+    adjustEvents: c.adjustEvents && Object.keys(c.adjustEvents).length ? c.adjustEvents : undefined,
   };
 }
 
@@ -317,6 +325,8 @@ export const channelApi = {
     return withFallback(
       async () => {
         // 1) 基本信息（后端 CreateChannelInput：不含域名/图标）。
+        // adjustAppToken/adjustEvents：08-adjust.md §6 跨层契约——随渠道保存接口一起提交，
+        // server 只存不解析；OpenAPI 契约待后端补齐后对齐（见 ChannelDTO 注释）。
         const created = await request<ChannelDTO>('/channels', {
           method: 'POST',
           body: JSON.stringify({
@@ -327,6 +337,8 @@ export const channelApi = {
             appName: input.appName.trim(),
             remark: input.remark ?? '',
             storeId: input.storeId ?? null,
+            adjustAppToken: input.adjustAppToken?.trim() ?? '',
+            adjustEvents: input.adjustEvents ?? {},
           }),
         });
         const ch = adaptChannel(created, input.brandCode);
@@ -349,6 +361,9 @@ export const channelApi = {
             appName: input.appName.trim(),
             status: input.status,
             remark: input.remark ?? '',
+            // adjustAppToken/adjustEvents：08-adjust.md §6 跨层契约，随保存接口一起提交。
+            adjustAppToken: input.adjustAppToken?.trim() ?? '',
+            adjustEvents: input.adjustEvents ?? {},
           }),
         });
         const ch = adaptChannel(updated, input.brandCode);
@@ -732,5 +747,7 @@ function inputToChannel(input: ChannelInput): Channel {
     splashUrl: input.splashDataUrl,
     remark: input.remark,
     storeId: input.storeId ?? null,
+    adjustAppToken: input.adjustAppToken?.trim() || undefined,
+    adjustEvents: input.adjustEvents && Object.keys(input.adjustEvents).length ? input.adjustEvents : undefined,
   };
 }

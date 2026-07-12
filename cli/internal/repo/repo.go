@@ -111,3 +111,11 @@ func (r *Repo) AppBuildGradle() string {
 func (r *Repo) AppGoogleServicesJSON() string {
 	return filepath.Join(r.Root, "app", "google-services.json")
 }
+
+// AppAdjustTokensJSON 返回 app/adjust-tokens.json 路径。
+// 该文件由 CLI pull/build 渲染（ADR-0013），供 app/build.gradle 的自包含旁路块按
+// applicationId 查表注入 ADJUST_APP_TOKEN/ADJUST_EVENT_MAP。App Token 非机密（随 APK
+// 分发），但仍作为渲染产物不进 git（已加入根 .gitignore）；无渠道绑定 Adjust 时该文件不存在。
+func (r *Repo) AppAdjustTokensJSON() string {
+	return filepath.Join(r.Root, "app", "adjust-tokens.json")
+}

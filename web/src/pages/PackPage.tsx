@@ -223,7 +223,7 @@ export function PackPage() {
               <Switch checked={testEvents} onChange={setTestEvents} />
               <div>
                 <div className="text-[13px] font-semibold">测试事件</div>
-                <div className="text-[11.5px] text-muted">首次安装一次性发送全部 AF 事件</div>
+                <div className="text-[11.5px] text-muted">首次安装一次性发送全部 AppsFlyer + Adjust 事件（Adjust 走 Sandbox，见测试控制台；仅对已绑定 Adjust 的渠道生效）</div>
               </div>
             </div>
 
