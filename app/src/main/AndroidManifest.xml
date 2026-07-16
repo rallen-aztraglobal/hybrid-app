@@ -20,16 +20,6 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Splash"
         tools:replace="android:dataExtractionRules,android:fullBackupContent">
-        <meta-data
-            android:name="com.appsflyer.devkey"
-            android:value="fXoKsKQwxPCRdhD8CD8q6F" />
-        <!-- AppsFlyer 广播接收器 -->
-        <receiver android:name="com.appsflyer.SingleInstallBroadcastReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.android.vending.INSTALL_REFERRER"/>
-            </intent-filter>
-        </receiver>
         <!-- WebView 页面 -->
         <activity
             android:name=".WebViewActivity"

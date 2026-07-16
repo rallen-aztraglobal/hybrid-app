@@ -1,11 +1,6 @@
 [versions]
-afAndroidSdk = "6.18.0"
-afOaid = "6.12.3"
-hmsAdsIdentifier = "3.4.62.300"
 agp = "9.1.1"
 fragmentKtx = "1.8.9"
-playServicesAdsIdentifierVersion = "18.2.0"
-playServicesAppset = "16.1.0"
 webviewInterceptor = "1.0.12"
 kotlin = "2.2.10"
 coreKtx = "1.10.1"
@@ -18,12 +13,7 @@ composeBom = "2024.09.00"
 filamentAndroid = "1.17.1"
 
 [libraries]
-af-android-sdk = { module = "com.appsflyer:af-android-sdk", version.ref = "afAndroidSdk" }
-af-oaid = { module = "com.appsflyer:oaid", version.ref = "afOaid" }
-hms-ads-identifier = { module = "com.huawei.hms:ads-identifier", version.ref = "hmsAdsIdentifier" }
 androidx-fragment-ktx = { module = "androidx.fragment:fragment-ktx", version.ref = "fragmentKtx" }
-gms-play-services-ads-identifier = { module = "com.google.android.gms:play-services-ads-identifier", version.ref = "playServicesAdsIdentifierVersion" }
-play-services-appset = { module = "com.google.android.gms:play-services-appset", version.ref = "playServicesAppset" }
 webview-interceptor = { module = "com.github.acsbendi:Android-Request-Inspector-WebView", version.ref = "webviewInterceptor" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
