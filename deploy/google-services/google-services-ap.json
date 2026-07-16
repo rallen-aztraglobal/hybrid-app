@@ -26,6 +26,82 @@
     },
     {
       "client_info": {
+        "mobilesdk_app_id": "1:52838749319:android:3c783b0ac3ae864b095422",
+        "android_client_info": {
+          "package_name": "com.arenaplus.ap01019"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCb5d6cIprG2q_ft4Jfu3lCgNHQWWiQfVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:52838749319:android:1236c7bc7ea8fe1d095422",
+        "android_client_info": {
+          "package_name": "com.arenaplus.ap01020"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCb5d6cIprG2q_ft4Jfu3lCgNHQWWiQfVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:52838749319:android:e218c5b4d3f15fd7095422",
+        "android_client_info": {
+          "package_name": "com.arenaplus.ap01021"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCb5d6cIprG2q_ft4Jfu3lCgNHQWWiQfVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:52838749319:android:6f80b241a7f47a96095422",
+        "android_client_info": {
+          "package_name": "com.arenaplus.ap01022"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCb5d6cIprG2q_ft4Jfu3lCgNHQWWiQfVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:52838749319:android:14434efd411d8a85095422",
         "android_client_info": {
           "package_name": "com.arenaplus.ap01034"
