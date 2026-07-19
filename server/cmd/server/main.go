@@ -31,6 +31,7 @@ import (
 
 	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/config"
+	"github.com/hybrid-app/server/internal/geoip"
 	"github.com/hybrid-app/server/internal/handler"
 	"github.com/hybrid-app/server/internal/httpx"
 	"github.com/hybrid-app/server/internal/repo"
@@ -68,6 +69,7 @@ type application struct {
 	svc     *service.Service
 	handler *handler.Handler
 	storage storage.Storage
+	geo     *geoip.Resolver // 上架包 AB 面网关的 IP→国家解析器
 }
 
 // build 装配全部依赖。
@@ -113,9 +115,20 @@ func build(cfg *config.Config) (*application, error) {
 	authMgr := auth.NewManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	authMgr.RunnerToken = cfg.RunnerToken // 构建机长期静态令牌（ADR-0008，评审 S1）
 	svc := service.New(cfg, r, st)
+
+	// 上架包 AB 面网关的 GeoIP 解析器。库缺失不阻断启动：New 内部已降级（全部判未知国家 → A 面）。
+	// 镜像构建期烤了一份保底库（Dockerfile.api），cron 每月覆盖更新。
+	geo := geoip.New(cfg.GeoIPPath)
+	if !geo.Loaded() {
+		log.Printf("[geoip] 警告：GeoIP 库未加载（path=%s），所有上架包网关判定将回退 A 面，直到库就绪", cfg.GeoIPPath)
+	} else {
+		log.Printf("[geoip] 已加载 GeoIP 库（path=%s，构建时间=%s）", cfg.GeoIPPath, geo.BuildTime().Format("2006-01-02"))
+	}
+	svc.SetCountryResolver(geo)
+
 	h := handler.New(cfg, svc, authMgr, r)
 
-	return &application{cfg: cfg, repo: r, svc: svc, handler: h, storage: st}, nil
+	return &application{cfg: cfg, repo: r, svc: svc, handler: h, storage: st, geo: geo}, nil
 }
 
 func buildStorage(cfg *config.Config) (storage.Storage, error) {
@@ -150,7 +163,7 @@ func runServer(cfg *config.Config, app *application) {
 
 	// 域名巡检 cron（ADR-0003，进程内）。
 	var c *cron.Cron
-	if cfg.DomainProbeEnable || cfg.PushCronEnable {
+	if cfg.DomainProbeEnable || cfg.PushCronEnable || cfg.GeoIPRefreshEnable {
 		c = cron.New()
 		if cfg.DomainProbeEnable {
 			_, _ = c.AddFunc("@every 5m", func() {
@@ -168,6 +181,20 @@ func runServer(cfg *config.Config, app *application) {
 				app.svc.RunScheduledCampaigns(ctx)
 			})
 			log.Printf("[cron] 推送定时任务已启用（每 1 分钟）")
+		}
+		// GeoIP 库月度更新（DB-IP 免费库，无需凭据）：每月 3 号 04:00 拉新覆盖。
+		// 选 3 号是留出月初库发布的余量；Refresh 内部本月拿不到会自动回退上月。
+		if cfg.GeoIPRefreshEnable {
+			_, _ = c.AddFunc("0 4 3 * *", func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				defer cancel()
+				if err := app.geo.Refresh(ctx, time.Now()); err != nil {
+					log.Printf("[geoip] 月度更新失败（继续用旧库）: %v", err)
+					return
+				}
+				log.Printf("[geoip] 月度更新成功（构建时间=%s）", app.geo.BuildTime().Format("2006-01-02"))
+			})
+			log.Printf("[cron] GeoIP 月度更新已启用（每月 3 号 04:00）")
 		}
 		c.Start()
 	}

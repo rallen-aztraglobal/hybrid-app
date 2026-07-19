@@ -82,9 +82,13 @@ services:
       FIREBASE_SA_BP: "/secrets/hybrid-bp-firebase-adminsdk-fbsvc-8d90186afa.json"
       FIREBASE_SA_GP: "/secrets/hybrid-gp-firebase-adminsdk-fbsvc-4ceaedae3f.json"
       # FIREBASE_SA_GP2 留空：gp 溢出项目暂无私钥，溢出包自动跳过（Skipped，不算失败）。
+      # 上架包（ColorStack/DeckTallyPro）独立 Firebase 项目；填好私钥路径与项目 ID 后即可发上架包推送。
+      # 留空则上架包推送整体 Skipped（不算失败），流程仍可跑通。私钥同样放 ./google-services 下。
+      FIREBASE_SA_LISTINGS: "${FIREBASE_SA_LISTINGS:-}"
       FIREBASE_PROJECT_AP: "hybrid-ap"
       FIREBASE_PROJECT_BP: "hybrid-bp"
       FIREBASE_PROJECT_GP: "hybrid-gp"
+      FIREBASE_PROJECT_LISTINGS: "${FIREBASE_PROJECT_LISTINGS:-hybrid-listings}"
     volumes:
       - api-data:/data
       # 私钥只读挂载：rsync 已把 deploy/google-services 同步上服务器，compose 在 deploy/ 下执行，

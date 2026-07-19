@@ -379,12 +379,53 @@ func (s *Service) RunScheduledCampaigns(ctx context.Context) {
 
 // ---------- 内部辅助 ----------
 
-// doSend 在 goroutine 中执行真实 FCM 发送（worker pool），结束后更新 campaign 统计。
-func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCampaign, tokenMap map[string][]model.PushDeviceToken, appIDs []string) {
-	// 构建 FCM data payload。
-	data := map[string]string{
-		"deeplink_path": c.DeeplinkPath,
+// fcmJob 一个待发送任务：路由键（决定发往哪个 Firebase 项目）+ 目标 token。
+type fcmJob struct {
+	routeKey string
+	token    model.PushDeviceToken
+}
+
+// fcmJobResult 单条发送结果。
+type fcmJobResult struct {
+	token        model.PushDeviceToken
+	err          error
+	unregistered bool
+	skipped      bool
+}
+
+// fcmSendStat 某分组（渠道按 appID / 上架包按 listingID）的发送计数与错误样本。
+type fcmSendStat struct {
+	sent    int
+	failed  int
+	skipped int
+	errSamp string
+}
+
+// apply 累计一条结果；返回非空字符串表示该 token 已失效需下线。
+func (st *fcmSendStat) apply(r fcmJobResult) (deadToken string) {
+	switch {
+	case r.skipped:
+		st.skipped++
+		if st.errSamp == "" {
+			st.errSamp = "FCM 项目未配置，已跳过（如 gp2/listings 暂无私钥）"
+		}
+	case r.err == nil:
+		st.sent++
+	default:
+		st.failed++
+		if st.errSamp == "" {
+			st.errSamp = r.err.Error()
+		}
+		if r.unregistered {
+			return r.token.DeviceToken
+		}
 	}
+	return ""
+}
+
+// buildPushData 组装 FCM data payload（deeplink + 活动自定义 extraData）。
+func buildPushData(c *model.PushCampaign) map[string]string {
+	data := map[string]string{"deeplink_path": c.DeeplinkPath}
 	if c.ExtraData != "" {
 		var extra map[string]string
 		if err := json.Unmarshal([]byte(c.ExtraData), &extra); err == nil {
@@ -393,98 +434,79 @@ func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCa
 			}
 		}
 	}
+	return data
+}
 
-	type tokenJob struct {
-		routeKey string
-		token    model.PushDeviceToken
+// dispatchFCMJobs 用 worker pool 并发发送一批任务，返回逐条结果（顺序不保证）。
+// 渠道推送与上架包推送共用此发送内核，各自负责「构建 jobs」与「按自己的键汇总结果」。
+// 每个 token 在公共 data 之上叠加自己的 palcode（透传给端上拼 URL）。
+func (s *Service) dispatchFCMJobs(ctx context.Context, jobs []fcmJob, c *model.PushCampaign, data map[string]string) []fcmJobResult {
+	if len(jobs) == 0 {
+		return nil
 	}
-
-	// 构建 applicationId → 路由键 映射（gp 拆分：gp2 溢出包路由到 gp2 项目）。
-	// 数据源是已上传的 fcm/gp2/google-services.json；未上传则索引为空、全部退回品牌路由。
-	appIndex := s.buildFCMAppIndex(ctx)
-
-	// 汇总所有 token 任务，逐 token 解析路由键（命中 gp2 索引→gp2，否则品牌 code）。
-	var jobs []tokenJob
-	for appID, tokens := range tokenMap {
-		_ = appID
-		for _, t := range tokens {
-			key := resolveFCMKey(appIndex, t.ApplicationID, t.BrandCode)
-			jobs = append(jobs, tokenJob{routeKey: key, token: t})
-		}
-	}
-
-	// worker pool。
-	jobCh := make(chan tokenJob, len(jobs))
+	jobCh := make(chan fcmJob, len(jobs))
 	for _, j := range jobs {
 		jobCh <- j
 	}
 	close(jobCh)
 
-	type sendRes struct {
-		appID        string
-		token        string
-		err          error
-		unregistered bool
-		skipped      bool
-	}
-	resCh := make(chan sendRes, len(jobs))
-
+	resCh := make(chan fcmJobResult, len(jobs))
 	var wg sync.WaitGroup
 	for i := 0; i < min(fcmWorkerCount, len(jobs)); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := range jobCh {
-				// 为每个 token 附上 palcode（透传给 APK 端 URL 拼接）。
 				d := make(map[string]string, len(data)+1)
 				for k, v := range data {
 					d[k] = v
 				}
 				d["palcode"] = j.token.PalCode
 				r := s.fcm.Send(ctx, j.routeKey, j.token.DeviceToken, c.Title, c.Body, c.ImageURL, d)
-				resCh <- sendRes{
-					appID:        j.token.ApplicationID,
-					token:        j.token.DeviceToken,
-					err:          r.Err,
-					unregistered: r.Unregistered,
-					skipped:      r.Skipped,
-				}
+				resCh <- fcmJobResult{token: j.token, err: r.Err, unregistered: r.Unregistered, skipped: r.Skipped}
 			}
 		}()
 	}
 	wg.Wait()
 	close(resCh)
 
-	// 汇总结果。skipped（路由项目未配置，如 gp2 暂无私钥）单独计：不算 sent 也不算 failed，
-	// 不下线 token——保证 gp2 私钥就绪后这些设备能正常补发。
-	type appStat struct {
-		sent    int
-		failed  int
-		skipped int
-		errSamp string
-	}
-	stats := map[string]*appStat{}
-	var deadTokens []string
+	out := make([]fcmJobResult, 0, len(jobs))
 	for r := range resCh {
-		if _, ok := stats[r.appID]; !ok {
-			stats[r.appID] = &appStat{}
+		out = append(out, r)
+	}
+	return out
+}
+
+// doSend 在 goroutine 中执行真实 FCM 发送（worker pool），结束后更新 campaign 统计。
+func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCampaign, tokenMap map[string][]model.PushDeviceToken, appIDs []string) {
+	data := buildPushData(c)
+
+	// 构建 applicationId → 路由键 映射（gp 拆分：gp2 溢出包路由到 gp2 项目）。
+	// 数据源是已上传的 fcm/gp2/google-services.json；未上传则索引为空、全部退回品牌路由。
+	appIndex := s.buildFCMAppIndex(ctx)
+
+	// 汇总所有 token 任务，逐 token 解析路由键（命中 gp2 索引→gp2，否则品牌 code）。
+	var jobs []fcmJob
+	for _, tokens := range tokenMap {
+		for _, t := range tokens {
+			key := resolveFCMKey(appIndex, t.ApplicationID, t.BrandCode)
+			jobs = append(jobs, fcmJob{routeKey: key, token: t})
 		}
-		switch {
-		case r.skipped:
-			stats[r.appID].skipped++
-			if stats[r.appID].errSamp == "" {
-				stats[r.appID].errSamp = "FCM 项目未配置，已跳过（如 gp2 暂无私钥）"
-			}
-		case r.err == nil:
-			stats[r.appID].sent++
-		default:
-			stats[r.appID].failed++
-			if stats[r.appID].errSamp == "" {
-				stats[r.appID].errSamp = r.err.Error()
-			}
-			if r.unregistered {
-				deadTokens = append(deadTokens, r.token)
-			}
+	}
+
+	results := s.dispatchFCMJobs(ctx, jobs, c, data)
+
+	// 汇总结果（按 applicationId）。skipped（路由项目未配置，如 gp2 暂无私钥）单独计：
+	// 不算 sent 也不算 failed，不下线 token——保证私钥就绪后这些设备能正常补发。
+	stats := map[string]*fcmSendStat{}
+	var deadTokens []string
+	for _, r := range results {
+		appID := r.token.ApplicationID
+		if _, ok := stats[appID]; !ok {
+			stats[appID] = &fcmSendStat{}
+		}
+		if dead := stats[appID].apply(r); dead != "" {
+			deadTokens = append(deadTokens, dead)
 		}
 	}
 

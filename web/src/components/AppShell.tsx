@@ -12,6 +12,7 @@ import {
   ClockIcon,
   GlobeIcon,
   GridIcon,
+  LayersIcon,
   LogoutIcon,
   MegaphoneIcon,
   PackageIcon,
@@ -29,6 +30,7 @@ interface NavItem {
 
 const META: Record<string, { title: string; crumb: string }> = {
   '/channels': { title: '渠道管理', crumb: '运营 / 按大渠道分组管理小渠道包' },
+  '/listings': { title: '上架包管理', crumb: '运营 / ColorStack / DeckTallyPro 等已上架应用 + AB 面网关' },
   '/domains': { title: '域名配置', crumb: '运营 / 主域名 + 备用域名 + 健康巡检' },
   '/push': { title: '推送管理', crumb: '运营 / FCM 推送活动编辑、渠道批量发送、历史查看' },
   '/pack': { title: '打包中心', crumb: '交付 / 拉取后台配置并跨平台打包' },
@@ -48,6 +50,7 @@ export function AppShell() {
 
   const items: NavItem[] = [
     { to: '/channels', label: '渠道管理', icon: GridIcon, group: '运营', badge: total || undefined },
+    { to: '/listings', label: '上架包', icon: LayersIcon, group: '运营' },
     { to: '/domains', label: '域名配置', icon: GlobeIcon, group: '运营' },
     { to: '/push', label: '推送管理', icon: MegaphoneIcon, group: '运营' },
     { to: '/pack', label: '打包中心', icon: PackageIcon, group: '交付' },

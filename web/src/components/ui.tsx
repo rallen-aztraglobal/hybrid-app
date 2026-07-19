@@ -242,16 +242,27 @@ export function healthLabel(h: DomainHealth): string {
 }
 
 // ---------- Switch ----------
-export function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+export function Switch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  /** 可选：置灰且不响应点击（原生 button disabled 属性天然阻止 onClick 触发）。 */
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
         'relative w-[42px] h-6 rounded-full flex-none transition',
         checked ? 'bg-brand' : 'bg-[#cbd5e1]',
+        disabled && 'opacity-40 cursor-not-allowed',
       )}
     >
       <span

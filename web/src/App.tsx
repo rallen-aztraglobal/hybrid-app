@@ -3,6 +3,7 @@ import { useAuthStore } from '@/store/authStore';
 import { AppShell } from '@/components/AppShell';
 import { LoginPage } from '@/pages/LoginPage';
 import { ChannelsPage } from '@/pages/ChannelsPage';
+import { ListingsPage } from '@/pages/ListingsPage';
 import { DomainsPage } from '@/pages/DomainsPage';
 import { PackPage } from '@/pages/PackPage';
 import { BuildsPage } from '@/pages/BuildsPage';
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/login" element={<Navigate to="/channels" replace />} />
       <Route element={<AppShell />}>
         <Route path="/channels" element={<ChannelsPage />} />
+        <Route path="/listings" element={<ListingsPage />} />
         <Route path="/domains" element={<DomainsPage />} />
         <Route path="/push" element={<PushPage />} />
         <Route path="/pack" element={<PackPage />} />

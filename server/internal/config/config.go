@@ -72,6 +72,21 @@ type Config struct {
 	FirebaseProjectBP string // FIREBASE_PROJECT_BP
 	FirebaseProjectGP string // FIREBASE_PROJECT_GP
 	FirebaseProjectGP2 string // FIREBASE_PROJECT_GP2：gp 溢出项目 ID（缺失则 gp2 包跳过不发，no-op）
+	// 上架包推送用独立 Firebase 项目（装 ColorStack android/ios + DeckTallyPro ios 三个 App）。
+	// 缺失则上架包推送整体 no-op（Send 返回 Skipped，不算失败），待运维配好私钥即可发。
+	FirebaseSAListings      string // FIREBASE_SA_LISTINGS：service account JSON 路径或内容
+	FirebaseProjectListings string // FIREBASE_PROJECT_LISTINGS：项目 ID
+
+	// 上架包 AB 面网关（listing gate）。
+	// GeoIPPath：DB-IP 国家库落盘路径。镜像构建期烤一份保底；GEOIP_REFRESH_ENABLE=true 时
+	// cron 每月拉新覆盖（DB-IP 免费库无需账号/凭据，可全自动更新，见 internal/geoip）。
+	GeoIPPath          string // GEOIP_PATH，默认 /app/geoip/dbip-country-lite.mmdb
+	GeoIPRefreshEnable bool   // GEOIP_REFRESH_ENABLE，默认 true：启用 cron 月度自动更新
+	// TrustedProxyCIDRs：可信反向代理网段（用于从 X-Forwarded-For 提取真实客户端 IP）。
+	// 留空 → 用内置私有网段集合（回环 + RFC1918 + IPv6 ULA），适配同机 nginx+go-api 部署。
+	TrustedProxyCIDRs []string // TRUSTED_PROXY_CIDRS，逗号分隔
+	// GateLogEnable：是否把每次网关判定落 listing_gate_log（排查用；量大时可关）。
+	GateLogEnable bool // GATE_LOG_ENABLE，默认 true
 }
 
 // Load 从环境变量装配 Config，缺省值保证本机可零配置启动。
@@ -125,6 +140,14 @@ func Load() *Config {
 		FirebaseProjectBP: env("FIREBASE_PROJECT_BP", ""),
 		FirebaseProjectGP: env("FIREBASE_PROJECT_GP", ""),
 		FirebaseProjectGP2: env("FIREBASE_PROJECT_GP2", ""),
+		FirebaseSAListings:      env("FIREBASE_SA_LISTINGS", ""),
+		FirebaseProjectListings: env("FIREBASE_PROJECT_LISTINGS", ""),
+
+		// 上架包 AB 面网关。
+		GeoIPPath:          env("GEOIP_PATH", "/app/geoip/dbip-country-lite.mmdb"),
+		GeoIPRefreshEnable: envBool("GEOIP_REFRESH_ENABLE", true),
+		TrustedProxyCIDRs:  splitCSV(env("TRUSTED_PROXY_CIDRS", "")),
+		GateLogEnable:      envBool("GATE_LOG_ENABLE", true),
 	}
 	// JWT_SECRET 未设置时自动生成随机密钥：兑现 compose「留空→自动生成」的承诺，
 	// 同时去掉可被伪造的硬编码弱默认值（评审 S2）。注意：随机密钥重启后失效 → 需重新登录；

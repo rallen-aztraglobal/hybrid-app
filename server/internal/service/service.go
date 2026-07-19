@@ -4,6 +4,7 @@ package service
 
 import (
 	"errors"
+	"net"
 	"net/http"
 
 	"github.com/hybrid-app/server/internal/config"
@@ -11,12 +12,19 @@ import (
 	"github.com/hybrid-app/server/internal/storage"
 )
 
+// CountryResolver 把 IP 解析为国家码。service 只依赖这个最小接口（geoip.Resolver 实现之），
+// 便于单测替换，也让「未注入 resolver」成为合法状态——此时一律解析不出国家 → 网关判 A 面。
+type CountryResolver interface {
+	Country(ip net.IP) (string, bool)
+}
+
 // Service 持有依赖，向 handler 暴露用例方法。
 type Service struct {
 	cfg     *config.Config
 	repo    *repo.Repo
 	storage storage.Storage
 	fcm     *FCMManager
+	geo     CountryResolver // 可空：nil 时上架包网关把所有请求判为未知国家 → A 面（fail-closed）
 }
 
 // New 创建 Service（同时初始化 FCM Manager，加载失败只警告不崩）。
@@ -29,16 +37,23 @@ func New(cfg *config.Config, r *repo.Repo, st storage.Storage) *Service {
 			"bp":  cfg.FirebaseSABP,
 			"gp":  cfg.FirebaseSAGP,
 			"gp2": cfg.FirebaseSAGP2,
+			// 上架包推送独立项目（ColorStack/DeckTallyPro）；未配则其推送整体 Skipped。
+			fcmRouteKeyListings: cfg.FirebaseSAListings,
 		},
 		map[string]string{
 			"ap":  cfg.FirebaseProjectAP,
 			"bp":  cfg.FirebaseProjectBP,
 			"gp":  cfg.FirebaseProjectGP,
 			"gp2": cfg.FirebaseProjectGP2,
+			fcmRouteKeyListings: cfg.FirebaseProjectListings,
 		},
 	)
 	return &Service{cfg: cfg, repo: r, storage: st, fcm: fcmMgr}
 }
+
+// SetCountryResolver 注入 GeoIP 解析器（在 main 里 resolver 构造完成后调用）。
+// 分开设置而非进 New：resolver 是可选依赖，且 New 的签名被测试复用，保持稳定。
+func (s *Service) SetCountryResolver(g CountryResolver) { s.geo = g }
 
 // Error 是带 HTTP 状态码的业务错误，便于 handler 直接映射。
 type Error struct {

@@ -360,6 +360,123 @@ export interface PushAudience {
   byApp: Record<string, number>;
 }
 
+// =========================================================================
+// 上架包管理（docs/admin/09-listing.md / ADR-0014）
+// =========================================================================
+
+/** 上架包所属平台。 */
+export type ListingPlatform = 'android' | 'ios';
+
+/** 上架包技术栈：决定构建方式与客户端 SDK 接入方式。 */
+export type ListingTech = 'flutter' | 'native_ios' | 'native_android';
+
+/** 上架包状态，与渠道同一套语义（enabled/disabled 可切换；archived 走硬删除或软归档）。 */
+export type ListingStatus = 'enabled' | 'disabled' | 'archived';
+
+/**
+ * AB 面网关规则（listing_gate，与上架包一对一）。
+ * countries 必填非空才算「已配置」——空清单在后端语义上等同「配置无效」，不是「不限国家」。
+ * CN/US 被服务端硬编码强制 A 面，前端也绝不提供这两个国家作为可选项（ADR-0014）。
+ */
+export interface ListingGateRule {
+  countries: string[];
+  timezones: string[];
+  ipAllowCidrs: string[];
+  ipDenyCidrs: string[];
+  updatedAt?: string;
+}
+
+/** 上架包（对应后端 model.ListingApp，含品牌/域名/网关关联）。 */
+export interface Listing {
+  /** 后端数字主键（字符串化） */
+  id: string;
+  /** 域名继承的所属品牌；上架包本身与品牌小渠道包是两条独立产线（09-listing.md）。 */
+  brandCode: BrandCode;
+  platform: ListingPlatform;
+  /** 包名；(platform, bundleId) 唯一，而非全局唯一（Flutter 双端可同包名）。 */
+  bundleId: string;
+  /** 内部代号，如 ColorStack */
+  name: string;
+  /** 商店展示名 */
+  displayName: string;
+  tech: ListingTech;
+  storeUrl: string;
+  status: ListingStatus;
+  /** 是否继承所属品牌的默认域名（ADR-0006 继承语义） */
+  useBrandDomains: boolean;
+  /** AB 面总开关；打开前后端强制校验国家白名单非空（ADR-0014）。新建恒为 false。 */
+  gateEnabled: boolean;
+  /** AppsFlyer 账号级 Dev Key，可空 = 未接 AF */
+  afDevKey: string;
+  /** AppsFlyer 应用级 App ID（iOS 形如 id123456789，Android 为包名） */
+  afAppId: string;
+  /** Adjust App Token（复用 ADR-0013 跨层契约），空 = 未启用 Adjust */
+  adjustAppToken?: string;
+  /** Adjust 事件映射 `{ 事件name: token }` */
+  adjustEvents?: Record<string, string>;
+  remark: string;
+  /** use_brand_domains=false 时生效的渠道级覆盖域名 */
+  domains?: DomainEntry[];
+  /** AB 面放行规则；未配置时为 undefined（前端据此判断「尚未配置国家白名单」） */
+  gate?: ListingGateRule;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * 新增/编辑上架包的表单载荷（前端聚合）。api 层按后端端点拆分为多次请求提交：
+ * 基本信息 → POST/PUT /listings；域名 → PUT /listings/:id/domains；
+ * 网关规则 → PUT /listings/:id/gate；总开关 → PUT /listings/:id { gateEnabled }
+ * （必须晚于网关规则保存，见 ADR-0014「打开前校验国家白名单非空」）。
+ */
+export interface ListingInput {
+  brandCode: BrandCode;
+  /** 新建必填；编辑态只读不下发（换平台等于换包）。 */
+  platform: ListingPlatform;
+  /** 新建必填；编辑态只读不下发。 */
+  bundleId: string;
+  name: string;
+  displayName: string;
+  tech: ListingTech;
+  storeUrl: string;
+  /** 新建时后端恒置 enabled，此字段仅编辑态下发。 */
+  status: ListingStatus;
+  remark: string;
+  afDevKey: string;
+  afAppId: string;
+  /** 空字符串 = 不启用/解绑（与 Channel 的约定一致）。 */
+  adjustAppToken?: string;
+  adjustEvents?: Record<string, string>;
+  useBrandDomains: boolean;
+  domains?: DomainEntry[];
+  /** 期望的 AB 面总开关目标态；api 层负责在网关规则保存之后再提交这一步。 */
+  gateEnabled: boolean;
+  gate: {
+    countries: string[];
+    timezones: string[];
+    ipAllowCidrs: string[];
+    ipDenyCidrs: string[];
+  };
+}
+
+/** 网关试算结果（POST /listings/:id/gate/test，后台自查专用，含原因）。 */
+export interface ListingGateTestResult {
+  mode: 'A' | 'B';
+  reason: string;
+  country: string;
+}
+
+/** 网关判定流水一条记录（GET /listings/:id/gate/logs）。 */
+export interface ListingGateLog {
+  id: string;
+  ip: string;
+  country: string;
+  timezone: string;
+  decision: 'A' | 'B';
+  reason: string;
+  createdAt: string;
+}
+
 /**
  * POST /api/push/campaigns/:id/send 的响应体（envelope.data）。
  * dry-run 时 campaign 保持原状态（draft），preview 带触达数；

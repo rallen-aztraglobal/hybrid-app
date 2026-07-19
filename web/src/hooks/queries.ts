@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { brandApi, buildApi, channelApi, pushApi, storeApi } from '@/lib/api';
+import { brandApi, buildApi, channelApi, listingApi, pushApi, storeApi } from '@/lib/api';
 import type {
   BrandCode,
   BuildJobRequest,
   ChannelInput,
   DomainEntry,
+  ListingInput,
   PushCampaignInput,
   PushSendResult,
   StoreInput,
@@ -28,6 +29,8 @@ export const qk = {
   pushCampaign: (id: string) => ['push', 'campaigns', id] as const,
   pushAudience: (appIds: string[]) => ['push', 'audience', ...appIds.slice().sort()] as const,
   stores: ['stores'] as const,
+  listings: ['listings'] as const,
+  listingGateLogs: (id: string) => ['listings', id, 'gateLogs'] as const,
 };
 
 export function useBrands() {
@@ -193,6 +196,56 @@ export function useSendPushCampaign() {
         void qc.invalidateQueries({ queryKey: qk.pushCampaign(result.campaign.id) });
       }
     },
+  });
+}
+
+// =========================================================================
+// 上架包管理查询 hooks（09-listing.md / ADR-0014）
+// =========================================================================
+
+/** 全量上架包（含品牌/域名/网关）；数据量小，页面自行按平台/状态/关键词过滤，不做服务端分页。 */
+export function useListings() {
+  return useQuery({ queryKey: qk.listings, queryFn: listingApi.list });
+}
+
+export function useSaveListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: ListingInput }) =>
+      id ? listingApi.update(id, input) : listingApi.create(input),
+    // 用 onSettled（而非 onSuccess）：保存是多步提交（基本信息→域名→网关规则→总开关，
+    // 见 lib/api.ts applyListingSideEffects），后面某一步失败时前面的步骤已经落库，
+    // 缓存也要刷新以反映「部分保存成功」的真实后端状态，不能让 UI 停留在旧快照上。
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: qk.listings });
+    },
+  });
+}
+
+export function useDeleteListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => listingApi.remove(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.listings });
+    },
+  });
+}
+
+/** 网关试算（后台自查工具）：每次调用都是独立一次性动作，用 mutation 而非 query。 */
+export function useTestListingGate() {
+  return useMutation({
+    mutationFn: ({ id, ip, timezone }: { id: string; ip: string; timezone: string }) =>
+      listingApi.testGate(id, ip, timezone),
+  });
+}
+
+/** 判定流水，惰性加载（enabled 由调用方控制，避免抽屉一打开就多发一个请求）。 */
+export function useListingGateLogs(id: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: id ? qk.listingGateLogs(id) : ['listings', 'none', 'gateLogs'],
+    queryFn: () => listingApi.gateLogs(id!, 100),
+    enabled: !!id && enabled,
   });
 }
 

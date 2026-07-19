@@ -36,6 +36,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	e.POST("/api/app/push/register-token", h.RegisterPushToken)
 	// google-services.json 按品牌下发（公开，非机密；CLI/构建机消费，ADR-0012 §3/§5）。
 	e.GET("/api/app/google-services", h.GetGoogleServices)
+	// 上架包 AB 面判定（公开，客户端 App 启动调用，服务端按真实 IP 判国家，不缓存）。
+	e.POST("/api/app/listing/gate", h.ListingGate)
+	// 上架包设备 push token 注册（公开，带 AB 面判定结果；上架包推送强制只发 B 面设备）。
+	e.POST("/api/app/listing/register-token", h.RegisterListingToken)
 
 	// 鉴权端点（登录/刷新公开）。
 	e.POST("/api/auth/login", h.Login)
@@ -58,6 +62,21 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.POST("/stores", h.CreateStore, operator)
 	api.PUT("/stores/:id", h.UpdateStore, operator)
 	api.DELETE("/stores/:id", h.DeleteStore, operator)
+
+	// 上架包（Flutter/原生 App，独立于小渠道 APK 产线）。
+	api.GET("/listings", h.ListListings, viewer)
+	api.POST("/listings", h.CreateListing, operator)
+	api.GET("/listings/:id", h.GetListing, viewer)
+	api.PUT("/listings/:id", h.UpdateListing, operator)
+	api.DELETE("/listings/:id", h.DeleteListing, operator)
+	api.PUT("/listings/:id/domains", h.SetListingDomains, operator)
+	api.PUT("/listings/:id/gate", h.SetListingGate, operator)
+	api.POST("/listings/:id/gate/test", h.TestListingGate, operator) // 后台试算判定
+	api.GET("/listings/:id/gate/logs", h.ListGateLogs, viewer)       // 判定流水排查
+
+	// 上架包推送（复用推送管线，但强制只发 B 面设备；独立 Firebase 项目）。
+	api.POST("/push/listing-campaigns", h.CreateListingCampaign, operator)
+	api.POST("/push/listing-campaigns/:id/send", h.SendListingCampaign, operator)
 
 	// 小渠道 CRUD。
 	api.GET("/channels", h.ListChannels, viewer)

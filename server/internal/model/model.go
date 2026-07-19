@@ -240,5 +240,10 @@ func AllModels() []any {
 		&PushCampaign{},
 		&PushCampaignTarget{},
 		&PushRecord{},
+		// 上架包 + AB 面网关
+		&ListingApp{},
+		&ListingDomain{},
+		&ListingGate{},
+		&ListingGateLog{},
 	}
 }

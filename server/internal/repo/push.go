@@ -26,14 +26,45 @@ func (r *Repo) UpsertDeviceToken(ctx context.Context, t *model.PushDeviceToken) 
 		Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "device_token"}},
 			DoUpdates: clause.AssignmentColumns([]string{
-				"application_id", "brand_code", "pal_code",
-				"platform", "model_info", "is_active", "last_seen_at",
+				"application_id", "listing_id", "brand_code", "pal_code",
+				"platform", "last_gate_mode", "last_gate_at",
+				"model_info", "is_active", "last_seen_at",
 			}),
 		}).Create(t)
 	if result.Error != nil {
 		return fmt.Errorf("upsert device token 失败: %w", result.Error)
 	}
 	return nil
+}
+
+// ActiveListingTokensBMode 取某上架包**当前判定为 B 面**的活跃设备 token。
+//
+// 这是「绝不把 B 面内容推给 A 面设备」这条安全线的落点：查询条件里 last_gate_mode='B' 是
+// 硬编码的、不接受调用方传入的过滤器——上架包推送的受众永远只能是 B 面设备，无从被参数绕过。
+// 返回按 platform 分组（android 走 FCM，ios 走 FCM 中转 APNs）。
+func (r *Repo) ActiveListingTokensBMode(ctx context.Context, listingID uint64) (map[string][]model.PushDeviceToken, error) {
+	var tokens []model.PushDeviceToken
+	if err := r.db.WithContext(ctx).
+		Where("listing_id = ? AND is_active = ? AND last_gate_mode = ?", listingID, true, model.GateModeB).
+		Find(&tokens).Error; err != nil {
+		return nil, fmt.Errorf("查询上架包 B 面设备失败: %w", err)
+	}
+	out := map[string][]model.PushDeviceToken{}
+	for _, t := range tokens {
+		out[t.Platform] = append(out[t.Platform], t)
+	}
+	return out, nil
+}
+
+// CountActiveListingTokensBMode 统计某上架包 B 面活跃设备数（audience 预估）。
+func (r *Repo) CountActiveListingTokensBMode(ctx context.Context, listingID uint64) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&model.PushDeviceToken{}).
+		Where("listing_id = ? AND is_active = ? AND last_gate_mode = ?", listingID, true, model.GateModeB).
+		Count(&n).Error; err != nil {
+		return 0, fmt.Errorf("统计上架包 B 面设备失败: %w", err)
+	}
+	return n, nil
 }
 
 // DeactivateTokens 批量将一组 device_token 置为 is_active=false（FCM 返回 UNREGISTERED/INVALID_ARGUMENT）。
@@ -257,6 +288,45 @@ func (r *Repo) GetCampaignTargetAppIDs(ctx context.Context, campaignID uint64) (
 	out := make([]string, 0, len(targets))
 	for _, t := range targets {
 		out = append(out, t.ApplicationID)
+	}
+	return out, nil
+}
+
+// ReplaceCampaignListingTargets 整体替换某活动的上架包目标（listing_id 列表）。
+// 与 ReplaceCampaignTargets（application_id）并列，供 kind=listing 的活动使用。
+func (r *Repo) ReplaceCampaignListingTargets(ctx context.Context, campaignID uint64, listingIDs []uint64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("campaign_id = ?", campaignID).Delete(&model.PushCampaignTarget{}).Error; err != nil {
+			return fmt.Errorf("清空上架包推送目标失败: %w", err)
+		}
+		if len(listingIDs) == 0 {
+			return nil
+		}
+		targets := make([]model.PushCampaignTarget, 0, len(listingIDs))
+		for _, lid := range listingIDs {
+			id := lid
+			targets = append(targets, model.PushCampaignTarget{CampaignID: campaignID, ListingID: &id})
+		}
+		if err := tx.Create(&targets).Error; err != nil {
+			return fmt.Errorf("写入上架包推送目标失败: %w", err)
+		}
+		return nil
+	})
+}
+
+// GetCampaignTargetListingIDs 读某活动的上架包目标 listing_id 列表。
+func (r *Repo) GetCampaignTargetListingIDs(ctx context.Context, campaignID uint64) ([]uint64, error) {
+	var targets []model.PushCampaignTarget
+	if err := r.db.WithContext(ctx).
+		Where("campaign_id = ? AND listing_id IS NOT NULL", campaignID).
+		Find(&targets).Error; err != nil {
+		return nil, fmt.Errorf("查询上架包推送目标失败: %w", err)
+	}
+	out := make([]uint64, 0, len(targets))
+	for _, t := range targets {
+		if t.ListingID != nil {
+			out = append(out, *t.ListingID)
+		}
 	}
 	return out, nil
 }

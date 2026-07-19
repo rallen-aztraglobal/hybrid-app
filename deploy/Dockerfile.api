@@ -32,6 +32,27 @@ RUN cd server \
 # 预建对象存储根目录；其属主随后由 COPY --chown 带进运行镜像（评审 D5）。
 RUN mkdir -p /data/objects
 
+# ---- GeoIP 库烘焙阶段 ----
+# 上架包 AB 面网关需要「IP→国家」解析（internal/geoip）。选 DB-IP country-lite（CC-BY 4.0）：
+# 免费、无需账号/凭据、URL 按月份可直接拼出，因此能在构建期直接拉取、也能被运行期 cron 月度自动更新。
+# 构建期烤一份进镜像，保证首次启动即可判定（不必等 cron）。
+# 严格失败：拉不到就让 build 失败，避免静默产出「网关判不了国家、全走 A 面」的镜像。
+FROM debian:bookworm-slim AS geoip
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    mkdir -p /geoip; \
+    ym="$(date -u +%Y-%m)"; \
+    prev="$(date -u -d 'last month' +%Y-%m)"; \
+    url="https://download.db-ip.com/free/dbip-country-lite-${ym}.mmdb.gz"; \
+    purl="https://download.db-ip.com/free/dbip-country-lite-${prev}.mmdb.gz"; \
+    # 月初本月库可能尚未发布：先试本月，404 再回退上月。
+    (curl -fsSL "$url" -o /tmp/geoip.gz || curl -fsSL "$purl" -o /tmp/geoip.gz); \
+    gunzip -c /tmp/geoip.gz > /geoip/dbip-country-lite.mmdb; \
+    test -s /geoip/dbip-country-lite.mmdb; \
+    ls -l /geoip
+
 # ---- 运行阶段 ----
 # distroless/static：仅 CA 证书 + tzdata + nonroot 用户，无 shell。
 FROM gcr.io/distroless/static-debian12:nonroot
@@ -47,6 +68,12 @@ COPY --from=build /out/server /app/server
 # 这些是构建期静态快照；不含 keystore / local.properties（护栏 #4，已被 dockerignore 拦截）。
 COPY channels/ /app/seed/channels/
 COPY app/src/channels/ /app/seed/res/
+
+# ---- GeoIP 库 ----
+# 从烘焙阶段拷入并归属 nonroot：运行期 cron 月度更新需在该目录写临时文件并原子替换（internal/geoip）。
+# 路径与 config 默认 GEOIP_PATH=/app/geoip/dbip-country-lite.mmdb 一致。
+# 注：该目录非 volume，容器重启会回到构建期的库；country 粒度变化缓慢，可接受，且下次 cron 会再更新。
+COPY --from=geoip --chown=nonroot:nonroot /geoip /app/geoip
 
 # 预创建对象存储根目录并归属 nonroot(65532)：命名卷首次挂载会继承镜像里该路径的属主，
 # 否则 distroless 的 nonroot 无法在 root 属主的空卷里 mkdir /data/objects → 首部署即崩（评审 D5）。

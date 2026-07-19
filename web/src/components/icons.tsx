@@ -176,3 +176,12 @@ export const CalendarIcon = (p: IconProps) => (
     <line x1="3" y1="10" x2="21" y2="10" />
   </svg>
 );
+
+/** 分层图标（上架包导航项：呼应「A 面 / B 面」两层结构）。 */
+export const LayersIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+    <polyline points="2 17 12 22 22 17" />
+    <polyline points="2 12 12 17 22 12" />
+  </svg>
+);

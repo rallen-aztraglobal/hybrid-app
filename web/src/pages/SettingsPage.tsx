@@ -85,6 +85,21 @@ export function SettingsPage() {
           <b>不采集、不展示、不存储</b>任何签名材料。
         </div>
       </div>
+
+      {/* 合规署名：上架包 AB 面网关（09-listing.md / ADR-0014）用 DB-IP 做 GeoIP 国家解析，
+          免费库的许可要求在此处声明署名，不显眼但必须存在。 */}
+      <div className="text-center text-[11px] text-muted pt-1 pb-2">
+        IP 地理数据来自{' '}
+        <a
+          href="https://db-ip.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline hover:text-ink-2"
+        >
+          DB-IP
+        </a>
+        （db-ip.com），CC BY 4.0
+      </div>
     </section>
   );
 }

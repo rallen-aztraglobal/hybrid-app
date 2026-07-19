@@ -11,6 +11,10 @@ import type {
   ChannelInput,
   DomainEntry,
   DomainInput,
+  Listing,
+  ListingGateLog,
+  ListingGateTestResult,
+  ListingInput,
   ListResult,
   LoginResponse,
   ProbeResult,
@@ -24,6 +28,7 @@ import type {
   StoreUpdateInput,
 } from './types';
 import { mockDb } from './mock/db';
+import { mockListingDb } from './mock/listings';
 import { BRAND_META } from './brands';
 
 /**
@@ -242,6 +247,111 @@ function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
   };
 }
 
+/** 后端 model.ListingDomain（09-listing.md）。 */
+interface ListingDomainDTO {
+  id?: number;
+  listingId?: number;
+  position: number;
+  url: string;
+  enabled: boolean;
+}
+
+/** 后端 model.ListingGate（一对一）；countries/timezones/ipAllowCidrs/ipDenyCidrs 空清单存 NULL。 */
+interface ListingGateDTO {
+  id?: number;
+  listingId?: number;
+  countries: string[] | null;
+  timezones: string[] | null;
+  ipAllowCidrs: string[] | null;
+  ipDenyCidrs: string[] | null;
+  updatedAt?: string;
+}
+
+/** 后端 model.ListingApp（含 Preload 的 Brand/Domains/Gate）。 */
+interface ListingDTO {
+  id: number;
+  brandId?: number;
+  platform: Listing['platform'];
+  bundleId: string;
+  name: string;
+  displayName: string;
+  tech: Listing['tech'];
+  storeUrl: string;
+  status: Listing['status'];
+  useBrandDomains: boolean;
+  gateEnabled: boolean;
+  afDevKey: string;
+  afAppId: string;
+  adjustAppToken?: string | null;
+  adjustEvents?: Record<string, string> | null;
+  remark: string;
+  createdAt?: string;
+  updatedAt?: string;
+  brand?: { id?: number; code?: BrandCode; name?: string } | null;
+  domains?: ListingDomainDTO[] | null;
+  gate?: ListingGateDTO | null;
+}
+
+/** 后端 model.ListingGateLog。 */
+interface ListingGateLogDTO {
+  id: number;
+  ip: string;
+  country: string;
+  timezone: string;
+  decision: 'A' | 'B';
+  reason: string;
+  createdAt: string;
+}
+
+/** 后端 ListingApp → UI Listing（数字 id 字符串化，domains/gate 展开为 UI 友好形态）。 */
+function adaptListing(l: ListingDTO): Listing {
+  return {
+    id: String(l.id),
+    // ListListings/GetListing 恒 Preload("Brand")，理论上不会缺失；缺失时回落 'ap' 仅为类型安全兜底。
+    brandCode: (l.brand?.code ?? 'ap') as BrandCode,
+    platform: l.platform,
+    bundleId: l.bundleId,
+    name: l.name,
+    displayName: l.displayName || '',
+    tech: l.tech,
+    storeUrl: l.storeUrl || '',
+    status: l.status,
+    useBrandDomains: l.useBrandDomains,
+    gateEnabled: l.gateEnabled,
+    afDevKey: l.afDevKey || '',
+    afAppId: l.afAppId || '',
+    adjustAppToken: l.adjustAppToken || undefined,
+    adjustEvents: l.adjustEvents && Object.keys(l.adjustEvents).length ? l.adjustEvents : undefined,
+    remark: l.remark || '',
+    domains: l.domains?.length
+      ? l.domains.map((d) => ({ position: d.position, url: d.url, enabled: d.enabled, health: 'unknown' as const }))
+      : undefined,
+    gate: l.gate
+      ? {
+          countries: l.gate.countries ?? [],
+          timezones: l.gate.timezones ?? [],
+          ipAllowCidrs: l.gate.ipAllowCidrs ?? [],
+          ipDenyCidrs: l.gate.ipDenyCidrs ?? [],
+          updatedAt: l.gate.updatedAt,
+        }
+      : undefined,
+    createdAt: l.createdAt,
+    updatedAt: l.updatedAt,
+  };
+}
+
+function adaptGateLog(g: ListingGateLogDTO): ListingGateLog {
+  return {
+    id: String(g.id),
+    ip: g.ip || '',
+    country: g.country || '',
+    timezone: g.timezone || '',
+    decision: g.decision,
+    reason: g.reason || '',
+    createdAt: g.createdAt,
+  };
+}
+
 // =========================================================================
 // 鉴权
 // =========================================================================
@@ -382,6 +492,146 @@ export const channelApi = {
     );
   },
 };
+
+// =========================================================================
+// 上架包（09-listing.md / ADR-0014）：ColorStack / DeckTallyPro 等独立合规应用
+// =========================================================================
+export const listingApi = {
+  /** 全量上架包（含品牌/域名/网关关联）；数量小，一次拉全量，页面自行按平台/状态/关键词过滤。 */
+  list(): Promise<Listing[]> {
+    return withFallback(
+      async () => {
+        const r = await request<ListResult<ListingDTO>>('/listings');
+        return r.items.map(adaptListing);
+      },
+      () => mockListingDb.list(),
+    );
+  },
+  get(id: string): Promise<Listing | undefined> {
+    return withFallback(
+      async () => adaptListing(await request<ListingDTO>(`/listings/${id}`)),
+      () => mockListingDb.get(id),
+    );
+  },
+  create(input: ListingInput): Promise<Listing> {
+    return withFallback(
+      async () => {
+        const created = await request<ListingDTO>('/listings', {
+          method: 'POST',
+          body: JSON.stringify({
+            brandCode: input.brandCode,
+            platform: input.platform,
+            bundleId: input.bundleId.trim(),
+            name: input.name.trim(),
+            displayName: input.displayName.trim(),
+            tech: input.tech,
+            storeUrl: input.storeUrl.trim(),
+            afDevKey: input.afDevKey.trim(),
+            afAppId: input.afAppId.trim(),
+            // *string：始终携带（空串亦然）以「声明意图」，与 updateListingReq 的解绑约定保持一致。
+            adjustAppToken: input.adjustAppToken?.trim() ?? '',
+            adjustEvents: input.adjustEvents ?? {},
+            remark: input.remark.trim(),
+          }),
+        });
+        const id = String(created.id);
+        await applyListingSideEffects(id, input);
+        return (await listingApi.get(id)) ?? adaptListing(created);
+      },
+      () => mockListingDb.create(input),
+    );
+  },
+  update(id: string, input: ListingInput): Promise<Listing> {
+    return withFallback(
+      async () => {
+        await request<ListingDTO>(`/listings/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: input.name.trim(),
+            displayName: input.displayName.trim(),
+            tech: input.tech,
+            storeUrl: input.storeUrl.trim(),
+            status: input.status,
+            afDevKey: input.afDevKey.trim(),
+            afAppId: input.afAppId.trim(),
+            adjustAppToken: input.adjustAppToken?.trim() ?? '',
+            adjustEvents: input.adjustEvents ?? {},
+            remark: input.remark.trim(),
+          }),
+        });
+        await applyListingSideEffects(id, input);
+        return (await listingApi.get(id))!;
+      },
+      () => mockListingDb.update(id, input),
+    );
+  },
+  remove(id: string): Promise<void> {
+    return withFallback(
+      async () => {
+        await request<{ deleted: boolean }>(`/listings/${id}`, { method: 'DELETE' });
+      },
+      () => mockListingDb.remove(id),
+    );
+  },
+  /** 后台试算：用指定 IP/时区跑一次判定，返回原因供保存前自查（与线上端点相反，线上不回原因）。 */
+  testGate(id: string, ip: string, timezone: string): Promise<ListingGateTestResult> {
+    return withFallback(
+      () =>
+        request<ListingGateTestResult>(`/listings/${id}/gate/test`, {
+          method: 'POST',
+          body: JSON.stringify({ ip, timezone }),
+        }),
+      () => mockListingDb.testGate(id, ip, timezone),
+    );
+  },
+  /** 判定流水（排查「为什么没进 B 面」）。 */
+  gateLogs(id: string, limit = 100): Promise<ListingGateLog[]> {
+    return withFallback(
+      async () => {
+        const r = await request<ListResult<ListingGateLogDTO>>(`/listings/${id}/gate/logs?limit=${limit}`);
+        return r.items.map(adaptGateLog);
+      },
+      () => mockListingDb.gateLogs(id, limit),
+    );
+  },
+};
+
+/**
+ * 上架包副作用：域名覆盖 → 网关规则 → AB 面总开关，顺序不可乱：
+ * 打开总开关前后端会重新查库校验「国家白名单非空」（ADR-0014），
+ * 故必须等网关规则的 PUT 先落库成功，才能提交开关这一步。
+ * 与 Channel 的「best-effort、失败仅告警」不同：这里任何一步失败都直接抛出，
+ * 不静默吞掉——AB 面网关是合规相关功能，域名/规则没保存成功却让用户以为成功了不可接受。
+ */
+async function applyListingSideEffects(id: string, input: ListingInput): Promise<void> {
+  if (input.useBrandDomains) {
+    await request(`/listings/${id}/domains`, {
+      method: 'PUT',
+      body: JSON.stringify({ inheritBrand: true, domains: [] }),
+    });
+  } else if (input.domains && input.domains.some((d) => d.url.trim())) {
+    await request(`/listings/${id}/domains`, {
+      method: 'PUT',
+      body: JSON.stringify({ inheritBrand: false, domains: domainsToInput(input.domains) }),
+    });
+  }
+
+  const countries = Array.from(new Set(input.gate.countries.map((c) => c.trim().toUpperCase()).filter(Boolean)));
+  if (countries.length > 0) {
+    await request(`/listings/${id}/gate`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        countries,
+        timezones: input.gate.timezones.map((t) => t.trim()).filter(Boolean),
+        ipAllowCidrs: input.gate.ipAllowCidrs.map((c) => c.trim()).filter(Boolean),
+        ipDenyCidrs: input.gate.ipDenyCidrs.map((c) => c.trim()).filter(Boolean),
+      }),
+    });
+  }
+
+  // 总开关：必须晚于网关规则保存（见上），否则国家白名单尚未落库会被后端 400 拒绝。
+  await request(`/listings/${id}`, { method: 'PUT', body: JSON.stringify({ gateEnabled: input.gateEnabled }) });
+}
 
 // =========================================================================
 // 应用商店（渠道包发布商店：华为 / 应用宝 / Google Play 等）

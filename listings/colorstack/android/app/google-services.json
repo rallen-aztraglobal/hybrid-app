@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1003205102003",
+    "project_id": "hybrid-listings",
+    "storage_bucket": "hybrid-listings.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1003205102003:android:575fbdf3cea4feae4123c6",
+        "android_client_info": {
+          "package_name": "com.vividnest.colorstack5821"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDG-PL6zwa0J_9bdcplmoC7FwDwcf81i0Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
