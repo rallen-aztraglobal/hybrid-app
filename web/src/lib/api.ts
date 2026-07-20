@@ -12,6 +12,9 @@ import type {
   DomainEntry,
   DomainInput,
   Listing,
+  ListingCampaign,
+  ListingCampaignInput,
+  ListingCampaignSendResult,
   ListingGateLog,
   ListingGateTestResult,
   ListingInput,
@@ -29,6 +32,7 @@ import type {
 } from './types';
 import { mockDb } from './mock/db';
 import { mockListingDb } from './mock/listings';
+import { mockListingCampaignDb } from './mock/listingCampaigns';
 import { BRAND_META } from './brands';
 
 /**
@@ -632,6 +636,103 @@ async function applyListingSideEffects(id: string, input: ListingInput): Promise
   // 总开关：必须晚于网关规则保存（见上），否则国家白名单尚未落库会被后端 400 拒绝。
   await request(`/listings/${id}`, { method: 'PUT', body: JSON.stringify({ gateEnabled: input.gateEnabled }) });
 }
+
+// =========================================================================
+// 上架包推送（09-listing.md §6）：ColorStack/DeckTallyPro 独立推送流程。
+// 与渠道推送（pushApi）共用后端发送内核，但目标是 listingIds，且发送时服务端
+// **强制只投递最近判定为 B 面的活跃设备**（无 UI 选项可绕过），故本层只透传 dryRun。
+// =========================================================================
+
+/** 后端 PushCampaignView（kind=listing）。数字 id/listingIds 需字符串化以对齐 UI 约定。 */
+interface ListingCampaignDTO {
+  id: number;
+  kind: string;
+  name: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  deeplinkPath?: string;
+  extraData?: Record<string, string>;
+  listingIds?: number[];
+  status: ListingCampaign['status'];
+  sentAt?: string;
+  totalDevices: number;
+  successCount: number;
+  failureCount: number;
+  createdBy?: string;
+  createdAt: string;
+}
+function adaptListingCampaign(c: ListingCampaignDTO): ListingCampaign {
+  return {
+    id: String(c.id),
+    kind: 'listing',
+    name: c.name,
+    title: c.title,
+    body: c.body,
+    imageUrl: c.imageUrl || undefined,
+    deeplinkPath: c.deeplinkPath || undefined,
+    extraData: c.extraData && Object.keys(c.extraData).length ? c.extraData : undefined,
+    listingIds: (c.listingIds ?? []).map(String),
+    status: c.status,
+    sentAt: c.sentAt || undefined,
+    totalDevices: c.totalDevices,
+    successCount: c.successCount,
+    failureCount: c.failureCount,
+    createdBy: c.createdBy || undefined,
+    createdAt: c.createdAt,
+  };
+}
+
+export const listingCampaignApi = {
+  /** 上架包推送活动列表（kind=listing，GET /api/push/listing-campaigns）。 */
+  listCampaigns(): Promise<ListingCampaign[]> {
+    return withFallback(
+      async () => {
+        const r = await request<ListResult<ListingCampaignDTO>>('/push/listing-campaigns');
+        return r.items.map(adaptListingCampaign);
+      },
+      () => mockListingCampaignDb.list(),
+    );
+  },
+
+  /** 创建草稿（POST /api/push/listing-campaigns）。注意：后端无编辑端点，创建后内容不可再改。 */
+  createCampaign(input: ListingCampaignInput): Promise<ListingCampaign> {
+    return withFallback(
+      async () => {
+        const created = await request<ListingCampaignDTO>('/push/listing-campaigns', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: input.name,
+            title: input.title,
+            body: input.body,
+            imageUrl: input.imageUrl ?? '',
+            deeplinkPath: input.deeplinkPath ?? '',
+            extraData: input.extraData ?? {},
+            // 后端 ListingIDs 为 []uint64；UI 侧统一以字符串持有 Listing.id，这里转数字。
+            listingIds: input.listingIds.map((id) => Number(id)),
+          }),
+        });
+        return adaptListingCampaign(created);
+      },
+      () => mockListingCampaignDb.create(input),
+    );
+  },
+
+  /**
+   * 发送（POST /api/push/listing-campaigns/:id/send）。
+   * dryRun=true → 预览各目标上架包的 B 面活跃设备数；dryRun=false → 异步真发（强制只投 B 面设备）。
+   */
+  sendCampaign(id: string, dryRun: boolean): Promise<ListingCampaignSendResult> {
+    return withFallback(
+      () =>
+        request<ListingCampaignSendResult>(`/push/listing-campaigns/${id}/send`, {
+          method: 'POST',
+          body: JSON.stringify({ dryRun }),
+        }),
+      () => mockListingCampaignDb.send(id, dryRun),
+    );
+  },
+};
 
 // =========================================================================
 // 应用商店（渠道包发布商店：华为 / 应用宝 / Google Play 等）

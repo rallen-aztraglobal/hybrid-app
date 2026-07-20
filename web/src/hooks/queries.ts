@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { brandApi, buildApi, channelApi, listingApi, pushApi, storeApi } from '@/lib/api';
+import { brandApi, buildApi, channelApi, listingApi, listingCampaignApi, pushApi, storeApi } from '@/lib/api';
 import type {
   BrandCode,
   BuildJobRequest,
   ChannelInput,
   DomainEntry,
+  ListingCampaignInput,
+  ListingCampaignSendResult,
   ListingInput,
   PushCampaignInput,
   PushSendResult,
@@ -31,6 +33,7 @@ export const qk = {
   stores: ['stores'] as const,
   listings: ['listings'] as const,
   listingGateLogs: (id: string) => ['listings', id, 'gateLogs'] as const,
+  listingCampaigns: ['push', 'listing-campaigns'] as const,
 };
 
 export function useBrands() {
@@ -257,6 +260,37 @@ export function useSchedulePushCampaign() {
     onSuccess: (campaign) => {
       void qc.invalidateQueries({ queryKey: ['push', 'campaigns'] });
       void qc.invalidateQueries({ queryKey: qk.pushCampaign(campaign.id) });
+    },
+  });
+}
+
+// =========================================================================
+// 上架包推送查询 hooks（09-listing.md §6）
+// =========================================================================
+
+/** 上架包推送活动列表（kind=listing，与渠道推送历史分开展示）。 */
+export function useListingCampaigns() {
+  return useQuery({ queryKey: qk.listingCampaigns, queryFn: listingCampaignApi.listCampaigns });
+}
+
+/** 创建上架包推送活动草稿。后端无编辑端点，创建成功后内容视为锁定。 */
+export function useCreateListingCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ListingCampaignInput) => listingCampaignApi.createCampaign(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.listingCampaigns });
+    },
+  });
+}
+
+/** 发送（dry-run 预览 / 真发）。统一用 onSettled 失效列表缓存，保证 status/统计数字与后端一致。 */
+export function useSendListingCampaign() {
+  const qc = useQueryClient();
+  return useMutation<ListingCampaignSendResult, Error, { id: string; dryRun: boolean }>({
+    mutationFn: ({ id, dryRun }) => listingCampaignApi.sendCampaign(id, dryRun),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: qk.listingCampaigns });
     },
   });
 }

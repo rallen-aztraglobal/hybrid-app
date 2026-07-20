@@ -490,3 +490,60 @@ export interface PushSendResult {
     byApp: Record<string, number>;
   };
 }
+
+// =========================================================================
+// 上架包推送（09-listing.md §6）：ColorStack / DeckTallyPro 独立推送流程。
+// 与渠道推送共用状态机字段与发送内核，差异仅两点：目标是 listingIds（而非
+// targetAppIds）；发送时服务端**强制只投递最近判定为 B 面的活跃设备**
+// （repo.ActiveListingTokensBMode 硬过滤，前端不提供、也不需要任何受众筛选项）。
+// =========================================================================
+
+/** 上架包推送活动创建载荷（POST /api/push/listing-campaigns）。 */
+export interface ListingCampaignInput {
+  name: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  deeplinkPath?: string;
+  extraData?: Record<string, string>;
+  /** 目标上架包 Listing.id 集合；提交真实后端时转 number[]（后端字段 listingIds:[]uint64）。 */
+  listingIds: string[];
+}
+
+/**
+ * 上架包推送活动（对应后端 PushCampaignView，kind 恒为 'listing'）。
+ * 注意：后端**没有编辑草稿的端点**（只有创建/列表/发送三个），Console 前端据此把
+ * 创建后的活动视为不可再改——如需调整内容只能放弃当前草稿、重新创建一条。
+ */
+export interface ListingCampaign {
+  id: string;
+  kind: 'listing';
+  name: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  deeplinkPath?: string;
+  extraData?: Record<string, string>;
+  listingIds: string[];
+  status: PushCampaignStatus;
+  sentAt?: string;
+  totalDevices: number;
+  successCount: number;
+  failureCount: number;
+  createdBy?: string;
+  createdAt: string;
+}
+
+/**
+ * POST /api/push/listing-campaigns/:id/send 响应体（09-listing.md §6）。
+ * dryRun=true：preview 为各目标上架包的 B 面活跃设备数，byApp 的 key 形如
+ * `listing:<id>`（`<id>` 即 Listing.id）；dryRun=false：真发异步进行，响应仅
+ * `{dryRun:false}`，需轮询 GET .../listing-campaigns 看 status/successCount/failureCount。
+ */
+export interface ListingCampaignSendResult {
+  dryRun: boolean;
+  preview?: {
+    totalDevices: number;
+    byApp: Record<string, number>;
+  };
+}

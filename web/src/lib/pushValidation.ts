@@ -8,7 +8,7 @@
  *  - deeplinkPath：若填，须以 / 开头，且不含协议/域名
  */
 
-import type { PushCampaignInput } from './types';
+import type { ListingCampaignInput, PushCampaignInput } from './types';
 
 export interface PushFieldError {
   field: keyof PushCampaignInput | 'targetAppIds';
@@ -62,6 +62,36 @@ export function validatePushCampaign(
 
   if (!input.targetAppIds.length) {
     errors.push({ field: 'targetAppIds', message: '请至少选择 1 个渠道包' });
+  }
+
+  if (input.deeplinkPath) {
+    const dlErr = validateDeeplinkPath(input.deeplinkPath);
+    if (dlErr) errors.push({ field: 'deeplinkPath', message: dlErr });
+  }
+
+  return errors;
+}
+
+/**
+ * 上架包推送活动校验（09-listing.md §6）—— 标题/正文/deeplink 复用同一套规则，
+ * 目标字段从 targetAppIds 换成 listingIds；受众（强制只投 B 面设备）由后端硬控，前端无需校验。
+ */
+export interface ListingCampaignFieldError {
+  field: keyof ListingCampaignInput | 'listingIds';
+  message: string;
+}
+
+export function validateListingCampaign(input: ListingCampaignInput): ListingCampaignFieldError[] {
+  const errors: ListingCampaignFieldError[] = [];
+
+  const titleErr = validatePushTitle(input.title);
+  if (titleErr) errors.push({ field: 'title', message: titleErr });
+
+  const bodyErr = validatePushBody(input.body);
+  if (bodyErr) errors.push({ field: 'body', message: bodyErr });
+
+  if (!input.listingIds.length) {
+    errors.push({ field: 'listingIds', message: '请至少选择 1 个目标上架包' });
   }
 
   if (input.deeplinkPath) {
