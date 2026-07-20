@@ -36,3 +36,10 @@ deploy/google-services/*firebase-adminsdk*
 # 全局兜底：任何位置的 adminsdk 私钥都不进 git（含 deploy/hybrid-fcm-service-accounts/）。
 *firebase-adminsdk*
 deploy/hybrid-fcm-service-accounts/
+# —— iOS 签名/推送凭据 + 部署证书（全部是机密，0 应进 git）——
+deploy/certs/
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+*.certSigningRequest
