@@ -6,10 +6,13 @@
 
 「上架包」= 正式上架 Google Play / App Store 的独立合规应用，与 3 个品牌的渠道 APK（`channels/*.csv` + flavor）是**两条独立产线**。当前两个：
 
-| 名称 | 技术栈 | 平台 | Bundle ID |
+| 名称 | 技术栈 | 上架平台 | Bundle ID |
 | --- | --- | --- | --- |
-| ColorStack | Flutter | Android + iOS | `com.vividnest.colorstack5821`（两端同包名）|
-| DeckTallyPro | 原生 iOS Swift | iOS | `com.deck.tallypro` |
+| ColorStack | Flutter | **仅 Android**（Google Play）| `com.vividnest.colorstack5821` |
+| DeckTallyPro | 原生 iOS Swift | **仅 iOS**（App Store，id `6780248860`）| `com.deck.tallypro` |
+
+> 共 **2 个上架包**（Console 里建 2 条 listing）。ColorStack 只发 Android、DeckTallyPro 只发 iOS，
+> 故不存在 ColorStack 的 iOS 上架。推送 Firebase 项目 **`hybrid-listings-51660`**（旧 `hybrid-listings` 已删）。
 
 每个上架包本体是干净小游戏（**A 面**）。开启「AB 面」后，命中放行规则的设备才访问配置的 web 链接（**B 面**，与品牌 ap/bp/gp 同一套域名）。
 

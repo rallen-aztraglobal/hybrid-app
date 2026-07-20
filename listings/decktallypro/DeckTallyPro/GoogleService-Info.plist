@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyCQdMw9dkP--89wuYoN6QR8RGreXbsbmeQ</string>
+	<string>AIzaSyAYbZYQKoVEZudkO6lpj7MujiuVwQAPnUk</string>
 	<key>GCM_SENDER_ID</key>
-	<string>1003205102003</string>
+	<string>609439342540</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.deck.tallypro</string>
 	<key>PROJECT_ID</key>
-	<string>hybrid-listings</string>
+	<string>hybrid-listings-51660</string>
 	<key>STORAGE_BUCKET</key>
-	<string>hybrid-listings.firebasestorage.app</string>
+	<string>hybrid-listings-51660.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:1003205102003:ios:629c4eaa267a7ccc4123c6</string>
+	<string>1:609439342540:ios:5726929626b88787a98769</string>
 </dict>
 </plist>
