@@ -40,6 +40,7 @@ type PushCampaignInput struct {
 // PushCampaignView 是对前端展示友好的活动响应（对应 API 契约 PushCampaign）。
 type PushCampaignView struct {
 	ID            uint64            `json:"id"`
+	Kind          string            `json:"kind"`                    // channel / listing
 	Name          string            `json:"name"`
 	Title         string            `json:"title"`
 	Body          string            `json:"body"`
@@ -47,6 +48,7 @@ type PushCampaignView struct {
 	DeeplinkPath  string            `json:"deeplinkPath"`
 	ExtraData     map[string]string `json:"extraData,omitempty"`
 	TargetAppIDs  []string          `json:"targetAppIds"`
+	ListingIDs    []uint64          `json:"listingIds,omitempty"`   // kind=listing 时的目标上架包
 	Status        string            `json:"status"`
 	ScheduledAt   *time.Time        `json:"scheduledAt,omitempty"`
 	SentAt        *time.Time        `json:"sentAt,omitempty"`
@@ -138,6 +140,7 @@ func (s *Service) CreateCampaign(ctx context.Context, in PushCampaignInput, crea
 		return nil, err
 	}
 	c := &model.PushCampaign{
+		Kind:         model.CampaignKindChannel, // 渠道推送；上架包推送走 CreateListingCampaign
 		Name:         in.Name,
 		Title:        in.Title,
 		Body:         in.Body,
@@ -159,7 +162,8 @@ func (s *Service) CreateCampaign(ctx context.Context, in PushCampaignInput, crea
 
 // ListCampaigns 查询推送活动列表。
 func (s *Service) ListCampaigns(ctx context.Context, brand string) ([]PushCampaignView, error) {
-	list, err := s.repo.ListCampaigns(ctx, repo.CampaignFilter{Brand: brand, Limit: 100})
+	// 只列渠道推送；上架包推送走 ListListingCampaigns，避免两类混在一起。
+	list, err := s.repo.ListCampaigns(ctx, repo.CampaignFilter{Brand: brand, Kind: model.CampaignKindChannel, Limit: 100})
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +171,19 @@ func (s *Service) ListCampaigns(ctx context.Context, brand string) ([]PushCampai
 	for i := range list {
 		appIDs := extractTargetAppIDs(list[i].Targets)
 		out = append(out, *s.campaignView(ctx, &list[i], appIDs))
+	}
+	return out, nil
+}
+
+// ListListingCampaigns 列出上架包推送活动（kind=listing），供 Console 历史展示。
+func (s *Service) ListListingCampaigns(ctx context.Context) ([]PushCampaignView, error) {
+	list, err := s.repo.ListCampaigns(ctx, repo.CampaignFilter{Kind: model.CampaignKindListing, Limit: 100})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PushCampaignView, 0, len(list))
+	for i := range list {
+		out = append(out, *s.campaignView(ctx, &list[i], nil))
 	}
 	return out, nil
 }
@@ -547,9 +564,14 @@ func (s *Service) doSend(ctx context.Context, campaignID uint64, c *model.PushCa
 }
 
 // campaignView 把 model.PushCampaign 转换为 PushCampaignView。
-func (s *Service) campaignView(_ context.Context, c *model.PushCampaign, appIDs []string) *PushCampaignView {
+func (s *Service) campaignView(ctx context.Context, c *model.PushCampaign, appIDs []string) *PushCampaignView {
+	kind := c.Kind
+	if kind == "" {
+		kind = model.CampaignKindChannel // 兼容 000007 之前无 kind 列的历史行
+	}
 	v := &PushCampaignView{
 		ID:           c.ID,
+		Kind:         kind,
 		Name:         c.Name,
 		Title:        c.Title,
 		Body:         c.Body,
@@ -569,6 +591,12 @@ func (s *Service) campaignView(_ context.Context, c *model.PushCampaign, appIDs 
 		var extra map[string]string
 		if err := json.Unmarshal([]byte(c.ExtraData), &extra); err == nil {
 			v.ExtraData = extra
+		}
+	}
+	// 上架包活动：补目标 listing_id 列表（容错，失败留空不阻断）。
+	if kind == model.CampaignKindListing {
+		if ids, err := s.repo.GetCampaignTargetListingIDs(ctx, c.ID); err == nil {
+			v.ListingIDs = ids
 		}
 	}
 	return v

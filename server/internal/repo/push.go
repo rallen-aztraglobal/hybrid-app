@@ -134,6 +134,7 @@ func (r *Repo) CreateCampaign(ctx context.Context, c *model.PushCampaign) error 
 // CampaignFilter 推送活动列表筛选。
 type CampaignFilter struct {
 	Brand string // 按 brand code 筛选（内联查 push_campaign_target → channel.brand_id）
+	Kind  string // 按种类筛选（channel/listing）；空 = 不限
 	Limit int
 }
 
@@ -145,6 +146,9 @@ func (r *Repo) ListCampaigns(ctx context.Context, f CampaignFilter) ([]model.Pus
 	q := r.db.WithContext(ctx).Model(&model.PushCampaign{}).
 		Preload("Targets").
 		Order("id desc").Limit(f.Limit)
+	if f.Kind != "" {
+		q = q.Where("kind = ?", f.Kind)
+	}
 	if f.Brand != "" {
 		// 过滤：该活动至少有一个 target 属于指定 brand。
 		q = q.Where(`id IN (

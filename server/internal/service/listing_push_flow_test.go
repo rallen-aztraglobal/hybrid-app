@@ -66,6 +66,51 @@ func TestListingCampaignAudienceOnlyBMode(t *testing.T) {
 	}
 }
 
+// 渠道活动与上架包活动在各自列表里互不串台。
+func TestListingAndChannelCampaignListsSeparate(t *testing.T) {
+	svc, ctx := newListingTestService(t, nil)
+	l := mustCreateListing(t, svc, ctx)
+
+	// 一条上架包活动 + 一条渠道活动。
+	lc, err := svc.CreateListingCampaign(ctx, CreateListingCampaignInput{
+		Name: "上架包", Title: "t", Body: "b", ListingIDs: []uint64{l.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lc.Kind != model.CampaignKindListing {
+		t.Errorf("上架包活动 kind 应为 listing，实际 %s", lc.Kind)
+	}
+	if len(lc.ListingIDs) != 1 || lc.ListingIDs[0] != l.ID {
+		t.Errorf("上架包活动应回带 listingIds=[%d]，实际 %v", l.ID, lc.ListingIDs)
+	}
+	if _, err := svc.CreateCampaign(ctx, PushCampaignInput{
+		Name: "渠道", Title: "t", Body: "b", TargetAppIDs: []string{"com.x.y"},
+	}, "tester"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 上架包列表只含上架包活动。
+	listing, err := svc.ListListingCampaigns(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listing) != 1 || listing[0].Kind != model.CampaignKindListing {
+		t.Errorf("上架包列表应只含 1 条 listing 活动，实际 %d 条", len(listing))
+	}
+
+	// 渠道列表只含渠道活动（不含上架包）。
+	channel, err := svc.ListCampaigns(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range channel {
+		if c.Kind == model.CampaignKindListing {
+			t.Error("渠道推送列表不应出现上架包活动")
+		}
+	}
+}
+
 // 校验：无目标、目标不存在、把渠道活动误发给上架包端点，都应被拒。
 func TestListingCampaignValidation(t *testing.T) {
 	svc, ctx := newListingTestService(t, nil)

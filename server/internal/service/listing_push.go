@@ -33,7 +33,7 @@ type CreateListingCampaignInput struct {
 }
 
 // CreateListingCampaign 创建一条 kind=listing 的推送活动（草稿）。
-func (s *Service) CreateListingCampaign(ctx context.Context, in CreateListingCampaignInput) (*model.PushCampaign, error) {
+func (s *Service) CreateListingCampaign(ctx context.Context, in CreateListingCampaignInput) (*PushCampaignView, error) {
 	if err := validateListingCampaign(in); err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (s *Service) CreateListingCampaign(ctx context.Context, in CreateListingCam
 	if err := s.repo.ReplaceCampaignListingTargets(ctx, c.ID, in.ListingIDs); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return s.campaignView(ctx, c, nil), nil
 }
 
 // ListingCampaignAudience 预估某活动的 B 面可推送设备数（按 listing 分组）。

@@ -75,6 +75,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.GET("/listings/:id/gate/logs", h.ListGateLogs, viewer)       // 判定流水排查
 
 	// 上架包推送（复用推送管线，但强制只发 B 面设备；独立 Firebase 项目）。
+	api.GET("/push/listing-campaigns", h.ListListingCampaigns, viewer)
 	api.POST("/push/listing-campaigns", h.CreateListingCampaign, operator)
 	api.POST("/push/listing-campaigns/:id/send", h.SendListingCampaign, operator)
 

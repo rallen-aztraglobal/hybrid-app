@@ -387,6 +387,21 @@ func (h *Handler) CreateListingCampaign(c echo.Context) error {
 	return httpx.Created(c, campaign)
 }
 
+// ListListingCampaigns godoc
+// @Summary  上架包推送活动列表（kind=listing）
+// @Tags     listings
+// @Produce  json
+// @Success  200  {object}  httpx.Envelope
+// @Security BearerAuth
+// @Router   /api/push/listing-campaigns [get]
+func (h *Handler) ListListingCampaigns(c echo.Context) error {
+	list, err := h.svc.ListListingCampaigns(c.Request().Context())
+	if err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, map[string]any{"items": list, "total": len(list)})
+}
+
 // SendListingCampaign godoc
 // @Summary  发送上架包推送活动（dryRun 预览受众；真发只投 B 面设备）
 // @Tags     listings
