@@ -1,4 +1,11 @@
 import Foundation
+// 归因 SDK 通过 SPM 引入；用 canImport 守卫 import，未加包时本文件仍能编译（全部 no-op）。
+#if canImport(AppsFlyerLib)
+import AppsFlyerLib
+#endif
+#if canImport(AdjustSdk) // Adjust iOS SDK v5 的模块名为 AdjustSdk（v4 曾叫 Adjust）
+import AdjustSdk
+#endif
 
 /// 归因上报（AppsFlyer + Adjust）。
 ///
@@ -47,11 +54,12 @@ final class TrackingService {
 
     private func startAdjust() {
         guard GateConfig.isConfigured(GateConfig.adjustAppToken) else { return }
-        #if canImport(Adjust)
+        #if canImport(AdjustSdk)
+        // Adjust iOS SDK v5：ADJConfig + Adjust.initSdk（v4 的 appDidLaunch 已移除）。
         let env = GateConfig.adjustEnvironment == "sandbox"
             ? ADJEnvironmentSandbox : ADJEnvironmentProduction
         if let config = ADJConfig(appToken: GateConfig.adjustAppToken, environment: env) {
-            Adjust.appDidLaunch(config)
+            Adjust.initSdk(config)
         }
         #endif
     }
@@ -59,7 +67,7 @@ final class TrackingService {
     private func trackAdjustContentView() {
         guard GateConfig.isConfigured(GateConfig.adjustAppToken),
               !GateConfig.adjustContentViewToken.isEmpty else { return }
-        #if canImport(Adjust)
+        #if canImport(AdjustSdk)
         if let event = ADJEvent(eventToken: GateConfig.adjustContentViewToken) {
             Adjust.trackEvent(event)
         }
