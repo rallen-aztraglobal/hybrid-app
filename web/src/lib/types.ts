@@ -367,9 +367,6 @@ export interface PushAudience {
 /** 上架包所属平台。 */
 export type ListingPlatform = 'android' | 'ios';
 
-/** 上架包技术栈：决定构建方式与客户端 SDK 接入方式。 */
-export type ListingTech = 'flutter' | 'native_ios' | 'native_android';
-
 /** 上架包状态，与渠道同一套语义（enabled/disabled 可切换；archived 走硬删除或软归档）。 */
 export type ListingStatus = 'enabled' | 'disabled' | 'archived';
 
@@ -380,7 +377,8 @@ export type ListingStatus = 'enabled' | 'disabled' | 'archived';
  */
 export interface ListingGateRule {
   countries: string[];
-  timezones: string[];
+  /** 时区黑名单：命中即强制 A 面（选填，与 IP 黑名单同类）。 */
+  timezoneDeny: string[];
   ipAllowCidrs: string[];
   ipDenyCidrs: string[];
   updatedAt?: string;
@@ -399,11 +397,12 @@ export interface Listing {
   name: string;
   /** 商店展示名 */
   displayName: string;
-  tech: ListingTech;
   storeUrl: string;
   status: ListingStatus;
   /** 是否继承所属品牌的默认域名（ADR-0006 继承语义） */
   useBrandDomains: boolean;
+  /** 参考渠道包的 PAL_CODE（运营手填，纯数字串），拼 B 面 /?palcode=。 */
+  palCode?: string;
   /** AB 面总开关；打开前后端强制校验国家白名单非空（ADR-0014）。新建恒为 false。 */
   gateEnabled: boolean;
   /** AppsFlyer 账号级 Dev Key，可空 = 未接 AF */
@@ -437,8 +436,9 @@ export interface ListingInput {
   bundleId: string;
   name: string;
   displayName: string;
-  tech: ListingTech;
   storeUrl: string;
+  /** 参考渠道包的 PAL_CODE（运营手填，纯数字串），必填；拼 B 面 /?palcode=。 */
+  palCode: string;
   /** 新建时后端恒置 enabled，此字段仅编辑态下发。 */
   status: ListingStatus;
   remark: string;
@@ -453,7 +453,7 @@ export interface ListingInput {
   gateEnabled: boolean;
   gate: {
     countries: string[];
-    timezones: string[];
+    timezoneDeny: string[];
     ipAllowCidrs: string[];
     ipDenyCidrs: string[];
   };

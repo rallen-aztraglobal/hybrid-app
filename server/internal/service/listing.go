@@ -36,7 +36,7 @@ type GateRequest struct {
 // 绝不返回判定原因、命中的规则、国家码等任何可反推规则的信息——审核方也会调这个接口。
 type GateResponse struct {
 	Mode string `json:"mode"`          // "A" | "B"
-	URL  string `json:"url,omitempty"` // 仅 mode=B 时有值：B 面主域名（含 palcode 等参数留客户端拼）
+	URL  string `json:"url,omitempty"` // 仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode=，客户端原样打开）
 }
 
 // EvaluateListingGate 是公开网关端点的核心编排。
@@ -93,7 +93,7 @@ func (s *Service) EvaluateListingGate(ctx context.Context, req GateRequest) (*Ga
 		return &GateResponse{Mode: model.GateModeA}, nil
 	}
 
-	return &GateResponse{Mode: model.GateModeB, URL: domains[0]}, nil
+	return &GateResponse{Mode: model.GateModeB, URL: buildListingBSideURL(domains[0], listing.PalCode)}, nil
 }
 
 // logGate 落一条判定流水（容错：失败只吞掉，绝不影响判定返回）。
@@ -169,8 +169,8 @@ type CreateListingInput struct {
 	BundleID       string
 	Name           string
 	DisplayName    string
-	Tech           string
 	StoreURL       string
+	PalCode        string // 参考渠道包的 PAL_CODE，运营手填，必填、纯数字串（拼 B 面 /?palcode=）
 	AfDevKey       string
 	AfAppID        string
 	AdjustAppToken *string
@@ -186,10 +186,6 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*mo
 	if err != nil {
 		return nil, err
 	}
-	tech, err := normalizeTech(in.Tech, platform)
-	if err != nil {
-		return nil, err
-	}
 	bundle := strings.TrimSpace(in.BundleID)
 	if bundle == "" {
 		return nil, errBadRequest("包名不能为空")
@@ -201,6 +197,12 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*mo
 	brand, err := s.repo.GetBrandByCode(ctx, in.BrandCode)
 	if err != nil {
 		return nil, errBadRequest(fmt.Sprintf("品牌 %q 不存在", in.BrandCode))
+	}
+
+	// 参考渠道包 PAL_CODE 必填、纯数字串（与渠道包表单同一口径）。
+	palCode, err := normalizeListingPalCode(in.PalCode)
+	if err != nil {
+		return nil, err
 	}
 
 	n, err := s.repo.CountListingsByPlatformBundle(ctx, platform, bundle, 0)
@@ -222,8 +224,8 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*mo
 		BundleID:        bundle,
 		Name:            strings.TrimSpace(in.Name),
 		DisplayName:     strings.TrimSpace(in.DisplayName),
-		Tech:            tech,
 		StoreURL:        strings.TrimSpace(in.StoreURL),
+		PalCode:         palCode,
 		Status:          model.ListingEnabled,
 		UseBrandDomains: true,  // 默认继承品牌域名
 		GateEnabled:     false, // 默认只有 A 面
@@ -242,11 +244,12 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*mo
 
 // UpdateListingInput 是更新上架包的入参。platform/bundleId 不可改（改了等于换个包），故不在此。
 type UpdateListingInput struct {
+	BrandCode      *string // 非 nil = 改所属品牌（决定 B 面继承的域名清单）；platform/bundleId 仍不可改
 	Name           *string
 	DisplayName    *string
-	Tech           *string
 	StoreURL       *string
 	Status         *string
+	PalCode        *string // 非 nil = 改参考渠道包 PAL_CODE；仍强制非空纯数字
 	GateEnabled    *bool
 	AfDevKey       *string
 	AfAppID        *string
@@ -265,6 +268,13 @@ func (s *Service) UpdateListing(ctx context.Context, id uint64, in UpdateListing
 	}
 
 	fields := map[string]any{}
+	if in.BrandCode != nil {
+		brand, err := s.repo.GetBrandByCode(ctx, *in.BrandCode)
+		if err != nil {
+			return nil, errBadRequest(fmt.Sprintf("品牌 %q 不存在", *in.BrandCode))
+		}
+		fields["brand_id"] = brand.ID
+	}
 	if in.Name != nil {
 		if strings.TrimSpace(*in.Name) == "" {
 			return nil, errBadRequest("名称不能为空")
@@ -274,15 +284,15 @@ func (s *Service) UpdateListing(ctx context.Context, id uint64, in UpdateListing
 	if in.DisplayName != nil {
 		fields["display_name"] = strings.TrimSpace(*in.DisplayName)
 	}
-	if in.Tech != nil {
-		tech, err := normalizeTech(*in.Tech, l.Platform)
+	if in.StoreURL != nil {
+		fields["store_url"] = strings.TrimSpace(*in.StoreURL)
+	}
+	if in.PalCode != nil {
+		palCode, err := normalizeListingPalCode(*in.PalCode)
 		if err != nil {
 			return nil, err
 		}
-		fields["tech"] = tech
-	}
-	if in.StoreURL != nil {
-		fields["store_url"] = strings.TrimSpace(*in.StoreURL)
+		fields["pal_code"] = palCode
 	}
 	if in.Status != nil {
 		st, err := normalizeStatus(*in.Status)
@@ -334,6 +344,21 @@ func (s *Service) UpdateListing(ctx context.Context, id uint64, in UpdateListing
 		return nil, AsError(err)
 	}
 	return s.GetListing(ctx, id)
+}
+
+// normalizeListingPalCode 校验并规范化参考渠道包 PAL_CODE：去空白后必须非空且为纯数字串
+// （与渠道包 PAL_CODE 同一口径，见 web validation）。返回规范化后的值。
+func normalizeListingPalCode(raw string) (string, error) {
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return "", errBadRequest("参考渠道包 PAL_CODE 必填")
+	}
+	for _, r := range p {
+		if r < '0' || r > '9' {
+			return "", errBadRequest("参考渠道包 PAL_CODE 应为纯数字串")
+		}
+	}
+	return p, nil
 }
 
 // assertGateReadyToEnable 校验一个上架包是否具备打开 AB 面的前提。
@@ -397,7 +422,7 @@ func (s *Service) SetListingDomains(ctx context.Context, id uint64, inheritBrand
 // SetGateInput 是保存网关规则的入参。
 type SetGateInput struct {
 	Countries    []string
-	Timezones    []string
+	TimezoneDeny []string // 时区黑名单：命中即强制 A（选填）
 	IPAllowCIDRs []string
 	IPDenyCIDRs  []string
 }
@@ -407,7 +432,7 @@ type SetGateInput struct {
 //     这里直接拒绝，避免运营误以为配了就生效；
 //   - 国家码规范化为大写、去重；
 //   - CIDR 语法校验（允许单个 IP 简写）；
-//   - 时区做基本非空校验（不强制解析 IANA 库，容忍新时区名）。
+//   - 时区黑名单做基本非空清洗（不强制解析 IANA 库，容忍新时区名）。
 func (s *Service) SetListingGate(ctx context.Context, id uint64, in SetGateInput) (*model.ListingGate, error) {
 	l, err := s.repo.GetListing(ctx, id)
 	if err != nil {
@@ -428,12 +453,10 @@ func (s *Service) SetListingGate(ctx context.Context, id uint64, in SetGateInput
 	if err := validateCIDRs(in.IPDenyCIDRs, "IP 黑名单"); err != nil {
 		return nil, err
 	}
-	timezones := trimNonEmpty(in.Timezones)
-
 	gate := &model.ListingGate{
 		ListingID:    l.ID,
 		Countries:    model.StringList(countries),
-		Timezones:    model.StringList(timezones),
+		TimezoneDeny: model.StringList(trimNonEmpty(in.TimezoneDeny)),
 		IPAllowCIDRs: model.StringList(trimNonEmpty(in.IPAllowCIDRs)),
 		IPDenyCIDRs:  model.StringList(trimNonEmpty(in.IPDenyCIDRs)),
 	}
@@ -542,6 +565,7 @@ func (s *Service) RegisterListingDeviceToken(ctx context.Context, in RegisterLis
 		ListingID:     &lid,
 		BrandCode:     brandCode,
 		DeviceToken:   strings.TrimSpace(in.DeviceToken),
+		PalCode:       listing.PalCode, // 继承自参考渠道包，随 B 面 URL 传递（repo 已按 RefChannel 填充）
 		Platform:      platform,
 		LastGateMode:  gateMode,
 		LastGateAt:    &now,

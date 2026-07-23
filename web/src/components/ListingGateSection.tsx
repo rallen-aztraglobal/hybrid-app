@@ -3,8 +3,8 @@
  *  1) 总开关：countries 草稿为空时禁用（前端先拦一道，后端仍是最终闸）；
  *  2) 国家白名单（必填）：常用国家 chips 多选 + 手输补充，绝不提供 CN/US 选项，
  *     手输命中会被就地拒绝并提示；
- *  3) 时区白名单（选填）：同样 chips 多选 + 手输；
- *  4) IP 白/黑名单（选填）：多行文本域，每行一个 CIDR / IP；
+ *  3) IP 白/黑名单（选填）：多行文本域，每行一个 CIDR / IP；
+ *  4) 时区黑名单（选填）：chips 多选 + 手输，命中即强制 A（放在 IP 名单之后）；
  *  5) 试算工具 + 判定流水：均依赖已存在的 listingId（后端端点要求 :id），
  *     新建未保存时以提示替代。
  *
@@ -22,7 +22,7 @@ import { InfoIcon } from './icons';
 
 export interface ListingGateDraft {
   countries: string[];
-  timezones: string[];
+  timezoneDeny: string[];
   ipAllowText: string;
   ipDenyText: string;
 }
@@ -78,13 +78,6 @@ export function ListingGateSection({
         <CountryPicker value={draft.countries} onChange={(countries) => patch({ countries })} />
       </div>
 
-      <div>
-        <div className="mb-[6px] text-[12.5px] font-semibold text-ink-2">
-          时区白名单 <span className="font-normal text-muted text-[11.5px]">· 选填；客户端上报可伪造，仅作叠加收紧，不单独作准</span>
-        </div>
-        <TimezonePicker value={draft.timezones} onChange={(timezones) => patch({ timezones })} />
-      </div>
-
       <div className="grid grid-cols-2 gap-3">
         <div>
           <div className="mb-[6px] text-[12.5px] font-semibold text-ink-2">
@@ -110,11 +103,18 @@ export function ListingGateSection({
         </div>
       </div>
 
+      <div>
+        <div className="mb-[6px] text-[12.5px] font-semibold text-ink-2">
+          时区黑名单 <span className="font-normal text-muted text-[11.5px]">· 选填；命中即强制 A 面（客户端上报，与 IP 黑名单同类）</span>
+        </div>
+        <TimezonePicker value={draft.timezoneDeny} onChange={(timezoneDeny) => patch({ timezoneDeny })} />
+      </div>
+
       <Note>
         <InfoIcon className="w-[17px] h-[17px] flex-none mt-0.5" style={{ color: 'var(--brand)' }} />
         <div>
-          判定顺序（任一步判 A 即短路，条件一律 AND）：总开关 → CN/US 强制 A → IP 黑名单 → 国家未知则 A →
-          国家白名单 → 时区白名单(选填) → IP 白名单(选填) → 全部通过才是 B 面。修改需点击抽屉底部「保存」才会生效；
+          判定顺序（任一步判 A 即短路，条件一律 AND）：总开关 → CN/US 强制 A → IP 黑名单 → 时区黑名单(选填) →
+          国家未知则 A → 国家白名单 → IP 白名单(选填) → 全部通过才是 B 面。修改需点击抽屉底部「保存」才会生效；
           下方「试算」与「判定流水」反映的是<b>已保存</b>的规则，与尚未保存的草稿可能不一致。后端不接受「清空」国家白名单
           （必须始终非空），若已保存过规则、这里又清空到 0 个再保存，本次提交会<b>跳过网关规则这一项、保留上次保存的值</b>，
           不会被清空——如需彻底变更，请直接替换成新的国家清单。
@@ -221,7 +221,7 @@ function CountryPicker({ value, onChange }: { value: string[]; onChange: (next: 
   );
 }
 
-// ---------- 时区白名单选择器 ----------
+// ---------- 时区黑名单选择器 ----------
 function TimezonePicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
   const [input, setInput] = useState('');
   const selected = new Set(value);
@@ -283,7 +283,7 @@ function TimezonePicker({ value, onChange }: { value: string[]; onChange: (next:
         />
         <Button onClick={addCustom}>添加</Button>
       </div>
-      <div className="mt-2 text-[11.5px] text-muted">选填；为空表示不限制时区，仅按国家判定。</div>
+      <div className="mt-2 text-[11.5px] text-muted">选填；命中黑名单的时区强制走 A 面，为空表示不按时区拦截。</div>
     </div>
   );
 }

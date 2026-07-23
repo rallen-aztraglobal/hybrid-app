@@ -65,7 +65,7 @@ func TestListingPushFlutterDualPlatformIsolation(t *testing.T) {
 	androidL := mustCreateListing(t, svc, ctx)
 	iosL, err := svc.CreateListing(ctx, CreateListingInput{
 		BrandCode: "ap", Platform: "ios", BundleID: "com.vividnest.colorstack5821",
-		Name: "ColorStack iOS", Tech: "flutter",
+		Name: "ColorStack iOS", PalCode: "1053259",
 	})
 	if err != nil {
 		t.Fatal(err)

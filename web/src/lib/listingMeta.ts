@@ -1,4 +1,4 @@
-import type { ListingPlatform, ListingTech } from './types';
+import type { ListingPlatform } from './types';
 
 /**
  * 上架包模块的静态元数据与常量（09-listing.md / ADR-0014）。
@@ -17,27 +17,6 @@ export const PLATFORM_META: Record<ListingPlatform, PlatformMeta> = {
 };
 
 export const PLATFORM_ORDER: ListingPlatform[] = ['android', 'ios'];
-
-export const TECH_LABEL: Record<ListingTech, string> = {
-  flutter: 'Flutter',
-  native_ios: '原生 iOS',
-  native_android: '原生 Android',
-};
-
-/**
- * 平台可选技术栈（对齐后端 normalizeTech 约束）：
- * native_ios 仅 ios 可选，native_android 仅 android 可选，flutter 两端皆可。
- */
-export const TECH_OPTIONS_BY_PLATFORM: Record<ListingPlatform, { value: ListingTech; label: string }[]> = {
-  android: [
-    { value: 'flutter', label: TECH_LABEL.flutter },
-    { value: 'native_android', label: TECH_LABEL.native_android },
-  ],
-  ios: [
-    { value: 'flutter', label: TECH_LABEL.flutter },
-    { value: 'native_ios', label: TECH_LABEL.native_ios },
-  ],
-};
 
 /** 硬编码强制走 A 面的国家（ADR-0014）：绝不出现在可选项里，手输也会被前端拦截+后端 400。 */
 export const FORCED_A_COUNTRIES = ['CN', 'US'];

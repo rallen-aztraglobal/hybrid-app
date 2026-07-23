@@ -66,6 +66,14 @@ func EvaluateGate(in GateInput) GateDecision {
 		return decideA("命中 IP 黑名单 %s", cidr)
 	}
 
+	// 4b. 时区黑名单（选填）：客户端上报时区命中即强制 A 面（与 IP 黑名单同类）。
+	//     空上报或空清单都不拦——黑名单只在「明确命中」时收紧。
+	if len(in.Gate.TimezoneDeny) > 0 {
+		if tz := strings.TrimSpace(in.Timezone); tz != "" && containsFold(in.Gate.TimezoneDeny, tz) {
+			return decideA("命中时区黑名单 %s", tz)
+		}
+	}
+
 	// 5. 国家未知（GeoIP 未加载、私有地址、库里查不到）→ fail-closed。
 	if country == "" {
 		return decideA("无法解析出国家")
@@ -80,18 +88,7 @@ func EvaluateGate(in GateInput) GateDecision {
 		return decideA("国家 %s 不在白名单内", country)
 	}
 
-	// 7. 时区白名单（选填）。非空才参与判定。
-	if len(in.Gate.Timezones) > 0 {
-		tz := strings.TrimSpace(in.Timezone)
-		if tz == "" {
-			return decideA("已配置时区白名单但客户端未上报时区")
-		}
-		if !containsFold(in.Gate.Timezones, tz) {
-			return decideA("时区 %s 不在白名单内", tz)
-		}
-	}
-
-	// 8. IP 白名单（选填）。非空时在国家白名单之上再收紧一层。
+	// 7. IP 白名单（选填）。非空时在国家白名单之上再收紧一层。
 	if len(in.Gate.IPAllowCIDRs) > 0 {
 		if in.IP == nil {
 			return decideA("已配置 IP 白名单但无法取得客户端 IP")

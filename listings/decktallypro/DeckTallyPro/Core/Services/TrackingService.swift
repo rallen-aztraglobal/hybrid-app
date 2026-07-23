@@ -37,8 +37,9 @@ final class TrackingService {
         guard GateConfig.isConfigured(GateConfig.appsFlyerDevKey),
               GateConfig.isConfigured(GateConfig.appsFlyerAppleAppID) else { return }
         #if canImport(AppsFlyerLib)
-        AppsFlyerLib.shared().appsFlyerDevKey = GateConfig.appsFlyerDevKey
-        AppsFlyerLib.shared().appleAppID = GateConfig.appsFlyerAppleAppID
+        // AppsFlyer v7：devKey / appleAppID 改为只读，凭据改用 initialize(devKey:appId:) 设置
+        // （见 AppsFlyerLib.h 的 NS_SWIFT_NAME(initialize(devKey:appId:))）。start()/logEvent 不变。
+        AppsFlyerLib.shared().initialize(devKey: GateConfig.appsFlyerDevKey, appId: GateConfig.appsFlyerAppleAppID)
         AppsFlyerLib.shared().start()
         #endif
     }

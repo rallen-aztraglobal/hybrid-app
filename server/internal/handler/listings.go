@@ -62,8 +62,8 @@ type createListingReq struct {
 	BundleID       string             `json:"bundleId"`
 	Name           string             `json:"name"`
 	DisplayName    string             `json:"displayName"`
-	Tech           string             `json:"tech"`
 	StoreURL       string             `json:"storeUrl"`
+	PalCode        string             `json:"palCode"`
 	AfDevKey       string             `json:"afDevKey"`
 	AfAppID        string             `json:"afAppId"`
 	AdjustAppToken *string            `json:"adjustAppToken"`
@@ -91,8 +91,8 @@ func (h *Handler) CreateListing(c echo.Context) error {
 		BundleID:       req.BundleID,
 		Name:           req.Name,
 		DisplayName:    req.DisplayName,
-		Tech:           req.Tech,
 		StoreURL:       req.StoreURL,
+		PalCode:        req.PalCode,
 		AfDevKey:       req.AfDevKey,
 		AfAppID:        req.AfAppID,
 		AdjustAppToken: req.AdjustAppToken,
@@ -108,11 +108,12 @@ func (h *Handler) CreateListing(c echo.Context) error {
 
 // updateListingReq 是更新请求体。全部字段可选（指针 nil = 不改）。
 type updateListingReq struct {
+	BrandCode      *string             `json:"brandCode"`
 	Name           *string             `json:"name"`
 	DisplayName    *string             `json:"displayName"`
-	Tech           *string             `json:"tech"`
 	StoreURL       *string             `json:"storeUrl"`
 	Status         *string             `json:"status"`
+	PalCode        *string             `json:"palCode"`
 	GateEnabled    *bool               `json:"gateEnabled"`
 	AfDevKey       *string             `json:"afDevKey"`
 	AfAppID        *string             `json:"afAppId"`
@@ -141,11 +142,12 @@ func (h *Handler) UpdateListing(c echo.Context) error {
 		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
 	}
 	l, err := h.svc.UpdateListing(c.Request().Context(), id, service.UpdateListingInput{
+		BrandCode:      req.BrandCode,
 		Name:           req.Name,
 		DisplayName:    req.DisplayName,
-		Tech:           req.Tech,
 		StoreURL:       req.StoreURL,
 		Status:         req.Status,
+		PalCode:        req.PalCode,
 		GateEnabled:    req.GateEnabled,
 		AfDevKey:       req.AfDevKey,
 		AfAppID:        req.AfAppID,
@@ -215,7 +217,7 @@ func (h *Handler) SetListingDomains(c echo.Context) error {
 
 type setListingGateReq struct {
 	Countries    []string `json:"countries"`
-	Timezones    []string `json:"timezones"`
+	TimezoneDeny []string `json:"timezoneDeny"`
 	IPAllowCIDRs []string `json:"ipAllowCidrs"`
 	IPDenyCIDRs  []string `json:"ipDenyCidrs"`
 }
@@ -241,7 +243,7 @@ func (h *Handler) SetListingGate(c echo.Context) error {
 	}
 	gate, err := h.svc.SetListingGate(c.Request().Context(), id, service.SetGateInput{
 		Countries:    req.Countries,
-		Timezones:    req.Timezones,
+		TimezoneDeny: req.TimezoneDeny,
 		IPAllowCIDRs: req.IPAllowCIDRs,
 		IPDenyCIDRs:  req.IPDenyCIDRs,
 	})

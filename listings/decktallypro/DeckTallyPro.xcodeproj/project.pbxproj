@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9FD7CD62300FE3C8005A95A8 /* AppsFlyerLib in Frameworks */ = {isa = PBXBuildFile; productRef = 9FD7CD61300FE3C8005A95A8 /* AppsFlyerLib */; };
+		9FD7CD66300FE4A5005A95A8 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 9FD7CD65300FE4A5005A95A8 /* FirebaseMessaging */; };
+		AD100000000000000000A003 /* AdjustSdk in Frameworks */ = {isa = PBXBuildFile; productRef = AD100000000000000000A002 /* AdjustSdk */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		5CC9B70E2F230D4A006A0746 /* DeckTallyPro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeckTallyPro.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +42,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9FD7CD66300FE4A5005A95A8 /* FirebaseMessaging in Frameworks */,
+				AD100000000000000000A003 /* AdjustSdk in Frameworks */,
+				9FD7CD62300FE3C8005A95A8 /* AppsFlyerLib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				5CC9B7102F230D4A006A0746 /* DeckTallyPro */,
+				9FD7CD64300FE4A5005A95A8 /* Frameworks */,
 				5CC9B70F2F230D4A006A0746 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +66,13 @@
 				5CC9B70E2F230D4A006A0746 /* DeckTallyPro.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		9FD7CD64300FE4A5005A95A8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -78,6 +95,9 @@
 			);
 			name = DeckTallyPro;
 			packageProductDependencies = (
+				AD100000000000000000A002 /* AdjustSdk */,
+				9FD7CD61300FE3C8005A95A8 /* AppsFlyerLib */,
+				9FD7CD65300FE4A5005A95A8 /* FirebaseMessaging */,
 			);
 			productName = DeckTallyPro;
 			productReference = 5CC9B70E2F230D4A006A0746 /* DeckTallyPro.app */;
@@ -108,6 +128,11 @@
 			);
 			mainGroup = 5CC9B7052F230D4A006A0746;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AD100000000000000000A001 /* XCRemoteSwiftPackageReference "ios_sdk" */,
+				9FD7CD60300FE3C8005A95A8 /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */,
+				9FD7CD63300FE484005A95A8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5CC9B70F2F230D4A006A0746 /* Products */;
 			projectDirPath = "";
@@ -144,11 +169,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = DeckTallyPro/DeckTallyPro.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = MPGRWA9ZAF;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 5UAWC9SA4T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DeckTallyPro/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Deck Tally Pro";
@@ -165,7 +191,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.deck.tallypro;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = d;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = AppStore;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -179,11 +205,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = DeckTallyPro/DeckTallyPro.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = MPGRWA9ZAF;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 5UAWC9SA4T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DeckTallyPro/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Deck Tally Pro";
@@ -200,7 +227,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.deck.tallypro;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = d;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = AppStore;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -347,6 +374,51 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9FD7CD60300FE3C8005A95A8 /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AppsFlyerSDK/AppsFlyerFramework";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+		9FD7CD63300FE484005A95A8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.16.0;
+			};
+		};
+		AD100000000000000000A001 /* XCRemoteSwiftPackageReference "ios_sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/adjust/ios_sdk";
+			requirement = {
+				kind = exactVersion;
+				version = 5.4.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9FD7CD61300FE3C8005A95A8 /* AppsFlyerLib */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9FD7CD60300FE3C8005A95A8 /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */;
+			productName = AppsFlyerLib;
+		};
+		9FD7CD65300FE4A5005A95A8 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9FD7CD63300FE484005A95A8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+		AD100000000000000000A002 /* AdjustSdk */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AD100000000000000000A001 /* XCRemoteSwiftPackageReference "ios_sdk" */;
+			productName = AdjustSdk;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5CC9B7062F230D4A006A0746 /* Project object */;
 }

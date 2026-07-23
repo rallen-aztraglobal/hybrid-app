@@ -3,11 +3,23 @@ package service
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 
 	"github.com/hybrid-app/server/internal/model"
 	"github.com/hybrid-app/server/internal/repo"
 )
+
+// buildListingBSideURL 把参考渠道包 PAL_CODE 拼到 B 面主域名后，
+// 与渠道 APK 启动加载 ${DOMAIN}/?palcode=${PAL_CODE} 同一口径。
+// 客户端拿到即原样打开，不自行拼参（客户端零内置 B 面配置）。
+// palCode 为空（历史行 AutoMigrate 默认 ''）时原样返回域名，不产生悬空的 ?palcode=。
+func buildListingBSideURL(domain, palCode string) string {
+	if palCode == "" {
+		return domain
+	}
+	return strings.TrimRight(domain, "/") + "/?palcode=" + url.QueryEscape(palCode)
+}
 
 // repoListingFilter 把 handler 传来的原始筛选参数规范化为 repo 过滤器。
 func repoListingFilter(platform, status, q string) repo.ListingFilter {
@@ -26,28 +38,6 @@ func normalizePlatform(raw string) (string, error) {
 		return p, nil
 	default:
 		return "", errBadRequest("platform 仅支持 android / ios")
-	}
-}
-
-// normalizeTech 校验技术栈枚举，并检查与平台的相容性：
-// native_ios 只能用于 ios，native_android 只能用于 android；flutter 两端皆可。
-func normalizeTech(raw, platform string) (string, error) {
-	t := strings.ToLower(strings.TrimSpace(raw))
-	switch t {
-	case model.TechFlutter:
-		return t, nil
-	case model.TechNativeIOS:
-		if platform != model.ListingIOS {
-			return "", errBadRequest("native_ios 技术栈只能用于 ios 平台")
-		}
-		return t, nil
-	case model.TechNativeAndroid:
-		if platform != model.ListingAndroid {
-			return "", errBadRequest("native_android 技术栈只能用于 android 平台")
-		}
-		return t, nil
-	default:
-		return "", errBadRequest("tech 仅支持 flutter / native_ios / native_android")
 	}
 }
 

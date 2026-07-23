@@ -27,7 +27,8 @@ func newListingTestService(t *testing.T, table map[string]string) (*Service, con
 	return svc, context.Background()
 }
 
-// mustCreateListing 建一个 android/flutter 上架包，挂在 ap 品牌下（其种子域名 https://arenaplus.ph）。
+// mustCreateListing 建一个 android 上架包，挂在 ap 品牌下（其种子域名 https://arenaplus.ph），
+// 参考渠道包 PAL_CODE 手填一个合法纯数字串。
 func mustCreateListing(t *testing.T, svc *Service, ctx context.Context) *model.ListingApp {
 	t.Helper()
 	l, err := svc.CreateListing(ctx, CreateListingInput{
@@ -35,7 +36,7 @@ func mustCreateListing(t *testing.T, svc *Service, ctx context.Context) *model.L
 		Platform:  "android",
 		BundleID:  "com.vividnest.colorstack5821",
 		Name:      "ColorStack",
-		Tech:      "flutter",
+		PalCode:   "1053259",
 	})
 	if err != nil {
 		t.Fatalf("创建上架包失败: %v", err)
@@ -64,7 +65,7 @@ func TestCreateListingRejectsDuplicatePlatformBundle(t *testing.T) {
 
 	// 同平台同包名 → 冲突。
 	_, err := svc.CreateListing(ctx, CreateListingInput{
-		BrandCode: "ap", Platform: "android", BundleID: "com.vividnest.colorstack5821", Name: "dup", Tech: "flutter",
+		BrandCode: "ap", Platform: "android", BundleID: "com.vividnest.colorstack5821", Name: "dup", PalCode: "1053259",
 	})
 	if err == nil {
 		t.Fatal("同 (platform,bundleId) 应冲突")
@@ -72,7 +73,7 @@ func TestCreateListingRejectsDuplicatePlatformBundle(t *testing.T) {
 
 	// 同包名但不同平台 → 允许（Flutter 双端共用包名，见 model 唯一键设计）。
 	_, err = svc.CreateListing(ctx, CreateListingInput{
-		BrandCode: "ap", Platform: "ios", BundleID: "com.vividnest.colorstack5821", Name: "ios", Tech: "flutter",
+		BrandCode: "ap", Platform: "ios", BundleID: "com.vividnest.colorstack5821", Name: "ios", PalCode: "1053259",
 	})
 	if err != nil {
 		t.Fatalf("不同平台同包名应允许，却失败: %v", err)
@@ -86,7 +87,7 @@ func TestCreateListingEmptyAdjustTokenNormalizedToNil(t *testing.T) {
 	empty := ""
 	l, err := svc.CreateListing(ctx, CreateListingInput{
 		BrandCode: "ap", Platform: "android", BundleID: "com.x.empty",
-		Name: "x", Tech: "flutter", AdjustAppToken: &empty,
+		Name: "x", AdjustAppToken: &empty, PalCode: "1053259",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -116,14 +117,43 @@ func TestCreateListingEmptyAdjustTokenNormalizedToNil(t *testing.T) {
 	}
 }
 
-func TestCreateListingTechPlatformCompat(t *testing.T) {
+// 参考渠道包 PAL_CODE：手填，必填、纯数字串；成功后原样落库。
+func TestCreateListingPalCodeRules(t *testing.T) {
 	svc, ctx := newListingTestService(t, nil)
-	// native_ios 不能建在 android 平台。
-	_, err := svc.CreateListing(ctx, CreateListingInput{
-		BrandCode: "ap", Platform: "android", BundleID: "com.x.y", Name: "x", Tech: "native_ios",
+
+	// 缺失 → 报错。
+	if _, err := svc.CreateListing(ctx, CreateListingInput{
+		BrandCode: "ap", Platform: "android", BundleID: "com.x.nopal", Name: "x",
+	}); err == nil {
+		t.Fatal("未填 PAL_CODE 应报错")
+	}
+
+	// 非纯数字 → 报错。
+	if _, err := svc.CreateListing(ctx, CreateListingInput{
+		BrandCode: "ap", Platform: "android", BundleID: "com.x.badpal", Name: "x", PalCode: "PAL-abc",
+	}); err == nil {
+		t.Fatal("非纯数字 PAL_CODE 应报错")
+	}
+
+	// 合法纯数字（含前后空白）→ 成功，去空白后原样落库。
+	l, err := svc.CreateListing(ctx, CreateListingInput{
+		BrandCode: "ap", Platform: "android", BundleID: "com.x.okpal", Name: "x", PalCode: "  1053259  ",
 	})
-	if err == nil {
-		t.Error("native_ios 建在 android 平台应报错")
+	if err != nil {
+		t.Fatalf("合法 PAL_CODE 应成功: %v", err)
+	}
+	if l.PalCode != "1053259" {
+		t.Errorf("PalCode 应去空白后为 1053259，实际 %q", l.PalCode)
+	}
+
+	// 更新 PAL_CODE 生效。
+	np := "2087431"
+	got, err := svc.UpdateListing(ctx, l.ID, UpdateListingInput{PalCode: &np})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PalCode != "2087431" {
+		t.Errorf("更新后 PalCode 应为 2087431，实际 %q", got.PalCode)
 	}
 }
 
@@ -211,7 +241,7 @@ func TestEvaluateListingGateEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 菲律宾 IP → B，且 URL 为继承的品牌域名。
+	// 菲律宾 IP → B，且 URL 为继承的品牌域名 + 参考渠道包 palcode。
 	res, err := svc.EvaluateListingGate(ctx, req("112.198.0.1"))
 	if err != nil {
 		t.Fatal(err)
@@ -219,8 +249,8 @@ func TestEvaluateListingGateEndToEnd(t *testing.T) {
 	if res.Mode != model.GateModeB {
 		t.Fatalf("菲律宾 IP 应进 B 面，实际 %s", res.Mode)
 	}
-	if res.URL != "https://arenaplus.ph" {
-		t.Errorf("B 面 URL 应为继承的品牌域名 https://arenaplus.ph，实际 %q", res.URL)
+	if res.URL != "https://arenaplus.ph/?palcode=1053259" {
+		t.Errorf("B 面 URL 应为品牌域名拼 palcode，实际 %q", res.URL)
 	}
 
 	// 美国 IP → 强制 A（即便不在白名单，硬编码闸也拦下）。

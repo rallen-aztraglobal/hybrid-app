@@ -8,11 +8,11 @@ import (
 	"github.com/hybrid-app/server/internal/model"
 )
 
-// gate 构造一条规则，简化用例书写。
-func gate(countries, timezones, allow, deny []string) *model.ListingGate {
+// gate 构造一条规则，简化用例书写。第二参数是「时区黑名单」（命中即强制 A）。
+func gate(countries, tzDeny, allow, deny []string) *model.ListingGate {
 	return &model.ListingGate{
 		Countries:    model.StringList(countries),
-		Timezones:    model.StringList(timezones),
+		TimezoneDeny: model.StringList(tzDeny),
 		IPAllowCIDRs: model.StringList(allow),
 		IPDenyCIDRs:  model.StringList(deny),
 	}
@@ -114,26 +114,26 @@ func TestEvaluateGate(t *testing.T) {
 			want: model.GateModeA,
 		},
 
-		// —— 时区（选填）——
+		// —— 时区黑名单（选填，命中即强制 A）——
 		{
-			name: "时区白名单命中 → B",
-			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"Asia/Manila"}, nil, nil), Country: "PH", Timezone: "Asia/Manila", IP: ip("112.198.0.1")},
-			want: model.GateModeB,
-		},
-		{
-			name: "时区不在白名单 → A",
-			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"Asia/Manila"}, nil, nil), Country: "PH", Timezone: "America/Los_Angeles", IP: ip("112.198.0.1")},
+			name: "时区命中黑名单 → A",
+			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"America/New_York"}, nil, nil), Country: "PH", Timezone: "America/New_York", IP: ip("112.198.0.1")},
 			want: model.GateModeA,
 		},
 		{
-			name: "配了时区白名单但客户端没上报 → A",
-			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"Asia/Manila"}, nil, nil), Country: "PH", Timezone: "", IP: ip("112.198.0.1")},
-			want: model.GateModeA,
+			name: "时区不在黑名单 → B（放行不受影响）",
+			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"America/New_York"}, nil, nil), Country: "PH", Timezone: "Asia/Manila", IP: ip("112.198.0.1")},
+			want: model.GateModeB,
 		},
 		{
-			name: "未配时区白名单时不上报时区也能放行",
-			in:   GateInput{GateEnabled: true, Gate: phOnly, Country: "PH", Timezone: "", IP: ip("112.198.0.1")},
+			name: "配了时区黑名单但客户端没上报时区 → B（黑名单只在明确命中时收紧）",
+			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"America/New_York"}, nil, nil), Country: "PH", Timezone: "", IP: ip("112.198.0.1")},
 			want: model.GateModeB,
+		},
+		{
+			name: "时区黑名单大小写/空白不敏感 → A",
+			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{" America/New_York "}, nil, nil), Country: "PH", Timezone: "America/New_York", IP: ip("112.198.0.1")},
+			want: model.GateModeA,
 		},
 
 		// —— IP 白名单（选填）——
@@ -155,18 +155,18 @@ func TestEvaluateGate(t *testing.T) {
 
 		// —— 条件之间是 AND ——
 		{
-			name: "国家中但时区不中 → A（AND 语义）",
-			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"Asia/Manila"}, nil, nil), Country: "PH", Timezone: "Asia/Tokyo", IP: ip("112.198.0.1")},
+			name: "国家中 + 时区命中黑名单 → A（黑名单短路）",
+			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"Asia/Tokyo"}, nil, nil), Country: "PH", Timezone: "Asia/Tokyo", IP: ip("112.198.0.1")},
 			want: model.GateModeA,
 		},
 		{
-			name: "国家与时区都中但 IP 不中 → A（AND 语义）",
-			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"Asia/Manila"}, []string{"203.0.113.0/24"}, nil), Country: "PH", Timezone: "Asia/Manila", IP: ip("112.198.0.1")},
+			name: "国家中 + 时区不在黑名单 但 IP 不在白名单 → A（AND 语义）",
+			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, nil, []string{"203.0.113.0/24"}, nil), Country: "PH", Timezone: "Asia/Manila", IP: ip("112.198.0.1")},
 			want: model.GateModeA,
 		},
 		{
-			name: "三个条件全中 → B",
-			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"Asia/Manila"}, []string{"112.198.0.0/16"}, nil), Country: "PH", Timezone: "Asia/Manila", IP: ip("112.198.0.1")},
+			name: "国家中 + 时区不在黑名单 + IP 在白名单 → B",
+			in:   GateInput{GateEnabled: true, Gate: gate([]string{"PH"}, []string{"America/New_York"}, []string{"112.198.0.0/16"}, nil), Country: "PH", Timezone: "Asia/Manila", IP: ip("112.198.0.1")},
 			want: model.GateModeB,
 		},
 

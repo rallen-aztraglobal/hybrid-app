@@ -93,6 +93,16 @@ func TestClientIP(t *testing.T) {
 			remoteAddr: "[2001:db8::2]:51234",
 			want:       "2001:db8::2",
 		},
+		{
+			// 真实部署：域名挂 Cloudflare 橙云 → 源站 nginx → go-api。
+			// Cloudflare 把真实访客放进 XFF 左侧，nginx 追加 Cloudflare 边缘 IP（172.71.x.x）到右侧。
+			// 信任 Cloudflare 网段后，右→左扫描跳过边缘 IP，取到真实访客——否则会把 CF 边缘当客户端
+			// （GeoIP 查成边缘所在国，AB 网关对所有真实用户误判 A）。
+			name:       "经 Cloudflare + nginx，跳过 CF 边缘取真实访客",
+			remoteAddr: "127.0.0.1:8080",
+			xff:        []string{"112.198.0.1, 172.71.198.91"},
+			want:       "112.198.0.1",
+		},
 	}
 
 	for _, tc := range cases {

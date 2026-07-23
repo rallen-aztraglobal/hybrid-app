@@ -1,6 +1,6 @@
 /**
  * 新增/编辑上架包抽屉 —— 仿照 ChannelDrawer 的分区结构与提交模式：
- *  1) 基本信息（品牌/平台/包名/代号/技术栈/状态/备注）；
+ *  1) 基本信息（品牌/平台/包名/代号/参考渠道包/状态/备注）；
  *  2) B 面域名：直接复用 DomainEditor（与品牌小渠道包同一套域名，ADR-0006 继承语义）；
  *  3) AB 面网关：ListingGateSection（重点，见该组件注释）；
  *  4) 归因：AF 两个字段 + 复用 AdjustSection。
@@ -17,10 +17,9 @@ import type {
   ListingInput,
   ListingPlatform,
   ListingStatus,
-  ListingTech,
 } from '@/lib/types';
 import { BRAND_META, BRAND_ORDER } from '@/lib/brands';
-import { FORCED_A_COUNTRIES, TECH_OPTIONS_BY_PLATFORM, parseLines } from '@/lib/listingMeta';
+import { FORCED_A_COUNTRIES, parseLines } from '@/lib/listingMeta';
 import { validateDomains } from '@/lib/validation';
 import { useBrands, useListings, useSaveListing } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
@@ -37,7 +36,7 @@ interface ListingFormState {
   bundleId: string;
   name: string;
   displayName: string;
-  tech: ListingTech;
+  palCode: string;
   storeUrl: string;
   status: ListingStatus;
   remark: string;
@@ -49,7 +48,7 @@ interface ListingFormState {
   domains: DomainEntry[];
   gateEnabled: boolean;
   countries: string[];
-  timezones: string[];
+  timezoneDeny: string[];
   ipAllowText: string;
   ipDenyText: string;
 }
@@ -103,7 +102,7 @@ export function ListingDrawer({
         bundleId: editListing.bundleId,
         name: editListing.name,
         displayName: editListing.displayName,
-        tech: editListing.tech,
+        palCode: editListing.palCode ?? '',
         storeUrl: editListing.storeUrl,
         status: editListing.status,
         remark: editListing.remark,
@@ -115,7 +114,7 @@ export function ListingDrawer({
         domains: editListing.domains ?? EMPTY_DOMAINS,
         gateEnabled: editListing.gateEnabled,
         countries: editListing.gate?.countries ?? [],
-        timezones: editListing.gate?.timezones ?? [],
+        timezoneDeny: editListing.gate?.timezoneDeny ?? [],
         ipAllowText: (editListing.gate?.ipAllowCidrs ?? []).join('\n'),
         ipDenyText: (editListing.gate?.ipDenyCidrs ?? []).join('\n'),
       });
@@ -126,12 +125,6 @@ export function ListingDrawer({
 
   function set<K extends keyof ListingFormState>(key: K, value: ListingFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  /** 切换平台时同步重置技术栈到该平台下的合法默认值（native_ios 仅 ios、native_android 仅 android）。 */
-  function setPlatform(next: ListingPlatform) {
-    const validTechs = TECH_OPTIONS_BY_PLATFORM[next].map((o) => o.value);
-    setForm((f) => ({ ...f, platform: next, tech: validTechs.includes(f.tech) ? f.tech : validTechs[0] }));
   }
 
   // 继承品牌时展示的域名：优先后端真实配置，缺省回落静态兜底（与 ChannelDrawer 同一套逻辑）。
@@ -172,7 +165,7 @@ export function ListingDrawer({
       bundleId: form.bundleId.trim(),
       name: form.name.trim(),
       displayName: form.displayName.trim(),
-      tech: form.tech,
+      palCode: form.palCode.trim(),
       storeUrl: form.storeUrl.trim(),
       status: form.status,
       remark: form.remark.trim(),
@@ -185,7 +178,7 @@ export function ListingDrawer({
       gateEnabled: form.gateEnabled,
       gate: {
         countries: filteredCountries,
-        timezones: form.timezones,
+        timezoneDeny: form.timezoneDeny,
         ipAllowCidrs: parseLines(form.ipAllowText),
         ipDenyCidrs: parseLines(form.ipDenyText),
       },
@@ -243,10 +236,9 @@ export function ListingDrawer({
           <div className="section-card">
             <SectionHeading num={1}>基本信息</SectionHeading>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="所属品牌" required hint="决定默认继承的域名清单">
+              <Field label="所属品牌" required>
                 <Select
                   value={form.brandCode}
-                  disabled={!!editing}
                   onChange={(v) => set('brandCode', v as BrandCode)}
                   options={BRAND_ORDER.map((code) => ({ value: code, label: `${BRAND_META[code].name}（${code}）` }))}
                 />
@@ -255,7 +247,7 @@ export function ListingDrawer({
                 <Select
                   value={form.platform}
                   disabled={!!editing}
-                  onChange={(v) => setPlatform(v as ListingPlatform)}
+                  onChange={(v) => set('platform', v as ListingPlatform)}
                   options={[
                     { value: 'android', label: 'Android' },
                     { value: 'ios', label: 'iOS' },
@@ -263,11 +255,7 @@ export function ListingDrawer({
                 />
               </Field>
             </div>
-            <Field
-              label="包名 Bundle ID"
-              required
-              hint={editing ? '创建后不可更改' : '如 com.vividnest.colorstack5821；双端同包名时分别建 android/ios 两条记录'}
-            >
+            <Field label="包名 Bundle ID" required>
               <input
                 className="field-input mono"
                 placeholder="com.example.app"
@@ -288,20 +276,20 @@ export function ListingDrawer({
                 />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="技术栈" required>
-                <Select
-                  value={form.tech}
-                  onChange={(v) => set('tech', v as ListingTech)}
-                  options={TECH_OPTIONS_BY_PLATFORM[form.platform]}
-                />
+            <Field label="参考渠道包 PAL_CODE" required hint="手填参考渠道包的 palcode（纯数字），拼 B 面 /?palcode=">
+              <input
+                className="field-input mono"
+                placeholder="如 1053259"
+                inputMode="numeric"
+                value={form.palCode}
+                onChange={(e) => set('palCode', e.target.value)}
+              />
+            </Field>
+            {editing && (
+              <Field label="状态">
+                <Select value={form.status} onChange={(v) => set('status', v as ListingStatus)} options={STATUS_OPTIONS} />
               </Field>
-              {editing && (
-                <Field label="状态">
-                  <Select value={form.status} onChange={(v) => set('status', v as ListingStatus)} options={STATUS_OPTIONS} />
-                </Field>
-              )}
-            </div>
+            )}
             <Field label="商店详情页链接" hint="选填">
               <input
                 className="field-input mono"
@@ -340,7 +328,7 @@ export function ListingDrawer({
           {/* 3. AB 面网关（重点） */}
           <div className="section-card">
             <SectionHeading num={3}>
-              AB 面网关 <span className="font-normal text-muted text-[11.5px]">· 按 IP 国家 + 时区判定放行 B 面（ADR-0014）</span>
+              AB 面网关 <span className="font-normal text-muted text-[11.5px]">· 按 IP 国家判定放行 B 面（ADR-0014）</span>
             </SectionHeading>
             <ListingGateSection
               listingId={editing}
@@ -348,7 +336,7 @@ export function ListingDrawer({
               onGateEnabledChange={(v) => set('gateEnabled', v)}
               draft={{
                 countries: form.countries,
-                timezones: form.timezones,
+                timezoneDeny: form.timezoneDeny,
                 ipAllowText: form.ipAllowText,
                 ipDenyText: form.ipDenyText,
               }}
@@ -356,7 +344,7 @@ export function ListingDrawer({
                 setForm((f) => ({
                   ...f,
                   countries: next.countries,
-                  timezones: next.timezones,
+                  timezoneDeny: next.timezoneDeny,
                   ipAllowText: next.ipAllowText,
                   ipDenyText: next.ipDenyText,
                 }))
@@ -425,7 +413,7 @@ function blankForm(platform: ListingPlatform): ListingFormState {
     bundleId: '',
     name: '',
     displayName: '',
-    tech: platform === 'ios' ? 'native_ios' : 'native_android',
+    palCode: '',
     storeUrl: '',
     status: 'enabled',
     remark: '',
@@ -437,7 +425,7 @@ function blankForm(platform: ListingPlatform): ListingFormState {
     domains: EMPTY_DOMAINS,
     gateEnabled: false,
     countries: [],
-    timezones: [],
+    timezoneDeny: [],
     ipAllowText: '',
     ipDenyText: '',
   };
@@ -448,6 +436,9 @@ function validate(form: ListingFormState, editing: boolean): string[] {
   const errors: string[] = [];
   if (!form.name.trim()) errors.push('内部代号必填');
   if (!editing && !form.bundleId.trim()) errors.push('包名 Bundle ID 必填');
+  const pal = form.palCode.trim();
+  if (!pal) errors.push('参考渠道包 PAL_CODE 必填');
+  else if (!/^\d+$/.test(pal)) errors.push('参考渠道包 PAL_CODE 应为纯数字串');
   if (!form.useBrandDomains) {
     const de = validateDomains(form.domains);
     if (de.length) errors.push(de[0]);

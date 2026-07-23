@@ -1,9 +1,9 @@
 /**
- * 上架包卡片 —— 仿照 ChannelCard：名称/包名/平台/技术栈徽章/状态 + AB 面徽标（醒目）+ 悬浮操作。
+ * 上架包卡片 —— 仿照 ChannelCard：名称/包名/平台/PAL_CODE 徽章/状态 + AB 面徽标（醒目）+ 悬浮操作。
  * gate_enabled 徽标是本卡片与 ChannelCard 最大的差异点，务必醒目（绿=AB 面已开 / 灰=仅 A 面）。
  */
 import type { Listing } from '@/lib/types';
-import { PLATFORM_META, TECH_LABEL } from '@/lib/listingMeta';
+import { PLATFORM_META } from '@/lib/listingMeta';
 import { cn } from '@/lib/cn';
 import { AppIcon } from './ui';
 import { EditIcon, TrashIcon } from './icons';
@@ -68,9 +68,14 @@ export function ListingCard({
             >
               {platformMeta.label}
             </span>
-            <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md text-ink-2 bg-panel-2 border border-line">
-              {TECH_LABEL[listing.tech] ?? listing.tech}
-            </span>
+            {listing.palCode && (
+              <span
+                className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md text-ink-2 bg-panel-2 border border-line mono"
+                title="继承自参考渠道包的 PAL_CODE"
+              >
+                palcode {listing.palCode}
+              </span>
+            )}
           </div>
         </div>
       </div>

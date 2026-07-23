@@ -27,13 +27,6 @@ const (
 	ListingArchived = "archived"
 )
 
-// 上架包技术栈枚举（决定 CLI/构建与客户端 SDK 接入方式）。
-const (
-	TechFlutter       = "flutter"        // ColorStack：一套 Dart 覆盖 android+ios
-	TechNativeIOS     = "native_ios"     // DeckTallyPro：原生 Swift，仅 iOS
-	TechNativeAndroid = "native_android" // 预留
-)
-
 // ForcedACountries 是无条件强制走 A 面的国家码，无视 listing_gate 的任何配置。
 //
 // 这是硬编码的最后一道闸，不做成可配置项：中美两地是应用商店审核与合规风险最集中的来源，
@@ -118,12 +111,15 @@ type ListingApp struct {
 
 	Name        string `gorm:"column:name;type:varchar(64);not null" json:"name"`        // 内部代号，如 ColorStack
 	DisplayName string `gorm:"column:display_name;type:varchar(128)" json:"displayName"` // 商店展示名
-	Tech        string `gorm:"column:tech;type:varchar(24);not null" json:"tech"`        // flutter / native_ios / native_android
 	StoreURL    string `gorm:"column:store_url;type:varchar(512)" json:"storeUrl"`       // 商店详情页链接
 	Status      string `gorm:"column:status;type:varchar(16);not null;default:enabled" json:"status"`
 
 	// UseBrandDomains=true 时 B 面域名继承品牌，false 时用 ListingDomain 覆盖。
 	UseBrandDomains bool `gorm:"column:use_brand_domains;not null;default:true" json:"useBrandDomains"`
+
+	// PalCode 参考渠道包的 PAL_CODE：运营手动填入（与渠道包表单的 PAL_CODE 同一套路，纯数字串），
+	// 上架包用它拼 B 面 /?palcode=。不再关联具体渠道记录，直接存值。新建/更新由 Service 层强制必填。
+	PalCode string `gorm:"column:pal_code;type:varchar(64);not null;default:'';index" json:"palCode"`
 
 	// GateEnabled 是 AB 面总开关。false = 该包永远只有 A 面（网关直接返回 mode=A，不做任何判定）。
 	// 这是「默认安全」的第一道闸：新建的上架包默认关闭，运营确认规则无误后再手动打开。
@@ -172,9 +168,9 @@ func (ListingDomain) TableName() string { return "listing_domain" }
 //  1. ListingApp.GateEnabled=false        → A（总开关关闭时，本结构体的所有字段都无意义）
 //  2. 国家 ∈ ForcedACountries（CN/US）     → A（硬编码，无视本结构体配置）
 //  3. 命中 IPDenyCIDRs                    → A
-//  4. GeoIP 解析不出国家                   → A（自然 fail-closed：未知国家不可能在必填白名单里）
-//  5. 国家 ∉ Countries                    → A
-//  6. Timezones 非空 且 时区 ∉ Timezones    → A
+//  4. 命中 TimezoneDeny（时区黑名单）       → A（客户端上报时区，命中即强制 A）
+//  5. GeoIP 解析不出国家                   → A（自然 fail-closed：未知国家不可能在必填白名单里）
+//  6. 国家 ∉ Countries                    → A
 //  7. IPAllowCIDRs 非空 且 IP ∉ 其中        → A
 //  8. 以上全部通过                         → B
 //
@@ -183,7 +179,7 @@ func (ListingDomain) TableName() string { return "listing_domain" }
 // 必填/选填（由 Service 层校验强制，不靠前端）：
 //   - Countries 必填非空。空清单不代表「不限国家」，而是配置无效，Service 拒绝保存；
 //     真要全关就把 GateEnabled 置 false，语义唯一、不产生歧义。
-//   - Timezones / IPAllowCIDRs / IPDenyCIDRs 选填，为空 = 该维度不参与判定。
+//   - TimezoneDeny / IPAllowCIDRs / IPDenyCIDRs 选填，为空 = 该维度不参与判定。
 type ListingGate struct {
 	ID        uint64 `gorm:"primaryKey;autoIncrement" json:"id"`
 	ListingID uint64 `gorm:"column:listing_id;not null;uniqueIndex" json:"listingId"`
@@ -193,9 +189,10 @@ type ListingGate struct {
 	// 即使运营把 CN/US 塞进来也无效——第 2 步的硬编码闸在它之前。
 	Countries StringList `gorm:"column:countries;type:text" json:"countries"`
 
-	// Timezones 选填：IANA 时区名白名单，如 ["Asia/Manila"]。
-	// 由客户端上报，可伪造，故只能作为收紧条件叠加在国家判定之上，永远不单独作准。
-	Timezones StringList `gorm:"column:timezones;type:text" json:"timezones"`
+	// TimezoneDeny 选填：IANA 时区名黑名单，如 ["America/New_York"]。命中即强制 A 面
+	// （与 IPDenyCIDRs 同类，用于钉死已知审核所在时区）。由客户端上报、可伪造，但黑名单方向
+	// 的伪造只会让伪造者「逃出黑名单」进而可能进 B——审核员没有伪造动机，故作为收紧手段成立。
+	TimezoneDeny StringList `gorm:"column:timezone_deny;type:text" json:"timezoneDeny"`
 
 	// IPAllowCIDRs 选填：非空时，请求 IP 还必须落在其中之一（在国家白名单之上再收紧一层）。
 	IPAllowCIDRs StringList `gorm:"column:ip_allow_cidrs;type:text" json:"ipAllowCidrs"`

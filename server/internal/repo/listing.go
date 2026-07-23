@@ -68,6 +68,7 @@ func (r *Repo) GetListing(ctx context.Context, id uint64) (*model.ListingApp, er
 func (r *Repo) GetListingByPlatformBundle(ctx context.Context, platform, bundleID string) (*model.ListingApp, error) {
 	var l model.ListingApp
 	err := r.db.WithContext(ctx).
+		Preload("Brand").
 		Preload("Domains", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
 		Preload("Gate").
 		Where("platform = ? AND bundle_id = ?", platform, bundleID).
@@ -165,7 +166,7 @@ func (r *Repo) UpsertListingGate(ctx context.Context, gate *model.ListingGate) e
 		gate.ID = existing.ID
 		if err := tx.Model(&model.ListingGate{}).Where("id = ?", existing.ID).Updates(map[string]any{
 			"countries":      gate.Countries,
-			"timezones":      gate.Timezones,
+			"timezone_deny":  gate.TimezoneDeny,
 			"ip_allow_cidrs": gate.IPAllowCIDRs,
 			"ip_deny_cidrs":  gate.IPDenyCIDRs,
 		}).Error; err != nil {

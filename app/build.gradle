@@ -93,18 +93,18 @@ def allChannels = brandConfig.keySet().collectMany { loadChannels(it) }
 def enableTestEvents = (project.findProperty("testEvents") ?: "false").toString().toBoolean()
 
 // 版本号：打包时传 -PversionName=1.0.1（固定 X.Y.Z 格式）。
-// versionCode 由 versionName「去掉点」换算（1.0.1 → 101）。
-// 注意：为保证 versionCode 单调递增，各段建议保持个位数（0-9）。
+// versionCode 定宽换算：major*10000 + minor*100 + patch，各段 0-99（如 2.0.2 → 20002，2.0.10 → 20010）。
+// 定宽保证各段两位数以内永远单调递增；新算法产出（major≥1 时 ≥10000）恒大于旧「去点拼接」算法（≤999），
+// 对所有商店都是版本升高，切换安全。注意不可回退：商店一旦收到定宽 code，旧算法追不上。
 def appVersionName = (project.findProperty("versionName") ?: "1.0.3").toString().trim()
 if (!(appVersionName ==~ /\d+\.\d+\.\d+/)) {
     throw new GradleException("versionName 必须为 X.Y.Z 格式（如 1.0.1），当前: '${appVersionName}'")
 }
-// versionCode 由 versionName「去掉点」换算（1.0.1 → 101）。为保证单调递增，各段必须个位数（0-9）：
-// 多位会破坏顺序（1.0.10→1010 反超 1.1.0→110），故直接拒绝而非静默错排（评审 A3）。
-if (appVersionName.tokenize('.').any { it.toInteger() > 9 }) {
-    throw new GradleException("versionName 各段须为个位数 0-9（当前: '${appVersionName}'）；如需多位段请改用定宽 versionCode 方案")
+def versionParts = appVersionName.tokenize('.').collect { it.toInteger() }
+if (versionParts.any { it > 99 }) {
+    throw new GradleException("versionName 各段须为 0-99（当前: '${appVersionName}'）")
 }
-def appVersionCode = appVersionName.replace(".", "").toInteger()
+def appVersionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
 
 android {
     namespace 'com.hybrid.android'

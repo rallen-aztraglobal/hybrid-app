@@ -260,12 +260,12 @@ interface ListingDomainDTO {
   enabled: boolean;
 }
 
-/** 后端 model.ListingGate（一对一）；countries/timezones/ipAllowCidrs/ipDenyCidrs 空清单存 NULL。 */
+/** 后端 model.ListingGate（一对一）；countries/timezoneDeny/ipAllowCidrs/ipDenyCidrs 空清单存 NULL。 */
 interface ListingGateDTO {
   id?: number;
   listingId?: number;
   countries: string[] | null;
-  timezones: string[] | null;
+  timezoneDeny: string[] | null;
   ipAllowCidrs: string[] | null;
   ipDenyCidrs: string[] | null;
   updatedAt?: string;
@@ -279,10 +279,10 @@ interface ListingDTO {
   bundleId: string;
   name: string;
   displayName: string;
-  tech: Listing['tech'];
   storeUrl: string;
   status: Listing['status'];
   useBrandDomains: boolean;
+  palCode?: string | null;
   gateEnabled: boolean;
   afDevKey: string;
   afAppId: string;
@@ -317,10 +317,10 @@ function adaptListing(l: ListingDTO): Listing {
     bundleId: l.bundleId,
     name: l.name,
     displayName: l.displayName || '',
-    tech: l.tech,
     storeUrl: l.storeUrl || '',
     status: l.status,
     useBrandDomains: l.useBrandDomains,
+    palCode: l.palCode || undefined,
     gateEnabled: l.gateEnabled,
     afDevKey: l.afDevKey || '',
     afAppId: l.afAppId || '',
@@ -333,7 +333,7 @@ function adaptListing(l: ListingDTO): Listing {
     gate: l.gate
       ? {
           countries: l.gate.countries ?? [],
-          timezones: l.gate.timezones ?? [],
+          timezoneDeny: l.gate.timezoneDeny ?? [],
           ipAllowCidrs: l.gate.ipAllowCidrs ?? [],
           ipDenyCidrs: l.gate.ipDenyCidrs ?? [],
           updatedAt: l.gate.updatedAt,
@@ -528,8 +528,8 @@ export const listingApi = {
             bundleId: input.bundleId.trim(),
             name: input.name.trim(),
             displayName: input.displayName.trim(),
-            tech: input.tech,
             storeUrl: input.storeUrl.trim(),
+            palCode: input.palCode.trim(),
             afDevKey: input.afDevKey.trim(),
             afAppId: input.afAppId.trim(),
             // *string：始终携带（空串亦然）以「声明意图」，与 updateListingReq 的解绑约定保持一致。
@@ -551,11 +551,12 @@ export const listingApi = {
         await request<ListingDTO>(`/listings/${id}`, {
           method: 'PUT',
           body: JSON.stringify({
+            brandCode: input.brandCode,
             name: input.name.trim(),
             displayName: input.displayName.trim(),
-            tech: input.tech,
             storeUrl: input.storeUrl.trim(),
             status: input.status,
+            palCode: input.palCode.trim(),
             afDevKey: input.afDevKey.trim(),
             afAppId: input.afAppId.trim(),
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
@@ -626,7 +627,7 @@ async function applyListingSideEffects(id: string, input: ListingInput): Promise
       method: 'PUT',
       body: JSON.stringify({
         countries,
-        timezones: input.gate.timezones.map((t) => t.trim()).filter(Boolean),
+        timezoneDeny: input.gate.timezoneDeny.map((t) => t.trim()).filter(Boolean),
         ipAllowCidrs: input.gate.ipAllowCidrs.map((c) => c.trim()).filter(Boolean),
         ipDenyCidrs: input.gate.ipDenyCidrs.map((c) => c.trim()).filter(Boolean),
       }),
