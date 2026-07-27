@@ -56,6 +56,7 @@ func (h *Handler) GetListing(c echo.Context) error {
 }
 
 // createListingReq 是新建上架包的请求体。AdjustAppToken 用指针区分「不传」与「传空串解绑」。
+// OpenMode 留空则由 service 归一化为默认值 internal（内开）。
 type createListingReq struct {
 	BrandCode      string             `json:"brandCode"`
 	Platform       string             `json:"platform"`
@@ -64,6 +65,7 @@ type createListingReq struct {
 	DisplayName    string             `json:"displayName"`
 	StoreURL       string             `json:"storeUrl"`
 	PalCode        string             `json:"palCode"`
+	OpenMode       string             `json:"openMode"`
 	AfDevKey       string             `json:"afDevKey"`
 	AfAppID        string             `json:"afAppId"`
 	AdjustAppToken *string            `json:"adjustAppToken"`
@@ -93,6 +95,7 @@ func (h *Handler) CreateListing(c echo.Context) error {
 		DisplayName:    req.DisplayName,
 		StoreURL:       req.StoreURL,
 		PalCode:        req.PalCode,
+		OpenMode:       req.OpenMode,
 		AfDevKey:       req.AfDevKey,
 		AfAppID:        req.AfAppID,
 		AdjustAppToken: req.AdjustAppToken,
@@ -106,7 +109,8 @@ func (h *Handler) CreateListing(c echo.Context) error {
 	return httpx.Created(c, l)
 }
 
-// updateListingReq 是更新请求体。全部字段可选（指针 nil = 不改）。
+// updateListingReq 是更新请求体。全部字段可选（指针 nil = 不改）。OpenMode 非 nil 时按
+// model.NormalizeOpenMode 归一化（空/非法值一律回落 internal）。
 type updateListingReq struct {
 	BrandCode      *string             `json:"brandCode"`
 	Name           *string             `json:"name"`
@@ -115,6 +119,7 @@ type updateListingReq struct {
 	Status         *string             `json:"status"`
 	PalCode        *string             `json:"palCode"`
 	GateEnabled    *bool               `json:"gateEnabled"`
+	OpenMode       *string             `json:"openMode"`
 	AfDevKey       *string             `json:"afDevKey"`
 	AfAppID        *string             `json:"afAppId"`
 	AdjustAppToken *string             `json:"adjustAppToken"`
@@ -149,6 +154,7 @@ func (h *Handler) UpdateListing(c echo.Context) error {
 		Status:         req.Status,
 		PalCode:        req.PalCode,
 		GateEnabled:    req.GateEnabled,
+		OpenMode:       req.OpenMode,
 		AfDevKey:       req.AfDevKey,
 		AfAppID:        req.AfAppID,
 		AdjustAppToken: req.AdjustAppToken,
@@ -319,6 +325,7 @@ type gateReq struct {
 // ListingGate godoc
 // @Summary  AB 面判定（公开，客户端 App 启动调用，不缓存）
 // @Description 服务端按请求真实 IP 查国家 + 校验时区/IP 规则，返回 mode=A（展示应用内容）或 mode=B（放行到配置 URL）。
+// @Description mode=B 时额外带 openMode（internal=内开/external=外开），告诉客户端用哪种方式打开该 URL；mode=A 时不含该字段。
 // @Description 出于安全：不返回任何判定原因/国家/命中规则，审核方也无法从响应反推规则。
 // @Tags     app
 // @Accept   json

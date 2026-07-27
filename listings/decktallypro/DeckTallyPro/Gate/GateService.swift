@@ -1,9 +1,21 @@
 import Foundation
 
+/// B 面打开方式：internal=内开（WKWebView）/ external=外开（系统浏览器）。
+/// 仅 mode=B 时有意义，服务端只在判 B 时下发；缺省/非法一律内开。
+enum GateOpenMode {
+    case internalWebView
+    case externalBrowser
+
+    /// 只认 "external"，其余（含缺省 nil）一律内开。
+    static func from(_ raw: String?) -> GateOpenMode {
+        return raw == "external" ? .externalBrowser : .internalWebView
+    }
+}
+
 /// 网关判定结果。默认即 A 面——任何不确定都落到这个安全默认值。
 enum GateDecision {
     case aSide
-    case bSide(url: URL)
+    case bSide(url: URL, openMode: GateOpenMode)
 }
 
 /// 调用服务端 AB 面网关。判定全在服务端（按请求真实 IP 查国家 + 时区/IP 规则）；
@@ -68,6 +80,6 @@ enum GateService {
         else {
             return .aSide
         }
-        return .bSide(url: url)
+        return .bSide(url: url, openMode: GateOpenMode.from(obj["openMode"] as? String))
     }
 }

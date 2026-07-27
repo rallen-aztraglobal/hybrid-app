@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../push/push_service.dart';
 import '../screens/home_screen.dart';
@@ -44,15 +45,39 @@ class _GateScreenState extends State<GateScreen> {
 
     if (!mounted) return;
     if (result.isBSide) {
-      // 进 B 面前补发 AF 标准事件（内部已容错）。
+      // 进 B 面前补发 AF 标准事件（内部已容错）。内开/外开都算进入 B 面。
       await TrackingService.instance.onEnterBSide();
       if (!mounted) return;
-      setState(() {
-        _bUrl = result.url;
-        _phase = _Phase.bSide;
-      });
+      if (result.isExternal) {
+        // 外开：唤起系统浏览器打开 B 面，App 本体展示 A 面（游戏）——既送用户去 B 面，
+        // 又让 App 看起来仍是干净游戏。浏览器打不开时静默降级，仍停在 A 面。
+        final opened = await _openExternal(result.url!);
+        // 确实唤起浏览器成功才补发 OpenBLanding（AF + Adjust）；失败不发。
+        if (opened) await TrackingService.instance.onOpenBLanding();
+        if (!mounted) return;
+        setState(() => _phase = _Phase.aSide);
+      } else {
+        // 内开：App 内嵌全屏 WebView 打开 B 面（默认，与渠道壳 App 一致）。
+        setState(() {
+          _bUrl = result.url;
+          _phase = _Phase.bSide;
+        });
+      }
     } else {
       setState(() => _phase = _Phase.aSide);
+    }
+  }
+
+  /// 用系统外部浏览器打开 url，返回是否唤起成功。失败（无浏览器、地址非法等）一律吞掉、返回 false：
+  /// 此时 App 停在 A 面，属于可接受的降级（不影响审核安全，该设备已判 B）。
+  Future<bool> _openExternal(String url) async {
+    try {
+      final uri = Uri.tryParse(url);
+      if (uri == null) return false;
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // 落到 A 面。
+      return false;
     }
   }
 

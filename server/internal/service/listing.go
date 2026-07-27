@@ -35,8 +35,9 @@ type GateRequest struct {
 // 刻意极简：只告诉客户端「进 A 还是 B」以及 B 面该开哪个 URL。
 // 绝不返回判定原因、命中的规则、国家码等任何可反推规则的信息——审核方也会调这个接口。
 type GateResponse struct {
-	Mode string `json:"mode"`          // "A" | "B"
-	URL  string `json:"url,omitempty"` // 仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode=，客户端原样打开）
+	Mode     string `json:"mode"`               // "A" | "B"
+	URL      string `json:"url,omitempty"`      // 仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode=，客户端原样打开）
+	OpenMode string `json:"openMode,omitempty"` // 仅 mode=B 时有值："internal"（内开）| "external"（外开）
 }
 
 // EvaluateListingGate 是公开网关端点的核心编排。
@@ -93,7 +94,11 @@ func (s *Service) EvaluateListingGate(ctx context.Context, req GateRequest) (*Ga
 		return &GateResponse{Mode: model.GateModeA}, nil
 	}
 
-	return &GateResponse{Mode: model.GateModeB, URL: buildListingBSideURL(domains[0], listing.PalCode)}, nil
+	return &GateResponse{
+		Mode:     model.GateModeB,
+		URL:      buildListingBSideURL(domains[0], listing.PalCode),
+		OpenMode: model.NormalizeOpenMode(listing.OpenMode),
+	}, nil
 }
 
 // logGate 落一条判定流水（容错：失败只吞掉，绝不影响判定返回）。
@@ -171,6 +176,7 @@ type CreateListingInput struct {
 	DisplayName    string
 	StoreURL       string
 	PalCode        string // 参考渠道包的 PAL_CODE，运营手填，必填、纯数字串（拼 B 面 /?palcode=）
+	OpenMode       string // B 面打开方式：internal/external，空/非法归一化为 internal（见 model.NormalizeOpenMode）
 	AfDevKey       string
 	AfAppID        string
 	AdjustAppToken *string
@@ -229,6 +235,7 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*mo
 		Status:          model.ListingEnabled,
 		UseBrandDomains: true,  // 默认继承品牌域名
 		GateEnabled:     false, // 默认只有 A 面
+		OpenMode:        model.NormalizeOpenMode(in.OpenMode),
 		AfDevKey:        strings.TrimSpace(in.AfDevKey),
 		AfAppID:         strings.TrimSpace(in.AfAppID),
 		AdjustAppToken:  adjustToken,
@@ -251,6 +258,7 @@ type UpdateListingInput struct {
 	Status         *string
 	PalCode        *string // 非 nil = 改参考渠道包 PAL_CODE；仍强制非空纯数字
 	GateEnabled    *bool
+	OpenMode       *string // 非 nil = 改 B 面打开方式；空/非法归一化为 internal（见 model.NormalizeOpenMode）
 	AfDevKey       *string
 	AfAppID        *string
 	AdjustAppToken *string
@@ -293,6 +301,9 @@ func (s *Service) UpdateListing(ctx context.Context, id uint64, in UpdateListing
 			return nil, err
 		}
 		fields["pal_code"] = palCode
+	}
+	if in.OpenMode != nil {
+		fields["open_mode"] = model.NormalizeOpenMode(*in.OpenMode)
 	}
 	if in.Status != nil {
 		st, err := normalizeStatus(*in.Status)

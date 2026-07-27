@@ -18,6 +18,7 @@ import type {
   ListingGateLog,
   ListingGateTestResult,
   ListingInput,
+  ListingOpenMode,
   ListResult,
   LoginResponse,
   ProbeResult,
@@ -281,6 +282,8 @@ interface ListingDTO {
   displayName: string;
   storeUrl: string;
   status: Listing['status'];
+  /** 后端字段；打开方式（09-listing.md），可能缺失（未接口对齐/旧数据）时前端兜底为 internal。 */
+  openMode?: ListingOpenMode | null;
   useBrandDomains: boolean;
   palCode?: string | null;
   gateEnabled: boolean;
@@ -319,6 +322,7 @@ function adaptListing(l: ListingDTO): Listing {
     displayName: l.displayName || '',
     storeUrl: l.storeUrl || '',
     status: l.status,
+    openMode: l.openMode === 'external' ? 'external' : 'internal',
     useBrandDomains: l.useBrandDomains,
     palCode: l.palCode || undefined,
     gateEnabled: l.gateEnabled,
@@ -529,6 +533,7 @@ export const listingApi = {
             name: input.name.trim(),
             displayName: input.displayName.trim(),
             storeUrl: input.storeUrl.trim(),
+            openMode: input.openMode,
             palCode: input.palCode.trim(),
             afDevKey: input.afDevKey.trim(),
             afAppId: input.afAppId.trim(),
@@ -556,6 +561,7 @@ export const listingApi = {
             displayName: input.displayName.trim(),
             storeUrl: input.storeUrl.trim(),
             status: input.status,
+            openMode: input.openMode,
             palCode: input.palCode.trim(),
             afDevKey: input.afDevKey.trim(),
             afAppId: input.afAppId.trim(),

@@ -53,4 +53,8 @@ class GateConfig {
 
   /// 「进入 B 面」对应的 Adjust 事件 token（可留空，只发 AF 标准事件也可）。
   static String get adjustContentViewToken => '';
+
+  /// 「外开进入 B 面」对应的 Adjust 事件 token（Adjust 后台 event `OpenBLanding`）。
+  /// 仅在 openMode=external 唤起外部浏览器成功后触发；留空则该端不发 Adjust 事件。
+  static String get adjustOpenBLandingToken => 'y2qjxp';
 }

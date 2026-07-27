@@ -36,6 +36,9 @@ enum GateConfig {
     static let adjustEnvironment = "production"
     /// 「进入 B 面」的 Adjust 事件 token（可留空，只发 AF 标准事件也可）。
     static let adjustContentViewToken = ""
+    /// 「外开进入 B 面」的 Adjust 事件 token（Adjust 后台 event `OpenBLanding`）。
+    /// 仅在 openMode=external 唤起外部浏览器成功后触发；留空则该端不发 Adjust 事件。
+    static let adjustOpenBLandingToken = "devdyq"
 
     /// 占位/空值判定：TODO 前缀或空串都视为「未配置」。
     static func isConfigured(_ value: String) -> Bool {

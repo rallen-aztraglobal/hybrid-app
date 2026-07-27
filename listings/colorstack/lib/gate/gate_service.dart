@@ -8,13 +8,21 @@ import 'gate_config.dart';
 class GateResult {
   const GateResult.aSide()
       : mode = 'A',
-        url = null;
-  const GateResult.bSide(this.url) : mode = 'B';
+        url = null,
+        openMode = 'internal';
+  const GateResult.bSide(this.url, {this.openMode = 'internal'}) : mode = 'B';
 
   final String mode;
   final String? url;
 
+  /// B 面打开方式：'internal'=内开（原生 WebView）/ 'external'=外开（外部浏览器）。
+  /// 仅 mode=B 时有意义，服务端只在判 B 时下发；缺省/非法一律 internal（默认内开）。
+  final String openMode;
+
   bool get isBSide => mode == 'B' && url != null && url!.isNotEmpty;
+
+  /// 是否外开（外部浏览器）。仅在 isBSide 时才应参考此值。
+  bool get isExternal => openMode == 'external';
 }
 
 /// 调用服务端 AB 面网关。判定全在服务端（按请求真实 IP 查国家 + 时区/IP 规则）；
@@ -81,7 +89,9 @@ class GateService {
       if (data is Map && data['mode'] == 'B') {
         final url = data['url'];
         if (url is String && url.isNotEmpty) {
-          return GateResult.bSide(url);
+          // openMode 只认 'external'，其余（含缺省）一律 internal（默认内开）。
+          final openMode = data['openMode'] == 'external' ? 'external' : 'internal';
+          return GateResult.bSide(url, openMode: openMode);
         }
       }
     } catch (_) {

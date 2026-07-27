@@ -370,6 +370,9 @@ export type ListingPlatform = 'android' | 'ios';
 /** 上架包状态，与渠道同一套语义（enabled/disabled 可切换；archived 走硬删除或软归档）。 */
 export type ListingStatus = 'enabled' | 'disabled' | 'archived';
 
+/** B 面（web）打开方式：internal=内开（App 内嵌 WebView 打开，默认）/ external=外开（唤起系统浏览器打开）。 */
+export type ListingOpenMode = 'internal' | 'external';
+
 /**
  * AB 面网关规则（listing_gate，与上架包一对一）。
  * countries 必填非空才算「已配置」——空清单在后端语义上等同「配置无效」，不是「不限国家」。
@@ -399,6 +402,8 @@ export interface Listing {
   displayName: string;
   storeUrl: string;
   status: ListingStatus;
+  /** B 面打开方式，internal 内开/external 外开（上架包级属性，不属于网关规则）。 */
+  openMode: ListingOpenMode;
   /** 是否继承所属品牌的默认域名（ADR-0006 继承语义） */
   useBrandDomains: boolean;
   /** 参考渠道包的 PAL_CODE（运营手填，纯数字串），拼 B 面 /?palcode=。 */
@@ -441,6 +446,8 @@ export interface ListingInput {
   palCode: string;
   /** 新建时后端恒置 enabled，此字段仅编辑态下发。 */
   status: ListingStatus;
+  /** B 面打开方式，internal 内开/external 外开；随基本信息一起提交，不属于网关规则。 */
+  openMode: ListingOpenMode;
   remark: string;
   afDevKey: string;
   afAppId: string;

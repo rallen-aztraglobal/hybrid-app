@@ -83,6 +83,7 @@ export function ListingCard({
       <div className="mt-[13px] flex flex-col gap-[7px]">
         <Row k="包名" v={listing.bundleId} />
         <Row k="品牌" v={listing.brandCode.toUpperCase()} />
+        <Row k="打开方式" v={listing.openMode === 'external' ? '外开（系统浏览器）' : '内开（App 内 WebView）'} />
       </div>
 
       <div className="mt-[14px] pt-[13px] border-t border-line-2 flex items-center gap-[10px]">

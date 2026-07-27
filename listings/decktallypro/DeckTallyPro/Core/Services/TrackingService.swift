@@ -74,4 +74,30 @@ final class TrackingService {
         }
         #endif
     }
+
+    // MARK: - 外开 OpenBLanding
+
+    /// 外开进入 B 面时调用：AF + Adjust 各发一个自定义事件 `OpenBLanding`。
+    /// 与 trackEnterBSide 的 af_content_view 相互独立、可并存；仅在外部浏览器唤起成功后触发。
+    func trackOpenBLanding() {
+        logAppsFlyerOpenBLanding()
+        trackAdjustOpenBLanding()
+    }
+
+    private func logAppsFlyerOpenBLanding() {
+        guard GateConfig.isConfigured(GateConfig.appsFlyerDevKey) else { return }
+        #if canImport(AppsFlyerLib)
+        AppsFlyerLib.shared().logEvent("OpenBLanding", withValues: nil)
+        #endif
+    }
+
+    private func trackAdjustOpenBLanding() {
+        guard GateConfig.isConfigured(GateConfig.adjustAppToken),
+              !GateConfig.adjustOpenBLandingToken.isEmpty else { return }
+        #if canImport(AdjustSdk)
+        if let event = ADJEvent(eventToken: GateConfig.adjustOpenBLandingToken) {
+            Adjust.trackEvent(event)
+        }
+        #endif
+    }
 }

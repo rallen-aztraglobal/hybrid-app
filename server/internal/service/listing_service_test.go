@@ -252,6 +252,10 @@ func TestEvaluateListingGateEndToEnd(t *testing.T) {
 	if res.URL != "https://arenaplus.ph/?palcode=1053259" {
 		t.Errorf("B 面 URL 应为品牌域名拼 palcode，实际 %q", res.URL)
 	}
+	// 新建上架包未指定 OpenMode，B 面响应应带默认值 internal。
+	if res.OpenMode != model.ListingOpenInternal {
+		t.Errorf("B 面默认 openMode 应为 internal，实际 %q", res.OpenMode)
+	}
 
 	// 美国 IP → 强制 A（即便不在白名单，硬编码闸也拦下）。
 	if res, _ := svc.EvaluateListingGate(ctx, req("8.8.8.8")); res.Mode != model.GateModeA {
@@ -260,6 +264,10 @@ func TestEvaluateListingGateEndToEnd(t *testing.T) {
 	// 美国 IP 的响应必须不含 URL（绝不泄露 B 面地址）。
 	if res, _ := svc.EvaluateListingGate(ctx, req("8.8.8.8")); res.URL != "" {
 		t.Errorf("A 面响应绝不能带 URL，实际 %q", res.URL)
+	}
+	// A 面响应也不应带 openMode——该字段仅在 mode=B 时对客户端有意义。
+	if res, _ := svc.EvaluateListingGate(ctx, req("8.8.8.8")); res.OpenMode != "" {
+		t.Errorf("A 面响应不应带 openMode，实际 %q", res.OpenMode)
 	}
 
 	// 日本 IP（不在白名单）→ A。
@@ -291,5 +299,119 @@ func TestEvaluateListingGateNilResolver(t *testing.T) {
 	}
 	if res.Mode != model.GateModeA {
 		t.Errorf("无 GeoIP resolver 时应降级为 A 面，实际 %s", res.Mode)
+	}
+}
+
+// EvaluateListingGate 对 openMode 的透传：分别覆盖 listing.OpenMode = internal（默认）/
+// external / 空串（模拟历史脏数据）三种取值，B 面响应都必须是归一化后的合法值。
+func TestEvaluateListingGateOpenMode(t *testing.T) {
+	svc, ctx := newListingTestService(t, map[string]string{"112.198.0.1": "PH"})
+	l := mustCreateListing(t, svc, ctx)
+	if _, err := svc.SetListingGate(ctx, l.ID, SetGateInput{Countries: []string{"PH"}}); err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	if _, err := svc.UpdateListing(ctx, l.ID, UpdateListingInput{GateEnabled: &on}); err != nil {
+		t.Fatal(err)
+	}
+	req := GateRequest{Platform: "android", BundleID: "com.vividnest.colorstack5821", IP: net.ParseIP("112.198.0.1")}
+
+	// 默认（CreateListing 未传 OpenMode）→ internal。
+	res, err := svc.EvaluateListingGate(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Mode != model.GateModeB {
+		t.Fatalf("应判为 B 面，实际 %s", res.Mode)
+	}
+	if res.OpenMode != model.ListingOpenInternal {
+		t.Errorf("默认 openMode 应为 internal，实际 %q", res.OpenMode)
+	}
+
+	// 改为 external → 判定响应同步更新。
+	ext := model.ListingOpenExternal
+	if _, err := svc.UpdateListing(ctx, l.ID, UpdateListingInput{OpenMode: &ext}); err != nil {
+		t.Fatal(err)
+	}
+	res, err = svc.EvaluateListingGate(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OpenMode != model.ListingOpenExternal {
+		t.Errorf("更新后 openMode 应为 external，实际 %q", res.OpenMode)
+	}
+
+	// 绕过 service 直接向库里写空串（模拟 AutoMigrate 补列前的历史行/脏数据），
+	// EvaluateListingGate 必须防御性归一化为 internal，而不是把脏值原样透给客户端。
+	if err := svc.repo.UpdateListingFields(ctx, l.ID, map[string]any{"open_mode": ""}); err != nil {
+		t.Fatal(err)
+	}
+	res, err = svc.EvaluateListingGate(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OpenMode != model.ListingOpenInternal {
+		t.Errorf("库中空串应被防御性归一化为 internal，实际 %q", res.OpenMode)
+	}
+}
+
+// CreateListing/UpdateListing 的 openMode 往返：未传→internal 默认值；显式 external→保留；
+// 非法值→归一化 internal；update 改为 external 后再改回 internal 均生效。
+func TestCreateAndUpdateListingOpenMode(t *testing.T) {
+	svc, ctx := newListingTestService(t, nil)
+
+	// 未传 OpenMode → 默认 internal。
+	l1, err := svc.CreateListing(ctx, CreateListingInput{
+		BrandCode: "ap", Platform: "android", BundleID: "com.x.openmode1", Name: "x1", PalCode: "1053259",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l1.OpenMode != model.ListingOpenInternal {
+		t.Errorf("未传 OpenMode 应默认 internal，实际 %q", l1.OpenMode)
+	}
+
+	// 显式 external → 创建后原样落库。
+	l2, err := svc.CreateListing(ctx, CreateListingInput{
+		BrandCode: "ap", Platform: "android", BundleID: "com.x.openmode2", Name: "x2", PalCode: "1053259",
+		OpenMode: "external",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l2.OpenMode != model.ListingOpenExternal {
+		t.Errorf("显式 external 应保留，实际 %q", l2.OpenMode)
+	}
+
+	// 非法值 → 归一化 internal。
+	l3, err := svc.CreateListing(ctx, CreateListingInput{
+		BrandCode: "ap", Platform: "android", BundleID: "com.x.openmode3", Name: "x3", PalCode: "1053259",
+		OpenMode: "popup",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l3.OpenMode != model.ListingOpenInternal {
+		t.Errorf("非法 OpenMode 应归一化为 internal，实际 %q", l3.OpenMode)
+	}
+
+	// update：改为 external → 读回 external。
+	ext := "external"
+	updated, err := svc.UpdateListing(ctx, l1.ID, UpdateListingInput{OpenMode: &ext})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.OpenMode != model.ListingOpenExternal {
+		t.Errorf("更新为 external 后应生效，实际 %q", updated.OpenMode)
+	}
+
+	// update：再改回 internal → 生效。
+	intl := "internal"
+	back, err := svc.UpdateListing(ctx, l1.ID, UpdateListingInput{OpenMode: &intl})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.OpenMode != model.ListingOpenInternal {
+		t.Errorf("更新回 internal 后应生效，实际 %q", back.OpenMode)
 	}
 }

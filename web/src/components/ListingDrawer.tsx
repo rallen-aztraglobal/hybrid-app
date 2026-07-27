@@ -15,6 +15,7 @@ import type {
   BrandCode,
   DomainEntry,
   ListingInput,
+  ListingOpenMode,
   ListingPlatform,
   ListingStatus,
 } from '@/lib/types';
@@ -39,6 +40,7 @@ interface ListingFormState {
   palCode: string;
   storeUrl: string;
   status: ListingStatus;
+  openMode: ListingOpenMode;
   remark: string;
   afDevKey: string;
   afAppId: string;
@@ -105,6 +107,7 @@ export function ListingDrawer({
         palCode: editListing.palCode ?? '',
         storeUrl: editListing.storeUrl,
         status: editListing.status,
+        openMode: editListing.openMode ?? 'internal',
         remark: editListing.remark,
         afDevKey: editListing.afDevKey,
         afAppId: editListing.afAppId,
@@ -168,6 +171,7 @@ export function ListingDrawer({
       palCode: form.palCode.trim(),
       storeUrl: form.storeUrl.trim(),
       status: form.status,
+      openMode: form.openMode,
       remark: form.remark.trim(),
       afDevKey: form.afDevKey.trim(),
       afAppId: form.afAppId.trim(),
@@ -330,6 +334,16 @@ export function ListingDrawer({
             <SectionHeading num={3}>
               AB 面网关 <span className="font-normal text-muted text-[11.5px]">· 按 IP 国家判定放行 B 面（ADR-0014）</span>
             </SectionHeading>
+            <Field label="打开方式" hint="仅在判定进入 B 面时生效；A 面始终展示 App 本体">
+              <Select
+                value={form.openMode}
+                onChange={(v) => set('openMode', v as ListingOpenMode)}
+                options={[
+                  { value: 'internal', label: '内开（App 内 WebView 打开 B 面）' },
+                  { value: 'external', label: '外开（系统浏览器打开 B 面）' },
+                ]}
+              />
+            </Field>
             <ListingGateSection
               listingId={editing}
               gateEnabled={form.gateEnabled}
@@ -416,6 +430,7 @@ function blankForm(platform: ListingPlatform): ListingFormState {
     palCode: '',
     storeUrl: '',
     status: 'enabled',
+    openMode: 'internal',
     remark: '',
     afDevKey: '',
     afAppId: '',

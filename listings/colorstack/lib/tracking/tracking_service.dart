@@ -81,4 +81,21 @@ class TrackingService {
       } catch (_) {}
     }
   }
+
+  /// 外开进入 B 面时调用：AF + Adjust 各发一个自定义事件 `OpenBLanding`。
+  /// 与 onEnterBSide 的 af_content_view 相互独立、可并存；仅在外部浏览器唤起成功后触发。
+  /// AF 用事件名字符串（无需 token），Adjust 用编译期烧录的 event token。全程吞异常。
+  Future<void> onOpenBLanding() async {
+    if (_afReady && _af != null) {
+      try {
+        await _af!.logEvent('OpenBLanding', <String, dynamic>{});
+      } catch (_) {}
+    }
+    final token = GateConfig.adjustOpenBLandingToken;
+    if (_configured(GateConfig.adjustAppToken) && token.isNotEmpty) {
+      try {
+        Adjust.trackEvent(AdjustEvent(token));
+      } catch (_) {}
+    }
+  }
 }

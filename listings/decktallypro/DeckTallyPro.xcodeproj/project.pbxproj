@@ -177,7 +177,7 @@
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 5UAWC9SA4T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DeckTallyPro/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Deck Tally Pro";
+				INFOPLIST_KEY_CFBundleDisplayName = "BingoPlus";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -213,7 +213,7 @@
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 5UAWC9SA4T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DeckTallyPro/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Deck Tally Pro";
+				INFOPLIST_KEY_CFBundleDisplayName = "BingoPlus";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;

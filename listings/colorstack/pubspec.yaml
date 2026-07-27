@@ -34,6 +34,8 @@ dependencies:
   # AB 面网关：B 面全屏 WebView + 本机 IANA 时区上报（判定用）。
   webview_flutter: ^4.10.0
   flutter_timezone: ^4.1.1
+  # 外开：openMode=external 时唤起系统外部浏览器打开 B 面（内开仍走上面的 WebView）。
+  url_launcher: ^6.3.1
   # 推送：FCM 收推送 + 取 token（随 AB 面判定结果上报，后端只推 B 面设备）。
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.2

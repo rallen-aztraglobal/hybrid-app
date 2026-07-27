@@ -39,7 +39,7 @@
 
 ## 3. 数据模型（migration 000006）
 
-- `listing_app`：`brand_id`（继承品牌域名）· `(platform,bundle_id)` 唯一 · `gate_enabled` 总开关 · `af_dev_key/af_app_id` · `adjust_app_token/adjust_events`（复用 ADR-0013）· `use_brand_domains`。
+- `listing_app`：`brand_id`（继承品牌域名）· `(platform,bundle_id)` 唯一 · `gate_enabled` 总开关 · `open_mode`（B 面打开方式：`internal` 内开=原生 WebView / `external` 外开=系统浏览器，默认 internal）· `af_dev_key/af_app_id` · `adjust_app_token/adjust_events`（复用 ADR-0013）· `use_brand_domains`。
 - `listing_domain`：B 面域名覆盖，`position` 0 主 / 1..n 备（`use_brand_domains=false` 时生效）。
 - `listing_gate`：`countries / timezones / ip_allow_cidrs / ip_deny_cidrs`（一对一）。
 - `listing_gate_log`：判定流水 `ip/country/timezone/decision/reason`（排查用）。
@@ -51,10 +51,12 @@
 ```
 POST /api/app/listing/gate                 不缓存（Cache-Control: no-store）
   req  { "platform":"android|ios", "bundleId":"...", "timezone":"Asia/Manila" }
-  resp { "mode":"A" }  或  { "mode":"B", "url":"https://arenaplus.ph" }
+  resp { "mode":"A" }  或  { "mode":"B", "url":"https://arenaplus.ph", "openMode":"internal|external" }
 ```
 
 真实 IP 由服务端从可信代理链提取（`X-Forwarded-For`，见 [realip.go](../../server/internal/httpx/realip.go)），**客户端不传 IP**。响应**绝不含**判定原因/国家/命中规则。
+
+`openMode` **仅 mode=B 时下发**（A 面响应不含），取自 `listing_app.open_mode`：`internal`=客户端原生 WebView 内开、`external`=客户端唤起系统浏览器外开；缺省/非法客户端一律按 `internal` 处理。它只决定「B 面 URL 怎么打开」，不影响 A/B 判定本身。
 
 ### 管理面（JWT，viewer 读 / operator 写）
 
@@ -79,7 +81,10 @@ Console 前端已按此顺序提交（域名 → 网关规则 → 开关）。
 
 ## 5. 客户端接入（已落地在本仓库）
 
-两个 App 源码已收进仓库并完成接入，逻辑同构：启动请求 gate → A 面走应用原有首页（一行不改）→ B 面推全屏 WebView。AF/Adjust **A/B 均初始化**；进 B 面发 AF 标准事件 `af_content_view`。
+两个 App 源码已收进仓库并完成接入，逻辑同构：启动请求 gate → A 面走应用原有首页（一行不改）→ B 面按 `openMode` 打开：`internal` 推全屏原生 WebView（默认，与渠道壳 App 一致）；`external` 唤起系统浏览器打开、App 本体退回展示 A 面（既送用户去 B 面，又让 App 看起来仍是干净游戏；外开失败静默降级停在 A 面）。AF/Adjust **A/B 均初始化**；进 B 面发 AF 标准事件 `af_content_view`（内开/外开都发）。
+
+- Flutter：外开用 `url_launcher`（`LaunchMode.externalApplication`），内开仍用 `webview_flutter`；分流在 `lib/gate/gate_screen.dart`，`GateResult.openMode` 由 `gate_service.dart` 解析。
+- iOS：外开用 `UIApplication.open`，内开仍用 `WKWebView`（`WebContainerViewController`）；分流在 `DeckTallyPro/Gate/GateCoordinator.swift`，`GateOpenMode` 由 `GateService.swift` 解析。
 
 | App | 位置 | 入口改造 | 验证 |
 | --- | --- | --- | --- |

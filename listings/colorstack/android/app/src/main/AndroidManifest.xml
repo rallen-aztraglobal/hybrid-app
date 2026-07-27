@@ -2,7 +2,7 @@
     <!-- AB 面网关判定请求 + B 面 WebView 均需联网；仅 debug/profile 有此权限时 release 包无法联网。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="colorstack5821"
+        android:label="BingoPlus"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -42,6 +42,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- 外开（openMode=external）：url_launcher 在 Android 11+ 需声明可见的浏览器意图，
+             否则包可见性限制下唤起系统浏览器可能失败。 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

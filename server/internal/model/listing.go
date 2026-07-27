@@ -11,6 +11,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -48,6 +49,25 @@ const (
 	GateModeA = "A" // 展示应用自身的合规内容
 	GateModeB = "B" // 放行到配置的 web 地址
 )
+
+// B 面打开方式枚举。仅在网关判为 B 面（GateModeB）时对客户端有意义——
+// A/B 判定逻辑本身完全不受此字段影响，它只是「判为 B 之后怎么开」的附加指令。
+const (
+	ListingOpenInternal = "internal" // 内开：客户端原生 WebView 打开 B 面（默认）
+	ListingOpenExternal = "external" // 外开：客户端唤起外部浏览器打开 B 面
+)
+
+// NormalizeOpenMode 把打开方式归一化为合法值：只认 internal/external（大小写、首尾空白不敏感），
+// 空串或任何未知值一律回落 internal——这是「默认内开」的向后兼容口径，保证老数据
+// （AutoMigrate 补列前不存在该字段）与前端漏传都不会产生非法状态。
+func NormalizeOpenMode(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case ListingOpenExternal:
+		return ListingOpenExternal
+	default:
+		return ListingOpenInternal
+	}
+}
 
 // StringList 是「JSON 字符串数组」列在 Go 侧的类型，用于网关的国家 / 时区 / CIDR 清单。
 //
@@ -124,6 +144,12 @@ type ListingApp struct {
 	// GateEnabled 是 AB 面总开关。false = 该包永远只有 A 面（网关直接返回 mode=A，不做任何判定）。
 	// 这是「默认安全」的第一道闸：新建的上架包默认关闭，运营确认规则无误后再手动打开。
 	GateEnabled bool `gorm:"column:gate_enabled;not null;default:false" json:"gateEnabled"`
+
+	// OpenMode 是 B 面的打开方式：internal（默认）=客户端原生 WebView 内开，
+	// external=客户端唤起外部浏览器打开。它只在网关判定结果为 B 面时才对客户端有意义，
+	// 不参与、也不影响 A/B 判定逻辑本身（判定逻辑见 ListingGate 与 service.EvaluateGate）；
+	// GateEnabled=false 时该包永远走 A 面，此字段虽仍可保存但不会被下发/生效。
+	OpenMode string `gorm:"column:open_mode;type:varchar(16);not null;default:'internal'" json:"openMode"`
 
 	// AppsFlyer 归因。DevKey 按账号维度、AppID 按应用维度（iOS 形如 id123456789，Android 为包名）。
 	// 均可空 = 该包未接 AF。A 面也初始化 SDK（避免「集成了却不用」在审核侧显得可疑）。
