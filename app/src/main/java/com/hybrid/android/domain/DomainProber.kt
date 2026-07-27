@@ -78,7 +78,12 @@ open class DomainProber(
      * DNS 污染/中间人即便把域名解析到自己服务器，也拿不到该域名的合法证书（CA 不会签发），TLS 握手即失败。
      * 因此**不再要求内容域名返回业务特征签名 JSON**——内容域名是第三方游戏站（SPA），不可能配合实现我们的
      * `/healthz` 签名端点（它对任意路径都回 200 + HTML）。强行校验签名会把合法站点误判为劫持（见本次修复）。
-     * 命中条件收敛为：证书覆盖域名 + HTTP 2xx/3xx（站点确实在服务）。
+     * 命中条件：证书覆盖域名 + 站点确实在服务（HTTP 2xx/3xx，或「活着但拒绝本次请求」的 401/403/451）。
+     *
+     * 401/403/451 视作命中的原因：内容域名挂在 Cloudflare/WAF 后，对非目标地区/被挑战的请求直接回 403
+     * （典型是探测出口 IP 不在放行地区）——这只代表「站点活着、拒绝了这一次探测」，**不代表域名死了**。
+     * 若因此跳过、耗尽备用域名 fail-closed 到错误页，反而不如把 URL 直接交给 WebView（真实设备在放行地区会正常加载，
+     * 即便不在也至少显示站点自己的页面）。反劫持仍靠证书校验兜底：证书不覆盖目标域名 → HIJACK，绝不放行到别人的服务器。
      */
     open fun probe(domain: String, probePath: String): ProbeError {
         val url = domain.trimEnd('/') + ensureLeadingSlash(probePath)
@@ -88,7 +93,7 @@ open class DomainProber(
                 val code = resp.code
                 when {
                     code in 500..599 -> ProbeError.HTTP_5XX
-                    code !in 200..399 -> ProbeError.OTHER  // 4xx（含地区封锁 403）→ 该域名当前不可服务，试下一个
+                    !isServingLike(code) -> ProbeError.OTHER  // 其它 4xx（404/410 等）→ 该域名当前不提供内容，试下一个
                     !certMatchesDomain(resp.handshake?.peerCertificates, domain) -> ProbeError.HIJACK
                     else -> ProbeError.HIT
                 }
@@ -164,6 +169,15 @@ open class DomainProber(
             "https://cp.cloudflare.com/generate_204" to 204,
             "https://captive.apple.com" to EXPECT_SUCCESS_BODY,
         )
+
+        /**
+         * 纯函数：HTTP 状态码是否代表「站点在服务」（→ 进而做证书校验判 [ProbeError.HIT]/[ProbeError.HIJACK]）。
+         * 2xx/3xx 是正常服务；401/403/451 是「站点活着但拒绝本次请求」（内容域名的 geo/WAF 拦截，典型是探测
+         * 出口 IP 不在放行地区），仍视作在服务——详见 [probe] 说明。其它（404/410 等 4xx）不算。5xx 由调用方单独归 HTTP_5XX。
+         * 抽成 companion 静态函数以便 JVM 单测（不依赖 Android/OkHttp 实例）。
+         */
+        fun isServingLike(code: Int): Boolean =
+            code in 200..399 || code == 401 || code == 403 || code == 451
 
         /**
          * 纯函数：把网络异常映射到 [ProbeError]，对应 02 文档「3. 错误类型与动作映射」。

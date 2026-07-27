@@ -58,6 +58,26 @@ class ProbeClassificationTest {
     }
 
     @Test
+    fun `状态码 服务判据 isServingLike`() {
+        // 2xx/3xx 正常服务
+        assertTrue(DomainProber.isServingLike(200))
+        assertTrue(DomainProber.isServingLike(301))
+        assertTrue(DomainProber.isServingLike(399))
+        // 401/403/451：站点活着但拒绝本次请求（geo/WAF 拦截）→ 仍视作在服务，交给证书校验
+        assertTrue(DomainProber.isServingLike(401))
+        assertTrue(DomainProber.isServingLike(403))
+        assertTrue(DomainProber.isServingLike(451))
+        // 其它 4xx（不提供内容）→ 试下一个
+        assertFalse(DomainProber.isServingLike(400))
+        assertFalse(DomainProber.isServingLike(404))
+        assertFalse(DomainProber.isServingLike(410))
+        assertFalse(DomainProber.isServingLike(429))
+        // 5xx 不在此判据内（由调用方单独归 HTTP_5XX）
+        assertFalse(DomainProber.isServingLike(500))
+        assertFalse(DomainProber.isServingLike(503))
+    }
+
+    @Test
     fun `host 解析`() {
         assertEquals("arenaplus.ph", DomainProber.hostOf("https://arenaplus.ph"))
         assertEquals("arenaplus.ph", DomainProber.hostOf("arenaplus.ph"))
