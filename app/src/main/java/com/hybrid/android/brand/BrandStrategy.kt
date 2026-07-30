@@ -13,8 +13,8 @@ import org.json.JSONObject
 interface BrandStrategy {
 
     /**
-     * AppsFlyer 初始化（品牌差异点：BP 采集 OAID，其它开启 debug log），
-     * 并加载本品牌持久化的归因状态。在 Activity.onCreate 最早期调用。
+     * AppsFlyer 初始化（各实现都要开 OAID 采集——华为等无 GMS 设备靠它才有广告标识；
+     * 品牌差异点在 debug log 与各自持久化的归因状态）。在 Activity.onCreate 最早期调用。
      */
     fun initTracking(activity: Activity)
 

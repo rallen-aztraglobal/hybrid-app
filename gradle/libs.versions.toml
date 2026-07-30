@@ -70,6 +70,15 @@ firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 adjust-android = { module = "com.adjust.sdk:adjust-android", version.ref = "adjustAndroid" }
 installreferrer = { module = "com.android.installreferrer:installreferrer", version.ref = "installReferrer" }
 
+# Adjust 华为设备插件（版本必须与 adjust-android 主 SDK 同轨）：
+#   adjust-oaid            华为设备无 GMS → 拿不到 GAID，OAID 是唯一可用的广告标识。
+#                          注意 AdjustOaid.isOaidToBeRead 默认 false，须显式 readOaid（见 AdjustBootstrap）。
+#   adjust-huawei-referrer AppGallery 安装来源（Play Install Referrer 在华为设备上取不到）。
+#                          shouldReadHuaweiReferrer 默认 true，加依赖即生效，无需调用。
+# 两个都是十几 KB 的薄壳，同 adjust-android 一样无条件入 classpath（ADR-0013「依赖恒在、运行时休眠」）。
+adjust-oaid = { module = "com.adjust.sdk:adjust-android-oaid", version.ref = "adjustAndroid" }
+adjust-huawei-referrer = { module = "com.adjust.sdk:adjust-android-huawei-referrer", version.ref = "adjustAndroid" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

@@ -62,7 +62,8 @@ if (localFile.exists()) {
 // 大渠道（品牌）配置：所有小渠道按所属品牌共享 域名 / deeplink scheme / 策略。
 //   - domain          首页加载域名
 //   - scheme          deeplink scheme（写入 manifest 占位符 + BuildConfig）
-//   - hms             是否集成 HMS / AppsFlyer OAID（仅 BP 需要）
+//   - hms             该品牌是否整体集成 HMS / AppsFlyer OAID（仅 BP）。注意这不是唯一开关：
+//                     华为商店包（flavor 以 _hw 结尾）无论品牌都会注入，见下方 dependencies 块。
 // 小渠道清单（包名 / PAL_CODE / 应用名）在 channels/<brand>.csv 中，一行一个。
 // 新增小渠道 = CSV 加一行 + 在 app/src/<flavor>/ 放置 icon 与 splash 资源。
 // ============================================================================
@@ -251,9 +252,20 @@ dependencies {
     // installreferrer 提供 Play 安装来源归因；GAID 复用已有的 gms.play.services.ads.identifier。
     implementation libs.adjust.android
     implementation libs.installreferrer
+    // Adjust 华为设备插件：同 adjust-android 一样无条件入 classpath（薄壳，各十几 KB），
+    // 非华为设备上内部探测不到 HMS / AppGallery 即自然 no-op。这样 AdjustBootstrap 可以直接
+    // 引用 AdjustOaid 而不必按 flavor 分叉出编译不过的共享代码（同 ADR-0013 对 Adjust 主 SDK 的取舍）。
+    implementation libs.adjust.oaid
+    implementation libs.adjust.huawei.referrer
 
-    // HMS / AppsFlyer OAID：仅 BP 品牌渠道集成（按 flavor 维度注入依赖）
-    allChannels.findAll { brandConfig[it.brand].hms }.each { ch ->
+    // OAID 采集（AppsFlyer）：华为设备无 GMS → 拿不到 GAID，AppsFlyer 将没有任何广告标识，
+    // 事件即使发出去也无法归因（表现为后台「事件丢了」）。两类包需要：
+    //   1) 品牌本身要（BP，存量语义不变）；
+    //   2) 华为商店包（flavor 以 _hw 结尾 → applicationId 以 .hw 结尾）。商店维度是跨品牌的
+    //      （ADR-0009 商店后缀），AP/GP 同样会有华为包，故不能只按品牌开关。
+    // com.appsflyer:oaid 体积较大（内含 MSA 移动安全联盟 SDK），仍按 flavor 注入、不全量铺开；
+    // 对应的 keep 规则见 proguard-rules.pro 的 OAID 段。
+    allChannels.findAll { brandConfig[it.brand].hms || it.name.endsWith("_hw") }.each { ch ->
         add("${ch.name}Implementation", libs.af.oaid)
         add("${ch.name}Implementation", libs.hms.ads.identifier)
     }

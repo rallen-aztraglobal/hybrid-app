@@ -27,6 +27,10 @@ class StandardStrategy : BrandStrategy {
     private var registDate: String? = ""
 
     override fun initTracking(activity: Activity) {
+        // OAID 采集：华为设备无 GMS → 拿不到 GAID，不开这项 AppsFlyer 就没有任何广告标识。
+        // 商店维度是跨品牌的（ADR-0009 商店后缀），AP/GP 也会有华为包，故不再是 BP 独有。
+        // com.appsflyer:oaid 按 flavor 注入（见 app/build.gradle），未注入的包调用此方法是安全的 no-op。
+        AppsFlyerLib.getInstance().setCollectOaid(true)
         AppsFlyerLib.getInstance().setDebugLog(true)
         AppsFlyerLib.getInstance().init(BuildConfig.AF_DEV_KEY, null, activity)
         AppsFlyerLib.getInstance().start(activity)

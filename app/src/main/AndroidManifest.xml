@@ -11,6 +11,14 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- FCM 推送：Android 13+（API 33+）需运行时动态申请；minSdk 29 需声明后才可在 33+ 动态申请 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 华为 AppGallery 安装来源：Adjust 的 huawei-referrer 插件读
+         content://com.huawei.appmarket.commondata/item/5 拿 referrer。targetSdk 30+ 的包可见性
+         限制下必须显式声明该 provider，否则 resolveContentProvider 返回 null，华为包的安装
+         归因会全部落成自然量。非华为设备上该 provider 不存在，声明本身无副作用。 -->
+    <uses-permission android:name="com.huawei.appmarket.service.commondata.permission.GET_COMMON_DATA"/>
+    <queries>
+        <provider android:authorities="com.huawei.appmarket.commondata" />
+    </queries>
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

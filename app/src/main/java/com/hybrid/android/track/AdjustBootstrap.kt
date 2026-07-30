@@ -5,6 +5,7 @@ import android.util.Log
 import com.adjust.sdk.Adjust
 import com.adjust.sdk.AdjustConfig
 import com.adjust.sdk.AdjustEvent
+import com.adjust.sdk.oaid.AdjustOaid
 import com.hybrid.android.BuildConfig
 import org.json.JSONObject
 
@@ -49,6 +50,14 @@ object AdjustBootstrap {
             return
         }
         if (initialized) return
+
+        // OAID 采集开关：华为设备无 GMS → 拿不到 GAID，OAID 是 Adjust 唯一可用的广告标识；
+        // 不开的话华为包（applicationId 以 .hw 结尾）的事件即使发出去也没有设备标识、无法归因。
+        // 必须在 initSdk 之前调用（AdjustOaid.isOaidToBeRead 默认 false）；非华为设备上插件内部
+        // 探测不到 HMS / MSA SDK 即跳过，不影响初始化，故这里无条件调用、不按包做分支。
+        // AppGallery 安装来源由 adjust-android-huawei-referrer 插件默认开启，无需在此调用。
+        AdjustOaid.readOaid(context.applicationContext)
+
         val environment = if (BuildConfig.ENABLE_TEST_EVENTS) {
             AdjustConfig.ENVIRONMENT_SANDBOX
         } else {

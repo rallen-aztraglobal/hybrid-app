@@ -248,3 +248,69 @@ Adjust Automation 用于**程序化建 app / 建事件 / 拿 token**。没有它
 | `cli/` | `pull/build` 渲染 `adjust-tokens.json` + `.gitignore` |
 | `server/` | `channel` 加 `adjust_app_token`/`adjust_events`（migration）；CRUD + CLI 配置接口带出这两字段；CSV 解析 |
 | `web/` | 渠道编辑页「Adjust」区块：App Token + 上传 CSV |
+
+---
+
+## 10. 华为商店包（`_hw`）：设备标识与安装来源
+
+> 补于 2026-07-30。现象：`_hw` 包的 Adjust / AppsFlyer 事件在后台看不到。
+
+### 10.1 为什么华为包特殊
+
+华为设备**没有 GMS**，拿不到 GAID。而 `.hw` 包恰恰主要装在华为设备上——两个 SDK 都没有任何广告标识可用，事件即使发出去也落不到具体设备/用户身上，后台表现就是「事件丢了」。华为设备上唯一可用的广告标识是 **OAID**，安装来源也只能走 **AppGallery referrer**（Play Install Referrer 取不到）。
+
+关键前提：**商店维度是跨品牌的**（[ADR-0009](../adr/0009-channel-identity-appid.md) 商店后缀）。`_hw` 可能挂在任何品牌下，所以不能只靠 `brandConfig[brand].hms` 这个品牌级开关——那是 BP 的历史遗留，只覆盖 BP。
+
+### 10.2 依赖（4 个，注入范围不同）
+
+| 依赖 | 作用 | 注入范围 |
+| --- | --- | --- |
+| `com.adjust.sdk:adjust-android-oaid` | Adjust 读 OAID | **全部 flavor**（无条件） |
+| `com.adjust.sdk:adjust-android-huawei-referrer` | AppGallery 安装来源 | **全部 flavor**（无条件） |
+| `com.appsflyer:oaid` | AppsFlyer 读 OAID（内含 MSA 移动安全联盟 SDK） | BP 品牌 + 所有 `_hw` |
+| `com.huawei.hms:ads-identifier` | HMS 侧 OAID provider | 同上 |
+
+两个 Adjust 插件的版本**必须与 `adjust-android` 主 SDK 同版本号**（用同一个 `version.ref = "adjustAndroid"`）。
+
+为何前两个无条件、后两个按 flavor：Adjust 插件各十几 KB，且 `AdjustBootstrap`（`src/main` 共享代码）要直接引用 `AdjustOaid`——按 flavor 物理排除会让没有该依赖的 flavor **编译不过**，与 §4.1 是同一个理由。`com.appsflyer:oaid` 体积大得多，而 AF 侧的调用点 `setCollectOaid(true)` 属于主 SDK，未注入 OAID 库时调用是安全的 no-op，因此能按 flavor 排除、不必给全部 90 个包铺开。
+
+### 10.3 代码开关（两个要显式开，一个默认开）
+
+| 开关 | 默认 | 要求 |
+| --- | --- | --- |
+| `AdjustOaid.readOaid(context)` | `isOaidToBeRead = false`，**默认关** | 必须在 `Adjust.initSdk` **之前**调用 |
+| `AppsFlyerLib.setCollectOaid(true)` | 默认关 | 必须在 `AppsFlyerLib.init` **之前**调用，**每个 `BrandStrategy` 实现都要有** |
+| `AdjustHuaweiReferrer` | `shouldReadHuaweiReferrer = true`，**默认开** | 加依赖即生效，不需要调用 |
+
+`setCollectOaid` 原来只写在 `BpStrategy` 里（历史上 OAID 被当成 BP 的品牌差异），`StandardStrategy`（AP/GP）漏了——AP/GP 的华为包因此彻底没有设备标识。现在两个实现都要开，`BrandStrategy.initTracking` 的接口注释也已同步：OAID 采集是**设备差异**，不是品牌差异。
+
+两处调用都是**无条件**的，不按包名分支：非华为设备上插件内部探测不到 HMS / MSA SDK 会静默跳过，不影响初始化。
+
+### 10.4 Manifest（最容易漏的一处）
+
+Huawei referrer 插件读的是 ContentProvider `content://com.huawei.appmarket.commondata/item/5`。工程 `targetSdk 36`，在 Android 11+ 的**包可见性**限制下必须显式声明，否则 `resolveContentProvider` 直接返回 `null`：
+
+```xml
+<uses-permission android:name="com.huawei.appmarket.service.commondata.permission.GET_COMMON_DATA"/>
+<queries>
+    <provider android:authorities="com.huawei.appmarket.commondata" />
+</queries>
+```
+
+漏了不会报错、不会崩，只是**华为包的安装归因全部静默落成自然量**——排查时最容易被忽略。非华为设备上该 provider 不存在，声明本身无副作用。
+
+### 10.5 ProGuard
+
+无需新增。现有 `-keep class com.adjust.sdk.** { *; }`（§4.6）已覆盖 `com.adjust.sdk.oaid` / `com.adjust.sdk.huawei` 两个子包；AF 侧 MSA SDK 要的各厂商 keep 规则在 `proguard-rules.pro` 的 `# OAID` 段里，早已存在。
+
+### 10.6 后台侧（代码解决不了，必须人工核对）
+
+1. **AppsFlyer 是按包名认 App 的。** `com.<brand>.<flavor>.hw` 是一个全新的 applicationId，AF 后台没有同名 App 的话，事件在 AF 服务端就被丢弃——**这一条与 OAID 完全无关，两件事都得对**。每个 `_hw` 包都要在 AF 后台建一个 App。dev key 全渠道共用、已烧进 `BuildConfig.AF_DEV_KEY`，所以 AF 侧不需要往 Console 填任何东西，但后台的 App 必须存在。
+2. **Adjust 侧**照常走 [`adjust-sync`](../../.claude/skills/adjust-sync/SKILL.md)：建 app + 6 个事件 → token 回填 Console → **重新打包**（App Token 是编译期烧进 `app/adjust-tokens.json` 的，回填后不重打包不生效）。
+3. Adjust 里华为包的商店字段目前统一填 `google`。不影响 SDK 事件，但既然 AppGallery referrer 已接上，改成 Huawei App Gallery 会让商店归因报表更准。
+
+### 10.7 验收
+
+- **华为真机**装 `_hw` 包，`adb logcat -s HybridAdjust Adjust AppsFlyer`：Adjust 请求里 `oaid` 字段非空；AF 的 deviceData 里能看到 `oaid`。Adjust Testing Console 见 install/session 与事件。
+- **非华为机回归**：装任一存量包（非 `_hw`），确认 Adjust / AF 事件照常——OAID 读取失败必须是静默跳过，不能影响 SDK 初始化。
+- **构建回归**：`_hw` 与非 `_hw` 各挑一个 flavor 跑 `assembleXxxRelease`（含 R8），确认 minify 阶段无 missing class 警告。
