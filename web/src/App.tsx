@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { isAdmin } from '@/lib/roles';
 import { AppShell } from '@/components/AppShell';
 import { LoginPage } from '@/pages/LoginPage';
 import { ChannelsPage } from '@/pages/ChannelsPage';
@@ -13,6 +14,8 @@ import { PushPage } from '@/pages/PushPage';
 /**
  * 路由：未登录强制跳 /login；登录后进入 AppShell（侧栏+顶栏）下的各业务页。
  * 路由结构对齐原型侧边栏：渠道管理 / 域名配置 / 打包中心 / 构建记录 / 系统设置。
+ * /settings 整个模块是 admin-only：非 admin 直接访问该路径会被重定向到 /channels
+ * （侧栏也不显示该入口，见 AppShell）；真正的拒绝仍在后端 /api/stores* 的 403。
  */
 export default function App() {
   const user = useAuthStore((s) => s.user);
@@ -36,7 +39,10 @@ export default function App() {
         <Route path="/push" element={<PushPage />} />
         <Route path="/pack" element={<PackPage />} />
         <Route path="/builds" element={<BuildsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/settings"
+          element={isAdmin(user) ? <SettingsPage /> : <Navigate to="/channels" replace />}
+        />
         <Route path="*" element={<Navigate to="/channels" replace />} />
       </Route>
     </Routes>

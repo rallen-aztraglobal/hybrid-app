@@ -31,6 +31,32 @@ func (h *Handler) BuildManifest(c echo.Context) error {
 	return httpx.OK(c, m)
 }
 
+// currentVersionResp 「当前版本」响应体：versionName 为 null 表示该品牌暂无成功构建。
+type currentVersionResp struct {
+	VersionName *string `json:"versionName"`
+}
+
+// GetCurrentVersion godoc
+// @Summary  取某品牌「当前版本」：全部 success 构建里语义版本最高的一条（供打包中心展示，
+// @Summary  与 CreateBuildJob 的版本校验共用同一实现，二者结果保证一致）
+// @Tags     build
+// @Produce  json
+// @Param    brand  query     string  true  "品牌 code"
+// @Success  200    {object}  httpx.Envelope{data=currentVersionResp}
+// @Security BearerAuth
+// @Router   /api/build/current-version [get]
+func (h *Handler) GetCurrentVersion(c echo.Context) error {
+	brand := c.QueryParam("brand")
+	if brand == "" {
+		return httpx.Fail(c, http.StatusBadRequest, "缺少 brand 参数")
+	}
+	name, found := h.svc.CurrentVersion(c.Request().Context(), brand)
+	if !found {
+		return httpx.OK(c, currentVersionResp{VersionName: nil})
+	}
+	return httpx.OK(c, currentVersionResp{VersionName: &name})
+}
+
 // CreateBuildJob godoc
 // @Summary  入队一个构建任务（Web 打包中心触发；状态机 queued→running→success/failed）
 // @Tags     build

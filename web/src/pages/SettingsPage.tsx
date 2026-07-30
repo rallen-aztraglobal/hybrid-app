@@ -1,6 +1,6 @@
 /**
  * 系统设置 —— 在原型占位基础上做成可用页：
- *  - 账号与权限说明（admin/operator/viewer，RBAC）；
+ *  - 账号与权限说明（admin/user，RBAC）；本页整体 admin-only（路由守卫见 App.tsx / AppShell.tsx）；
  *  - 探针端点 / CDN 快照配置（展示当前值）；
  *  - **运行时配置预览工具**：输入 PAL_CODE，按三级取用（实时→缓存→兜底，ADR-0002）
  *    解析该渠道当前会拿到的域名，并标注命中来源，便于运营核对「域名热更是否生效」；
@@ -28,11 +28,10 @@ export function SettingsPage() {
         <div className="text-[12.5px] text-ink-2 mb-3">
           当前登录：<b>{user?.username}</b>（{user?.role}）
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {[
-            { role: 'admin', desc: '全部权限：账号、域名、渠道、打包' },
-            { role: 'operator', desc: '渠道 CRUD、图标、触发打包' },
-            { role: 'viewer', desc: '只读：查看渠道与构建记录' },
+            { role: 'admin', desc: '全部权限：系统设置（商店管理）、渠道归档/删除，以及全部日常业务操作' },
+            { role: 'user', desc: '除系统设置与渠道归档/删除外的全部日常操作：渠道、域名、打包、推送' },
           ].map((r) => (
             <div
               key={r.role}

@@ -240,7 +240,8 @@ export interface BuildLogChunk {
 /** 登录态用户。token = accessToken（请求头携带）。 */
 export interface AuthUser {
   username: string;
-  role: 'admin' | 'operator' | 'viewer';
+  /** admin：全部权限（含系统设置/商店管理/渠道归档）；user：其余全部日常业务操作。 */
+  role: 'admin' | 'user';
   /** access token（写入请求头 Authorization: Bearer） */
   token: string;
   /** refresh token（用于续期；本轮仅持有，未做自动刷新调度） */

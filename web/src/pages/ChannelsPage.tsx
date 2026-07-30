@@ -7,6 +7,8 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk, useArchiveChannel, useBrands, useChannels } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
+import { useAuthStore } from '@/store/authStore';
+import { isAdmin } from '@/lib/roles';
 import { BRAND_META } from '@/lib/brands';
 import type { Channel, ChannelStatus } from '@/lib/types';
 import { BrandTabs } from '@/components/BrandTabs';
@@ -45,6 +47,8 @@ export function ChannelsPage() {
   const { data: channels, isLoading, isFetching } = useChannels();
   const archive = useArchiveChannel();
   const qc = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const canArchive = isAdmin(user);
 
   const currentBrand = useUiStore((s) => s.currentBrand);
   const setCurrentBrand = useUiStore((s) => s.setCurrentBrand);
@@ -146,6 +150,7 @@ export function ChannelsPage() {
                 brand={brand}
                 onEdit={() => openEdit(c.id)}
                 onArchive={() => archive.mutate(c.id)}
+                canArchive={canArchive}
               />
             ))}
         </div>

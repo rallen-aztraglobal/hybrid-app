@@ -35,6 +35,7 @@ import { mockDb } from './mock/db';
 import { mockListingDb } from './mock/listings';
 import { mockListingCampaignDb } from './mock/listingCampaigns';
 import { BRAND_META } from './brands';
+import { highestVersion } from './version';
 
 /**
  * API 客户端 —— 对齐**真实后端**（server/internal/handler 路由 + httpx.Envelope）。
@@ -374,9 +375,9 @@ export const authApi = {
         return { username: r.username, role: r.role, token: r.accessToken, refreshToken: r.refreshToken };
       },
       () => {
-        // mock：任意非空账号密码即登录，演示 RBAC 角色
+        // mock：任意非空账号密码即登录，演示 RBAC 角色（只有 admin / user 两档）
         if (!username || !password) throw new ApiError('请输入账号密码', 400);
-        const role: AuthUser['role'] = username === 'admin' ? 'admin' : 'operator';
+        const role: AuthUser['role'] = username === 'admin' ? 'admin' : 'user';
         return { username, role, token: `mock-token-${username}-${Date.now()}` };
       },
     );
@@ -878,6 +879,24 @@ export const buildApi = {
         }
       },
       () => mockDb.listBuildJobs(brand),
+    );
+  },
+
+  /**
+   * 该品牌「当前版本」：全部成功构建里语义版本最高的一条（null = 暂无成功构建）。
+   * 后端 GET /api/build/current-version 全量扫描 success 记录（不像 /build/records 那样
+   * 受分页/上限约束），与 CreateBuildJob 的强制版本校验共用同一实现——前端不应该、也不
+   * 需要自己在一份可能被截断的构建记录列表上重新算一遍，保证展示与强制校验永远一致。
+   */
+  currentVersion(brand: BrandCode): Promise<string | null> {
+    return withFallback<string | null>(
+      async () => {
+        const r = await request<{ versionName: string | null }>(`/build/current-version?brand=${brand}`);
+        return r.versionName;
+      },
+      // mock：mockDb 本身是内存里的完整数据集（不分页），直接在全量上取最高版本即可，
+      // 与真实后端「全量扫描」的语义一致。
+      () => highestVersion(mockDb.listBuildJobs(brand).filter((j) => j.status === 'success').map((j) => j.versionName)),
     );
   },
 

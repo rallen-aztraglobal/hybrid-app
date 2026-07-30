@@ -13,7 +13,8 @@ import (
 )
 
 // Register 挂载全部路由到 Echo 实例。
-// 鉴权分层：/api/app/* 与 /healthz 公开；其余需 JWT；写操作要求 operator+，账号管理要求 admin。
+// 鉴权分层：/api/app/* 与 /healthz 公开；其余需 JWT；日常业务读写要求 user+；
+// 系统设置（商店管理）与渠道归档/删除要求 admin。
 func (h *Handler) Register(e *echo.Echo) {
 	// 全局中间件。
 	e.Use(middleware.Recover())
@@ -49,73 +50,76 @@ func (h *Handler) Register(e *echo.Echo) {
 	api := e.Group("/api")
 	api.Use(h.authMgr.Middleware())
 
-	viewer := auth.RequireRole(model.RoleViewer)   // 只读
-	operator := auth.RequireRole(model.RoleOperator) // 写
+	user := auth.RequireRole(model.RoleUser)   // 日常业务操作（读 + 大多数写）
+	admin := auth.RequireRole(model.RoleAdmin) // 系统设置（商店）与渠道归档/删除
 
 	// 大渠道。
-	api.GET("/brands", h.ListBrands, viewer)
-	api.GET("/brands/:code/domains", h.GetBrandDomains, viewer)
-	api.PUT("/brands/:code/domains", h.SetBrandDomains, operator)
+	api.GET("/brands", h.ListBrands, user)
+	api.GET("/brands/:code/domains", h.GetBrandDomains, user)
+	api.PUT("/brands/:code/domains", h.SetBrandDomains, user)
 
-	// 应用商店（渠道 store 后缀，见 CLAUDE.md 商店后缀功能）。
-	api.GET("/stores", h.ListStores, viewer)
-	api.POST("/stores", h.CreateStore, operator)
-	api.PUT("/stores/:id", h.UpdateStore, operator)
-	api.DELETE("/stores/:id", h.DeleteStore, operator)
+	// 应用商店（系统设置模块；渠道 store 后缀见 CLAUDE.md 商店后缀功能）：admin-only。
+	api.GET("/stores", h.ListStores, admin)
+	api.POST("/stores", h.CreateStore, admin)
+	api.PUT("/stores/:id", h.UpdateStore, admin)
+	api.DELETE("/stores/:id", h.DeleteStore, admin)
 
 	// 上架包（Flutter/原生 App，独立于小渠道 APK 产线）。
-	api.GET("/listings", h.ListListings, viewer)
-	api.POST("/listings", h.CreateListing, operator)
-	api.GET("/listings/:id", h.GetListing, viewer)
-	api.PUT("/listings/:id", h.UpdateListing, operator)
-	api.DELETE("/listings/:id", h.DeleteListing, operator)
-	api.PUT("/listings/:id/domains", h.SetListingDomains, operator)
-	api.PUT("/listings/:id/gate", h.SetListingGate, operator)
-	api.POST("/listings/:id/gate/test", h.TestListingGate, operator) // 后台试算判定
-	api.GET("/listings/:id/gate/logs", h.ListGateLogs, viewer)       // 判定流水排查
+	api.GET("/listings", h.ListListings, user)
+	api.POST("/listings", h.CreateListing, user)
+	api.GET("/listings/:id", h.GetListing, user)
+	api.PUT("/listings/:id", h.UpdateListing, user)
+	api.DELETE("/listings/:id", h.DeleteListing, user)
+	api.PUT("/listings/:id/domains", h.SetListingDomains, user)
+	api.PUT("/listings/:id/gate", h.SetListingGate, user)
+	api.POST("/listings/:id/gate/test", h.TestListingGate, user) // 后台试算判定
+	api.GET("/listings/:id/gate/logs", h.ListGateLogs, user)     // 判定流水排查
 
 	// 上架包推送（复用推送管线，但强制只发 B 面设备；独立 Firebase 项目）。
-	api.GET("/push/listing-campaigns", h.ListListingCampaigns, viewer)
-	api.POST("/push/listing-campaigns", h.CreateListingCampaign, operator)
-	api.POST("/push/listing-campaigns/:id/send", h.SendListingCampaign, operator)
+	api.GET("/push/listing-campaigns", h.ListListingCampaigns, user)
+	api.POST("/push/listing-campaigns", h.CreateListingCampaign, user)
+	api.POST("/push/listing-campaigns/:id/send", h.SendListingCampaign, user)
 
 	// 小渠道 CRUD。
-	api.GET("/channels", h.ListChannels, viewer)
-	api.POST("/channels", h.CreateChannel, operator)
-	api.GET("/channels/:id", h.GetChannel, viewer)
-	api.PUT("/channels/:id", h.UpdateChannel, operator)
-	api.DELETE("/channels/:id", h.DeleteChannel, operator)
-	api.PUT("/channels/:id/domains", h.SetChannelDomains, operator)
-	api.GET("/channels/:id/latest-apk", h.LatestApk, viewer) // 渠道卡片「下载最新包」（ADR-0008）
+	api.GET("/channels", h.ListChannels, user)
+	api.POST("/channels", h.CreateChannel, user)
+	api.GET("/channels/:id", h.GetChannel, user)
+	api.PUT("/channels/:id", h.UpdateChannel, user)
+	api.DELETE("/channels/:id", h.DeleteChannel, admin) // 归档=破坏性操作，admin-only
+	api.PUT("/channels/:id/domains", h.SetChannelDomains, user)
+	api.GET("/channels/:id/latest-apk", h.LatestApk, user) // 渠道卡片「下载最新包」（ADR-0008）
 
 	// 图标管线。
-	api.POST("/channels/:id/icon", h.UploadIcon, operator)
-	api.POST("/channels/:id/splash", h.UploadSplash, operator)
-	api.GET("/channels/:id/res.zip", h.GetResZip, viewer)
+	api.POST("/channels/:id/icon", h.UploadIcon, user)
+	api.POST("/channels/:id/splash", h.UploadSplash, user)
+	api.GET("/channels/:id/res.zip", h.GetResZip, user)
 
 	// 打包：manifest 供 CLI 拉全量；jobs 队列与记录供 Web 打包中心（ADR-0008）。
-	api.GET("/build/manifest", h.BuildManifest, viewer)
-	api.POST("/build/jobs", h.CreateBuildJob, operator)
-	api.GET("/build/records", h.ListBuildRecords, viewer)
-	api.GET("/build/records/:id", h.GetBuildRecord, viewer)
-	api.GET("/build/records/:id/logs", h.BuildLogs, viewer)
+	api.GET("/build/manifest", h.BuildManifest, user)
+	// 当前版本：与 CreateBuildJob 的版本校验共用 Service.CurrentVersion，全量扫描 success 记录
+	// （不像 /build/records 那样受分页/上限约束），保证前端展示与后端强制校验永远一致。
+	api.GET("/build/current-version", h.GetCurrentVersion, user)
+	api.POST("/build/jobs", h.CreateBuildJob, user)
+	api.GET("/build/records", h.ListBuildRecords, user)
+	api.GET("/build/records/:id", h.GetBuildRecord, user)
+	api.GET("/build/records/:id/logs", h.BuildLogs, user)
 
-	// 构建机（runner）领取与上报：机器对机器，要求 operator+ 的服务账号。
-	api.POST("/build/claim", h.ClaimBuild, operator)
-	api.POST("/build/records/:id/status", h.ReportBuildStatus, operator)
-	api.POST("/build/records/:id/logs", h.AppendBuildLog, operator)
-	api.POST("/build/records/:id/artifacts", h.AddBuildArtifact, operator)
+	// 构建机（runner）领取与上报：机器对机器，静态令牌注入的是 user 身份（见 auth.Manager.Middleware）。
+	api.POST("/build/claim", h.ClaimBuild, user)
+	api.POST("/build/records/:id/status", h.ReportBuildStatus, user)
+	api.POST("/build/records/:id/logs", h.AppendBuildLog, user)
+	api.POST("/build/records/:id/artifacts", h.AddBuildArtifact, user)
 
 	// 推送管理（ADR-0012）。
-	api.GET("/push/status", h.GetPushStatus, viewer)
-	api.GET("/push/campaigns", h.ListPushCampaigns, viewer)
-	api.POST("/push/campaigns", h.CreatePushCampaign, operator)
-	api.GET("/push/campaigns/:id", h.GetPushCampaign, viewer)
-	api.PUT("/push/campaigns/:id", h.UpdatePushCampaign, operator)
-	api.POST("/push/campaigns/:id/send", h.SendPushCampaign, operator)
-	api.POST("/push/campaigns/:id/schedule", h.SchedulePushCampaign, operator)
-	api.POST("/push/upload-image", h.UploadPushImage, operator)
-	api.GET("/push/audience", h.GetPushAudience, viewer)
-	// google-services.json 上传（operator+；GET 公开已在上方注册）。
-	api.POST("/push/google-services", h.UploadGoogleServices, operator)
+	api.GET("/push/status", h.GetPushStatus, user)
+	api.GET("/push/campaigns", h.ListPushCampaigns, user)
+	api.POST("/push/campaigns", h.CreatePushCampaign, user)
+	api.GET("/push/campaigns/:id", h.GetPushCampaign, user)
+	api.PUT("/push/campaigns/:id", h.UpdatePushCampaign, user)
+	api.POST("/push/campaigns/:id/send", h.SendPushCampaign, user)
+	api.POST("/push/campaigns/:id/schedule", h.SchedulePushCampaign, user)
+	api.POST("/push/upload-image", h.UploadPushImage, user)
+	api.GET("/push/audience", h.GetPushAudience, user)
+	// google-services.json 上传（user+；GET 公开已在上方注册）。
+	api.POST("/push/google-services", h.UploadGoogleServices, user)
 }

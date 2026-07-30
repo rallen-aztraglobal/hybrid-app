@@ -434,6 +434,20 @@ func (r *Repo) ListBuildRecords(ctx context.Context, f BuildRecordFilter) ([]mod
 	return list, nil
 }
 
+// ListSuccessfulVersionNames 取某品牌全部 success 构建记录的 version_name（不分页、不预加载产物）。
+// 供「当前版本」校验使用：只需版本号字符串本身，按最高语义版本比较，而非按时间/自增 id 取最新一条
+// （后者可能因为手误提交了一个更低的版本号而给出错误的「最新」）。
+func (r *Repo) ListSuccessfulVersionNames(ctx context.Context, brandCode string) ([]string, error) {
+	var versions []string
+	err := r.db.WithContext(ctx).Model(&model.BuildRecord{}).
+		Where("brand_code = ? AND status = ? AND version_name <> ''", brandCode, model.BuildSuccess).
+		Pluck("version_name", &versions).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询品牌 %s 成功构建版本失败: %w", brandCode, err)
+	}
+	return versions, nil
+}
+
 // GetBuildRecord 按 id 取单条构建记录（含产物）。
 func (r *Repo) GetBuildRecord(ctx context.Context, id uint64) (*model.BuildRecord, error) {
 	var rec model.BuildRecord
