@@ -55,11 +55,28 @@ log "3/6 同步源码 → ${BOX_HOST}:${REMOTE_DIR}（rsync 增量；排除机�
 # rsync 需两端都有；AliLinux 最小化默认无 rsync，确保装上。
 ssh_box "mkdir -p '$REMOTE_DIR'; command -v rsync >/dev/null 2>&1 || dnf -y install rsync >/dev/null 2>&1 || true"
 ssh_box 'command -v rsync >/dev/null 2>&1' || { echo "✗ 服务器装 rsync 失败"; exit 1; }
+
+# channels/*.csv 是 hybrid-pack 从 Console 渲染出来的【产物】，后台才是 source of truth（ADR-0004），
+# 本不该从开发机同步过去。但首次部署必须给一份：
+#   * go-api 镜像的种子层要 COPY channels/（deploy/Dockerfile.api），目录缺失会导致 docker build 失败；
+#   * csvio.WriteFile 不自建父目录，缺 channels/ 时构建机第一次 pull 也写不进去。
+# 而【非首次】不能再同步：会把构建机工作区里 pull 渲染好的清单（含 _hw 等商店包）盖回开发机的旧版本，
+# 直到下一次 pull 才恢复；这期间任何绕过 runner 的手工 gradlew 都看不到那些 flavor。
+# 故按「服务器上是否已有该目录」区分：首次带上，之后跳过。
+SYNC_PATHS="server cli web app gradle deploy"
+if ssh_box "[ -d '$REMOTE_DIR/channels' ]"; then
+  echo "  channels/ 已存在 → 本次不同步（渲染产物以 Console 为准，ADR-0004）"
+else
+  SYNC_PATHS="$SYNC_PATHS channels"
+  echo "  首次部署 → 一并同步 channels/（供 go-api 种子层导入）"
+fi
+
+# shellcheck disable=SC2086  # SYNC_PATHS 需按空格分词展开为多个源路径
 rsync -az -e "ssh $KEYOPT" \
   --exclude='.git' --exclude='node_modules' --exclude='.gradle' --exclude='app/build' \
   --exclude='web/dist' --exclude='*.log' \
   --exclude='deploy/certs' --exclude='deploy/.env' --exclude='deploy/.env.release' \
-  server cli web app channels gradle deploy build.gradle settings.gradle gradle.properties gradlew gradlew.bat \
+  $SYNC_PATHS build.gradle settings.gradle gradle.properties gradlew gradlew.bat \
   "${BOX_USER}@${BOX_HOST}:${REMOTE_DIR}/"
 ssh_box "chown -R 1000:1000 '$REMOTE_DIR'"   # build-runner(uid1000) 需写权限
 
