@@ -299,9 +299,22 @@ Huawei referrer 插件读的是 ContentProvider `content://com.huawei.appmarket.
 
 漏了不会报错、不会崩，只是**华为包的安装归因全部静默落成自然量**——排查时最容易被忽略。非华为设备上该 provider 不存在，声明本身无副作用。
 
-### 10.5 ProGuard
+### 10.5 ProGuard：必须补 `-dontwarn com.bun.miitmdid.**`
 
-无需新增。现有 `-keep class com.adjust.sdk.** { *; }`（§4.6）已覆盖 `com.adjust.sdk.oaid` / `com.adjust.sdk.huawei` 两个子包；AF 侧 MSA SDK 要的各厂商 keep 规则在 `proguard-rules.pro` 的 `# OAID` 段里，早已存在。
+`-keep class com.adjust.sdk.** { *; }`（§4.6）已覆盖 `com.adjust.sdk.oaid` / `com.adjust.sdk.huawei` 两个子包，但**还要额外加一条**，否则 `minifyXxxReleaseWithR8` 会直接失败：
+
+```proguard
+-dontwarn com.bun.miitmdid.**
+```
+
+原委：本工程**不打包 MSA（移动安全联盟）SDK**——`com.appsflyer:oaid` 里只有 `com.appsflyer.oaid.*`，它靠反射调 MSA，所以 `# OAID` 段那一大串 `com.bun.miitmdid.**` keep 规则一直是对不存在的类生效（no-op），从没暴露过问题。而 Adjust 的 OAID 插件是**直接类引用**，且 AAR 里**没带 consumer proguard 规则**（AF 的 AAR 带了），于是 R8 报：
+
+```
+ERROR: R8: Missing class com.bun.miitmdid.core.MdidSdkHelper
+       (referenced from: void com.adjust.sdk.oaid.AdjustOaid.readOaid(android.content.Context))
+```
+
+`-dontwarn` 在运行时是安全的（已核对插件字节码）：`readOaid` 里 `MdidSdkHelper.InitCert` 的调用点落在 `catch Throwable` 的异常表内，缺类时被吞掉并置 `isMsaSdkAvailable=false`；`Util` 取 OAID 前先判这个标志，`MsaSdkClient` 永远不会被加载。**华为 OAID 走的是另一条 `HmsSdkClient` 路径**，不经过 MSA，所以功能不受影响——这正是我们要的那条路。
 
 ### 10.6 后台侧（代码解决不了，必须人工核对）
 

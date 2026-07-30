@@ -63,3 +63,13 @@
 -keep class com.google.android.gms.ads.identifier.AdvertisingIdClient { *; }
 -keep class com.google.android.gms.ads.identifier.AdvertisingIdClient$Info { *; }
 -keep public class com.android.installreferrer.** { *; }
+
+# Adjust OAID 插件（adjust-android-oaid）对 MSA 移动安全联盟 SDK 的引用。
+# 本工程【不打包】MSA：com.appsflyer:oaid 只含 com.appsflyer.oaid.*，靠反射调 MSA，
+# 故上面 OAID 段那些 com.bun.miitmdid.** keep 规则一直是对不存在的类生效（no-op）。
+# 但 Adjust 的插件是【直接类引用】且 AAR 里没带 consumer proguard 规则，R8 会以
+# "Missing classes detected" 直接失败（AdjustOaid.readOaid / MsaSdkClient.getOaidInfo）。
+# 运行时安全（已核对字节码）：readOaid 里 MdidSdkHelper.InitCert 的调用点在 catch Throwable
+# 的异常表内，缺类走 isMsaSdkAvailable=false；Util 取 OAID 前先判该标志，MsaSdkClient
+# 永不被加载。华为 OAID 走的是另一条 HmsSdkClient 路径，不受影响。
+-dontwarn com.bun.miitmdid.**
