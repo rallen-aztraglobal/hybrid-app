@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -31,6 +32,30 @@ func New(cfg *config.Config, svc *service.Service, authMgr *auth.Manager, r *rep
 		authMgr:        authMgr,
 		repo:           r,
 		trustedProxies: httpx.NewTrustedProxies(cfg.TrustedProxyCIDRs),
+	}
+}
+
+// RequireEnabled 校验当前 access token 对应账号仍处于启用状态。
+//
+// 背景：JWT access token 一旦签发，在自然过期（ADR-0008）前仅凭 auth.Manager.Middleware
+// 的签名校验即可通过——管理员把某账号禁用后，该账号已持有的 token 并不会因此失效。
+// 这里对每个受保护请求重新查一次库，把「禁用」做成立即生效的服务端强制检查，
+// 而不是等 token 自然过期（详见用户管理文档「禁用账号行为」一节）。
+// 构建机静态令牌（RunnerToken）注入的机器身份不对应 admin_user 记录（UserID 恒为 0），跳过此检查。
+func (h *Handler) RequireEnabled(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		claims := auth.FromContext(c)
+		if claims == nil {
+			return echo.NewHTTPError(http.StatusUnauthorized, "未鉴权")
+		}
+		if claims.UserID == 0 {
+			return next(c)
+		}
+		u, err := h.repo.GetUserByID(c.Request().Context(), claims.UserID)
+		if err != nil || !u.Enabled {
+			return echo.NewHTTPError(http.StatusUnauthorized, "账号已被禁用")
+		}
+		return next(c)
 	}
 }
 

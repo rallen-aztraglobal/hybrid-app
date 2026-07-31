@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { brandApi, buildApi, channelApi, listingApi, listingCampaignApi, pushApi, storeApi } from '@/lib/api';
+import { brandApi, buildApi, channelApi, listingApi, listingCampaignApi, pushApi, storeApi, usersApi } from '@/lib/api';
 import type {
   BrandCode,
   BuildJobRequest,
   ChannelInput,
+  CreateUserInput,
   DomainEntry,
   ListingCampaignInput,
   ListingCampaignSendResult,
@@ -12,6 +13,7 @@ import type {
   PushSendResult,
   StoreInput,
   StoreUpdateInput,
+  UpdateUserInput,
 } from '@/lib/types';
 
 /**
@@ -32,6 +34,7 @@ export const qk = {
   pushCampaign: (id: string) => ['push', 'campaigns', id] as const,
   pushAudience: (appIds: string[]) => ['push', 'audience', ...appIds.slice().sort()] as const,
   stores: ['stores'] as const,
+  users: ['users'] as const,
   listings: ['listings'] as const,
   listingGateLogs: (id: string) => ['listings', id, 'gateLogs'] as const,
   listingCampaigns: ['push', 'listing-campaigns'] as const,
@@ -140,6 +143,43 @@ export function useDeleteStore() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.stores });
     },
+  });
+}
+
+// =========================================================================
+// 账号管理（Admin-only User Management）
+// =========================================================================
+
+/** 账号列表（admin-only）。数量小，不分页。 */
+export function useUsers() {
+  return useQuery({ queryKey: qk.users, queryFn: usersApi.list });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateUserInput) => usersApi.create(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.users });
+    },
+  });
+}
+
+/** 改角色 / 启停用（admin-only）；自身账号与最后一个启用中的 admin 的保护规则由后端强制。 */
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateUserInput }) => usersApi.update(id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.users });
+    },
+  });
+}
+
+/** 重置密码（admin-only）。不影响账号列表数据，成功后无需 invalidate。 */
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) => usersApi.resetPassword(id, password),
   });
 }
 

@@ -199,12 +199,20 @@ type BuildArtifact struct {
 func (BuildArtifact) TableName() string { return "build_artifact" }
 
 // AdminUser 后台账号。
+//
+// Enabled=false（账号管理，见 docs/admin 用户管理文档）：
+//   - 登录被拒绝（Service.Login 校验）；
+//   - 已签发、尚未过期的 access token 也立即失效——鉴权中间件在
+//     RequireEnabled 里对每次请求重新查库确认账号当前仍启用（见 handler.RequireEnabled），
+//     而不是等 token 自然过期（ADR-0008 access token 有效期较长，仅停用不足以立即生效）。
 type AdminUser struct {
 	ID           uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username     string    `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`
 	PasswordHash string    `gorm:"column:password_hash;type:varchar(255);not null" json:"-"`
 	Role         string    `gorm:"column:role;type:varchar(16);not null;default:user" json:"role"`
+	Enabled      bool      `gorm:"column:enabled;not null;default:true" json:"enabled"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
 
 func (AdminUser) TableName() string { return "admin_user" }

@@ -248,6 +248,37 @@ export interface AuthUser {
   refreshToken?: string;
 }
 
+// =========================================================================
+// 账号管理（Admin-only User Management）
+// =========================================================================
+
+/**
+ * 后台账号（对应后端 model.AdminUser）。后端 PasswordHash 字段 json 标签是 "-"，
+ * 接口天然不会下发密码哈希，故本类型没有、也不应该有密码相关字段。
+ */
+export interface AdminAccount {
+  id: string;
+  username: string;
+  role: 'admin' | 'user';
+  enabled: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/** 新增账号入参（POST /api/users，admin-only）。enabled 缺省 true。 */
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  role: AdminAccount['role'];
+  enabled?: boolean;
+}
+
+/** 修改账号入参（PUT /api/users/:id，admin-only）：仅角色 / 启用状态可改。 */
+export interface UpdateUserInput {
+  role?: AdminAccount['role'];
+  enabled?: boolean;
+}
+
 /** 后端登录端点返回体（auth.go tokenResp）。 */
 export interface LoginResponse {
   accessToken: string;

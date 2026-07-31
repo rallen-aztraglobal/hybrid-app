@@ -57,7 +57,7 @@ func (s *Service) ListBrands(ctx context.Context) ([]BrandView, error) {
 	return out, nil
 }
 
-// Login 校验账号密码，成功返回用户。
+// Login 校验账号密码，成功返回用户。禁用账号即使密码正确也拒绝登录。
 func (s *Service) Login(ctx context.Context, username, password string) (*model.AdminUser, error) {
 	u, err := s.repo.GetUserByUsername(ctx, username)
 	if err != nil {
@@ -65,6 +65,9 @@ func (s *Service) Login(ctx context.Context, username, password string) (*model.
 	}
 	if !auth.CheckPassword(u.PasswordHash, password) {
 		return nil, errBadRequest("用户名或密码错误")
+	}
+	if !u.Enabled {
+		return nil, errBadRequest("账号已被禁用，请联系管理员")
 	}
 	return u, nil
 }

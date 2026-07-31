@@ -9,9 +9,19 @@
 import { useMemo, useState } from 'react';
 import { resolveAppConfig, type ResolveResult } from '@/lib/runtimeConfig';
 import { useAuthStore } from '@/store/authStore';
-import { useChannels, useCreateStore, useDeleteStore, useStores, useUpdateStore } from '@/hooks/queries';
+import {
+  useChannels,
+  useCreateStore,
+  useCreateUser,
+  useDeleteStore,
+  useResetUserPassword,
+  useStores,
+  useUpdateStore,
+  useUpdateUser,
+  useUsers,
+} from '@/hooks/queries';
 import { BRAND_META } from '@/lib/brands';
-import type { Store } from '@/lib/types';
+import type { AdminAccount, Store } from '@/lib/types';
 import { ApiError } from '@/lib/api';
 import { Button, Note, Select, Switch } from '@/components/ui';
 import { EditIcon, InfoIcon, PlusIcon, ShieldIcon, TrashIcon } from '@/components/icons';
@@ -65,6 +75,9 @@ export function SettingsPage() {
 
       {/* 应用商店 */}
       <StoresManager />
+
+      {/* 账号管理 */}
+      <UsersManager />
 
       {/* 运行时配置预览 */}
       <RuntimePreview />
@@ -327,6 +340,279 @@ function StoresManager() {
             {rowError?.id === s.id && <div className="mt-2 text-[12px] text-down">{rowError.message}</div>}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 账号管理（Admin-only User Management）——新建账号 / 改角色 / 启停用 / 重置密码。
+ * 自身账号（按 username 与当前登录用户比对）的角色下拉与启停用开关禁用，避免用户先点了
+ * 才被后端 409 拒绝；真正的拒绝仍在后端（前端只是更友好的 UX，不是权限的最终来源）。
+ * 不提供硬删除：audit_log.user_id / channel.created_by / listing_app.created_by 均引用
+ * admin_user.id 且无级联，硬删会破坏审计与归属追溯（见 server/internal/service/user.go）。
+ */
+function UsersManager() {
+  const me = useAuthStore((s) => s.user);
+  const { data: users, isLoading } = useUsers();
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const resetPassword = useResetUserPassword();
+
+  const [adding, setAdding] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newConfirm, setNewConfirm] = useState('');
+  const [newRole, setNewRole] = useState<AdminAccount['role']>('user');
+  const [newEnabled, setNewEnabled] = useState(true);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetPw, setResetPw] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+
+  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+
+  const sorted = useMemo(() => (users ?? []).slice().sort((a, b) => a.username.localeCompare(b.username)), [users]);
+
+  function friendlyError(err: unknown, fallback: string): string {
+    if (err instanceof ApiError) {
+      if (err.status === 409) return err.message || '操作冲突（可能违反账号安全规则）';
+      if (err.status === 403) return '权限不足';
+      if (err.status === 400) return err.message || '请求参数不合法';
+    }
+    return err instanceof Error ? err.message : fallback;
+  }
+
+  async function submitAdd() {
+    setAddError(null);
+    const username = newUsername.trim();
+    if (!username) {
+      setAddError('用户名不能为空');
+      return;
+    }
+    if (!newPassword) {
+      setAddError('密码不能为空');
+      return;
+    }
+    if (newPassword !== newConfirm) {
+      setAddError('两次输入的密码不一致');
+      return;
+    }
+    try {
+      await createUser.mutateAsync({ username, password: newPassword, role: newRole, enabled: newEnabled });
+      setAdding(false);
+      setNewUsername('');
+      setNewPassword('');
+      setNewConfirm('');
+      setNewRole('user');
+      setNewEnabled(true);
+    } catch (err) {
+      setAddError(friendlyError(err, '新增失败'));
+    }
+  }
+
+  async function changeRole(u: AdminAccount, role: AdminAccount['role']) {
+    if (role === u.role) return;
+    setRowError(null);
+    try {
+      await updateUser.mutateAsync({ id: u.id, input: { role } });
+    } catch (err) {
+      setRowError({ id: u.id, message: friendlyError(err, '修改角色失败') });
+    }
+  }
+
+  async function toggleEnabled(u: AdminAccount) {
+    setRowError(null);
+    if (u.enabled && !confirm(`确认禁用账号「${u.username}」？禁用后该账号将无法登录、已登录的会话也会立即失效。`)) {
+      return;
+    }
+    try {
+      await updateUser.mutateAsync({ id: u.id, input: { enabled: !u.enabled } });
+    } catch (err) {
+      setRowError({ id: u.id, message: friendlyError(err, '操作失败') });
+    }
+  }
+
+  function startReset(id: string) {
+    setResettingId(id);
+    setResetPw('');
+    setResetConfirm('');
+    setRowError(null);
+  }
+
+  async function submitReset(id: string) {
+    setRowError(null);
+    if (!resetPw) {
+      setRowError({ id, message: '新密码不能为空' });
+      return;
+    }
+    if (resetPw !== resetConfirm) {
+      setRowError({ id, message: '两次输入的密码不一致' });
+      return;
+    }
+    try {
+      await resetPassword.mutateAsync({ id, password: resetPw });
+      setResettingId(null);
+      setResetPw('');
+      setResetConfirm('');
+    } catch (err) {
+      setRowError({ id, message: friendlyError(err, '重置密码失败') });
+    }
+  }
+
+  return (
+    <div className="section-card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[13px] font-bold">账号管理</h3>
+        <Button onClick={() => setAdding((v) => !v)}>
+          <PlusIcon className="w-4 h-4" />
+          新增账号
+        </Button>
+      </div>
+      <p className="text-[12px] text-muted mb-3">
+        仅 admin 可见此区块与对应接口（后端 403 是最终防线）。角色仅 admin / user 两档；不能修改自己的角色或禁用自己；
+        不能让系统里「启用中的 admin」归零。不提供删除账号——账号被构建/上架包等记录的创建人引用，删除会破坏审计追溯，只能启停用。
+      </p>
+
+      {adding && (
+        <div className="flex flex-wrap items-end gap-2 p-3 mb-3 rounded-[10px] border border-line bg-panel-2">
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-[11.5px] text-muted mb-1">用户名</label>
+            <input
+              className="field-input"
+              placeholder="username"
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-[11.5px] text-muted mb-1">密码</label>
+            <input
+              type="password"
+              className="field-input"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-[11.5px] text-muted mb-1">确认密码</label>
+            <input
+              type="password"
+              className="field-input"
+              autoComplete="new-password"
+              value={newConfirm}
+              onChange={(e) => setNewConfirm(e.target.value)}
+            />
+          </div>
+          <div className="w-28">
+            <label className="block text-[11.5px] text-muted mb-1">角色</label>
+            <Select
+              value={newRole}
+              onChange={(v) => setNewRole(v as AdminAccount['role'])}
+              options={[
+                { value: 'admin', label: 'admin' },
+                { value: 'user', label: 'user' },
+              ]}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-[12.5px] text-ink-2 pb-2">
+            <Switch checked={newEnabled} onChange={setNewEnabled} />
+            启用
+          </label>
+          <Button variant="primary" onClick={submitAdd} disabled={createUser.isPending}>
+            {createUser.isPending ? '保存中…' : '确定'}
+          </Button>
+          <Button
+            onClick={() => {
+              setAdding(false);
+              setAddError(null);
+            }}
+          >
+            取消
+          </Button>
+          {addError && <div className="w-full text-[12px] text-down">{addError}</div>}
+        </div>
+      )}
+
+      {isLoading && <div className="text-[12.5px] text-muted py-2">加载中…</div>}
+      {!isLoading && sorted.length === 0 && <div className="text-[12.5px] text-muted py-2">暂无账号。</div>}
+
+      <div className="flex flex-col gap-2">
+        {sorted.map((u) => {
+          const isSelf = !!me && me.username === u.username;
+          return (
+            <div key={u.id} className="rounded-[10px] border border-line p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[120px]">
+                  <div className="text-[13px] font-semibold truncate">
+                    {u.username}
+                    {isSelf && <span className="ml-2 text-[11px] font-normal text-muted">（当前登录）</span>}
+                  </div>
+                  <div className="text-[11px] text-muted">
+                    创建于 {u.createdAt ? new Date(u.createdAt).toLocaleString() : '—'}
+                  </div>
+                </div>
+                <div className="w-28">
+                  <Select
+                    value={u.role}
+                    disabled={isSelf || updateUser.isPending}
+                    onChange={(v) => changeRole(u, v as AdminAccount['role'])}
+                    options={[
+                      { value: 'admin', label: 'admin' },
+                      { value: 'user', label: 'user' },
+                    ]}
+                  />
+                </div>
+                <span
+                  className={cn(
+                    'text-[11px] font-semibold px-2 py-0.5 rounded-full flex-none',
+                    u.enabled ? 'text-[#15803d] bg-[#dcfce7]' : 'text-[#64748b] bg-[#f1f5f9]',
+                  )}
+                >
+                  {u.enabled ? '启用' : '禁用'}
+                </span>
+                <Switch checked={u.enabled} disabled={isSelf || updateUser.isPending} onChange={() => toggleEnabled(u)} />
+                <Button onClick={() => startReset(u.id)}>
+                  <ShieldIcon className="w-4 h-4" />
+                  重置密码
+                </Button>
+              </div>
+
+              {resettingId === u.id && (
+                <div className="flex flex-wrap items-end gap-2 mt-3 pt-3 border-t border-line-2">
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-[11.5px] text-muted mb-1">新密码</label>
+                    <input
+                      type="password"
+                      className="field-input"
+                      autoComplete="new-password"
+                      value={resetPw}
+                      onChange={(e) => setResetPw(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-[11.5px] text-muted mb-1">确认新密码</label>
+                    <input
+                      type="password"
+                      className="field-input"
+                      autoComplete="new-password"
+                      value={resetConfirm}
+                      onChange={(e) => setResetConfirm(e.target.value)}
+                    />
+                  </div>
+                  <Button variant="primary" onClick={() => submitReset(u.id)} disabled={resetPassword.isPending}>
+                    {resetPassword.isPending ? '保存中…' : '确定重置'}
+                  </Button>
+                  <Button onClick={() => setResettingId(null)}>取消</Button>
+                </div>
+              )}
+
+              {rowError?.id === u.id && <div className="mt-2 text-[12px] text-down">{rowError.message}</div>}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

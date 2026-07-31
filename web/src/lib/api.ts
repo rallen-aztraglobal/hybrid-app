@@ -1,4 +1,5 @@
 import type {
+  AdminAccount,
   ApiEnvelope,
   AuthUser,
   Brand,
@@ -9,6 +10,7 @@ import type {
   BuildLogChunk,
   Channel,
   ChannelInput,
+  CreateUserInput,
   DomainEntry,
   DomainInput,
   Listing,
@@ -30,6 +32,7 @@ import type {
   Store,
   StoreInput,
   StoreUpdateInput,
+  UpdateUserInput,
 } from './types';
 import { mockDb } from './mock/db';
 import { mockListingDb } from './mock/listings';
@@ -802,6 +805,64 @@ export const storeApi = {
         mockStores = mockStores.filter((s) => s.id !== id);
       },
     );
+  },
+};
+
+// =========================================================================
+// 账号管理（Admin-only User Management）
+// =========================================================================
+
+/** 后端 model.AdminUser（数字 id）。PasswordHash json 标签为 "-"，天然不会下发。 */
+interface AdminUserDTO {
+  id: number;
+  username: string;
+  role: AdminAccount['role'];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+function adaptUser(u: AdminUserDTO): AdminAccount {
+  return {
+    id: String(u.id),
+    username: u.username,
+    role: u.role,
+    enabled: u.enabled,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+  };
+}
+
+/**
+ * 账号管理是安全敏感操作（新建账号、改角色、启停用、重置密码），刻意不接 mock 兜底——
+ * 后端不可达时应如实报错，而不是让运营误以为一次真实的安全操作已经生效。
+ * 与本文件其余 API 模块（withFallback）的约定不同，这是有意的例外。
+ */
+export const usersApi = {
+  list(): Promise<AdminAccount[]> {
+    return request<AdminUserDTO[]>('/users').then((list) => list.map(adaptUser));
+  },
+  create(input: CreateUserInput): Promise<AdminAccount> {
+    return request<AdminUserDTO>('/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: input.username.trim(),
+        password: input.password,
+        role: input.role,
+        enabled: input.enabled ?? true,
+      }),
+    }).then(adaptUser);
+  },
+  update(id: string, input: UpdateUserInput): Promise<AdminAccount> {
+    return request<AdminUserDTO>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }).then(adaptUser);
+  },
+  async resetPassword(id: string, password: string): Promise<void> {
+    await request(`/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
   },
 };
 

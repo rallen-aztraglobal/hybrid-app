@@ -389,10 +389,25 @@ func (r *Repo) CountUsers(ctx context.Context) (int64, error) {
 }
 
 // CreateUser 新建账号。
+//
+// GORM 对带 `default` tag 的字段有个隐藏行为：struct 里该字段若恰好是其类型零值，INSERT 语句
+// 会把它替换成 tag 里的默认值——且事后还会把这个被替换的值写回传入的 struct 字段本身。
+// Enabled 恰好 `default:true` 且零值是 false：调用方想创建一个「新建即禁用」的账号，
+// 传入的 Enabled:false 会在 INSERT 里被静默换成 true，*u.Enabled 也会被 GORM 同步改写成
+// true（曾用 SQL 日志实测确认这两点，之前以为 Select("*") 或事后读 u.Enabled 二次覆盖能
+// 绕开，实测均不可靠）。唯一确定的解法：在调用 Create 之前就把调用方原始意图存一份局部变量，
+// insert 后用这份「未被 GORM 动过」的值再做一次 map 更新强制覆盖（map 更新不区分零值与
+// 未设置，恒按给定值写列）。
 func (r *Repo) CreateUser(ctx context.Context, u *model.AdminUser) error {
+	wantEnabled := u.Enabled
 	if err := r.db.WithContext(ctx).Create(u).Error; err != nil {
 		return fmt.Errorf("创建账号失败: %w", err)
 	}
+	if err := r.db.WithContext(ctx).Model(&model.AdminUser{}).Where("id = ?", u.ID).
+		Update("enabled", wantEnabled).Error; err != nil {
+		return fmt.Errorf("创建账号失败（写入启用状态）: %w", err)
+	}
+	u.Enabled = wantEnabled
 	return nil
 }
 
