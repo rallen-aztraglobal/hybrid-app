@@ -28,6 +28,8 @@ React 18 后台  ──→  Go(Echo) + MySQL + imaging + 对象存储（单静�
 | [06 · 镜像构建与发布](./06-release.md) | 我方 CI 构建/推送版本化镜像、keystore 带外交付、发布包 | 我方 |
 | [07 · Firebase 推送(FCM)](./07-push.md) 🔔 | APK 集成 FCM + Console 编辑推送选渠道包批量发送；按品牌 3 项目、设备 token 库、HTTP v1 发送、即时+定时 | 推送 |
 | [08 · Adjust 归因](./08-adjust.md) 📊 | 按 flavor 绑定 App Token 即集成、未绑定则休眠（同 FCM gate）；后台填 token + 上传事件 CSV，事件复用 sendAFEvent fan-out | 归因 |
+| [09 · 上架包管理](./09-listing.md) | ColorStack/DeckTallyPro 等独立合规应用 + AB 面放行网关 | 上架包 |
+| [10 · 账号管理](./10-user-management.md) 👤 | V1 单管理员 MVP：唯一永久 admin 受保护，Admin 只管理普通 User 的新建/重置密码/删除（软删除），删除账号会话即时撤销 | 账号 |
 | [UI 原型](./ui/index.html) 🎨 | 单文件 HTML，浏览器直接打开。3 Tab / 渠道卡片 / 新增抽屉 / 图标九宫格 / 域名配置 / 打包中心 | ①②④ |
 
 > UI 原型已用浏览器实测渲染，截图见对话。运营版用 React 18 复刻该设计。

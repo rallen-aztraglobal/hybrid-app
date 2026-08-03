@@ -1,4 +1,5 @@
 import type {
+  AdminAccount,
   ApiEnvelope,
   AuthUser,
   Brand,
@@ -9,6 +10,7 @@ import type {
   BuildLogChunk,
   Channel,
   ChannelInput,
+  CreateUserInput,
   DomainEntry,
   DomainInput,
   Listing,
@@ -802,6 +804,57 @@ export const storeApi = {
         mockStores = mockStores.filter((s) => s.id !== id);
       },
     );
+  },
+};
+
+// =========================================================================
+// 账号管理（Admin-only User Management）
+// =========================================================================
+
+/** 后端 service.UserView（数字 id）。没有密码相关字段——后端响应形状上就不存在。 */
+interface AdminUserDTO {
+  id: number;
+  username: string;
+  role: AdminAccount['role'];
+  createdAt: string;
+  protected: boolean;
+}
+function adaptUser(u: AdminUserDTO): AdminAccount {
+  return {
+    id: String(u.id),
+    username: u.username,
+    role: u.role,
+    createdAt: u.createdAt,
+    protected: u.protected,
+  };
+}
+
+/**
+ * 账号管理是安全敏感操作（新建用户、重置密码、删除），刻意不接 mock 兜底——
+ * 后端不可达时应如实报错，而不是让运营误以为一次真实的安全操作已经生效。
+ * 与本文件其余 API 模块（withFallback）的约定不同，这是有意的例外。
+ *
+ * V1 单管理员 MVP：没有改角色 / 启停用接口——系统只有一个永久 admin，
+ * User Management 只新建/重置密码/删除普通用户（role 恒为 user）。
+ */
+export const usersApi = {
+  list(): Promise<AdminAccount[]> {
+    return request<AdminUserDTO[]>('/users').then((list) => list.map(adaptUser));
+  },
+  create(input: CreateUserInput): Promise<AdminAccount> {
+    return request<AdminUserDTO>('/users', {
+      method: 'POST',
+      body: JSON.stringify({ username: input.username.trim(), password: input.password }),
+    }).then(adaptUser);
+  },
+  async resetPassword(id: string, password: string): Promise<void> {
+    await request(`/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
+  async remove(id: string): Promise<void> {
+    await request(`/users/${id}`, { method: 'DELETE' });
   },
 };
 

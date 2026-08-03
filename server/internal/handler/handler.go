@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -31,6 +32,40 @@ func New(cfg *config.Config, svc *service.Service, authMgr *auth.Manager, r *rep
 		authMgr:        authMgr,
 		repo:           r,
 		trustedProxies: httpx.NewTrustedProxies(cfg.TrustedProxyCIDRs),
+	}
+}
+
+// RequireActiveAccount 校验当前 access token 对应的账号仍然存在（未被删除），
+// 且 token 签发时的密码指纹与当前密码哈希一致。
+//
+// 背景：JWT access token 一旦签发，在自然过期前仅凭 auth.Manager.Middleware 的签名校验
+// 即可通过——管理员删除某账号后，该账号已持有的 token 并不会因此失效。这里对每个受保护
+// 请求重新查一次库，把「删除」做成立即生效的服务端强制检查，而不是等 token 自然过期。
+// AdminUser 用 GORM 软删除（DeletedAt）：已删除的账号对 GetUserByID 的默认查询天然
+// 不可见（等同不存在），故第一步只需判断「查得到 = 仍存在」。
+//
+// 但账号删除后允许用同一用户名重新创建时会复用同一行/同一 id（见
+// repo.CreateOrReactivateUser）：这会让「查得到」这一条件在复用后重新为真，
+// 无法单独区分「删除前的旧会话」与「复用后的新会话」。密码指纹校验补上这一环——
+// 复用/重置密码必然产生新的 password_hash，旧 token 的指纹对不上，逼用户重新登录。
+// 构建机静态令牌（RunnerToken）注入的机器身份不对应 admin_user 记录（UserID 恒为 0），跳过此检查。
+func (h *Handler) RequireActiveAccount(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		claims := auth.FromContext(c)
+		if claims == nil {
+			return echo.NewHTTPError(http.StatusUnauthorized, "未鉴权")
+		}
+		if claims.UserID == 0 {
+			return next(c)
+		}
+		u, err := h.repo.GetUserByID(c.Request().Context(), claims.UserID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusUnauthorized, "账号不存在")
+		}
+		if auth.PasswordFingerprint(u.PasswordHash) != claims.PwFp {
+			return echo.NewHTTPError(http.StatusUnauthorized, "登录状态已失效，请重新登录")
+		}
+		return next(c)
 	}
 }
 

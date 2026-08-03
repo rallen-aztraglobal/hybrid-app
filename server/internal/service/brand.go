@@ -57,7 +57,8 @@ func (s *Service) ListBrands(ctx context.Context) ([]BrandView, error) {
 	return out, nil
 }
 
-// Login 校验账号密码，成功返回用户。
+// Login 校验账号密码，成功返回用户。已删除账号 GetUserByUsername 天然查不到
+// （GORM 软删除默认过滤），故与「用户名不存在」走同一条错误路径，无需单独判断。
 func (s *Service) Login(ctx context.Context, username, password string) (*model.AdminUser, error) {
 	u, err := s.repo.GetUserByUsername(ctx, username)
 	if err != nil {

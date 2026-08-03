@@ -248,6 +248,31 @@ export interface AuthUser {
   refreshToken?: string;
 }
 
+// =========================================================================
+// 账号管理（Admin-only User Management）
+// =========================================================================
+
+/**
+ * 后台账号（对应后端 service.UserView）。V1 单管理员 MVP：系统里只有一个永久 admin
+ * （bootstrap 创建，不可通过本模块新建/改角色/删除），User Management 只管理 role=user
+ * 的普通账号。protected=true 标记该行不可编辑/删除（V1 恒等于 role==='admin'，
+ * 用显式字段而非让前端重复判断，是为未来多 admin 演进预留的扩展点）。
+ * 后端不下发密码哈希，本类型没有、也不应该有密码相关字段。
+ */
+export interface AdminAccount {
+  id: string;
+  username: string;
+  role: 'admin' | 'user';
+  createdAt: string;
+  protected: boolean;
+}
+
+/** 新增用户入参（POST /api/users，admin-only）。没有 role 字段：角色恒为 user。 */
+export interface CreateUserInput {
+  username: string;
+  password: string;
+}
+
 /** 后端登录端点返回体（auth.go tokenResp）。 */
 export interface LoginResponse {
   accessToken: string;

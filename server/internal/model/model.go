@@ -6,6 +6,8 @@ package model
 import (
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // 渠道状态枚举。
@@ -198,13 +200,30 @@ type BuildArtifact struct {
 
 func (BuildArtifact) TableName() string { return "build_artifact" }
 
-// AdminUser 后台账号。
+// AdminUser 后台账号。V1 只有一个永久 admin（bootstrap 创建，见 seed.EnsureBootstrapAdmin），
+// User Management 只管理 role=user 的普通账号（见 docs/admin/10-user-management.md）。
+//
+// 删除用户是软删除（DeletedAt 非空 = 已删除）而非物理删除：channel.created_by /
+// listing_app.created_by / audit_log.user_id 均引用 admin_user.id 且无级联，物理删除会
+// 让这些外键字段悬空、破坏审计与归属追溯。GORM 对带 DeletedAt 字段的模型：
+//   - 常规查询（First/Find，包括 GetUserByUsername 登录查询、GetUserByID 鉴权查询、
+//     ListUsers 列表查询）自动加 `deleted_at IS NULL` 过滤，已删除账号天然「查不到」——
+//     登录自然失败、已签发的 token 在下一次 RequireActiveAccount 检查时自然被判无效，
+//     都不需要额外代码；
+//   - .Delete() 自动变成 UPDATE ... SET deleted_at=now()，不是真正的 DELETE。
+//   - 只有显式 .Unscoped() 才能看到/操作已删除的行（repo.CreateOrReactivateUser 用它
+//     查找「同用户名的已删除行」并原地复活，而不是被 username 的全局唯一索引挡住）。
+//
+// 复活同用户名账号后，该行的 id 与创建时间保持不变——历史的 created_by 引用仍然指向
+// 同一个 id，这是刻意的简化：新账号被视为「延续」了这个用户名此前的身份，而不是分配
+// 一个全新的 id。见 docs/admin/10-user-management.md「用户名复用」一节。
 type AdminUser struct {
-	ID           uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	Username     string    `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`
-	PasswordHash string    `gorm:"column:password_hash;type:varchar(255);not null" json:"-"`
-	Role         string    `gorm:"column:role;type:varchar(16);not null;default:user" json:"role"`
-	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	ID           uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username     string         `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`
+	PasswordHash string         `gorm:"column:password_hash;type:varchar(255);not null" json:"-"`
+	Role         string         `gorm:"column:role;type:varchar(16);not null;default:user" json:"role"`
+	CreatedAt    time.Time      `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 }
 
 func (AdminUser) TableName() string { return "admin_user" }
