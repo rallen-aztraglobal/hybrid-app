@@ -211,8 +211,12 @@ func (BuildArtifact) TableName() string { return "build_artifact" }
 //     登录自然失败、已签发的 token 在下一次 RequireActiveAccount 检查时自然被判无效，
 //     都不需要额外代码；
 //   - .Delete() 自动变成 UPDATE ... SET deleted_at=now()，不是真正的 DELETE。
-//   - 只有显式 .Unscoped() 才能看到/操作已删除的行（ExistsUsernameCI 用它防止用户名
-//     误判为可用、实际却撞上 DB 唯一索引）。
+//   - 只有显式 .Unscoped() 才能看到/操作已删除的行（repo.CreateOrReactivateUser 用它
+//     查找「同用户名的已删除行」并原地复活，而不是被 username 的全局唯一索引挡住）。
+//
+// 复活同用户名账号后，该行的 id 与创建时间保持不变——历史的 created_by 引用仍然指向
+// 同一个 id，这是刻意的简化：新账号被视为「延续」了这个用户名此前的身份，而不是分配
+// 一个全新的 id。见 docs/admin/10-user-management.md「用户名复用」一节。
 type AdminUser struct {
 	ID           uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username     string         `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`

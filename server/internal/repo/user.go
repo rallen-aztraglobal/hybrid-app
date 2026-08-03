@@ -8,9 +8,13 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/hybrid-app/server/internal/model"
 )
+
+// ErrActiveUsernameConflict 表示该用户名已被一个「未删除」的账号占用（含永久 admin）。
+var ErrActiveUsernameConflict = errors.New("用户名已被启用中的账号占用")
 
 // ListUsers 返回全部账号（不分页；账号数量级不需要），按 id 升序。已软删除的账号
 // 天然不出现在结果里（GORM 默认查询会过滤 deleted_at 非空的行）。
@@ -36,20 +40,50 @@ func (r *Repo) GetUserByID(ctx context.Context, id uint64) (*model.AdminUser, er
 	return &u, nil
 }
 
-// ExistsUsernameCI 大小写不敏感地检查用户名是否已被占用（含已软删除的账号）。
-// 用应用层 LOWER() 比较而非依赖库表 collation：sqlite（开发）默认大小写敏感、
-// MySQL（生产）默认多为不敏感，两边行为不一致；显式比较保证跨环境结果一致。
-// 必须用 Unscoped()：admin_user.username 是单列全局唯一索引，即使某账号已被软删除，
-// 其用户名仍占着这个唯一值——不用 Unscoped 会出现「应用层说可用，DB 唯一索引却拒绝插入」
-// 的不一致。V1 接受「用户名删除后不可再复用」这个简化限制，不做局部唯一索引之类的复杂方案。
-func (r *Repo) ExistsUsernameCI(ctx context.Context, username string) (bool, error) {
-	var n int64
-	err := r.db.WithContext(ctx).Unscoped().Model(&model.AdminUser{}).
-		Where("LOWER(username) = LOWER(?)", username).Count(&n).Error
+// CreateOrReactivateUser 新建一个普通用户账号；若该用户名（大小写不敏感）此前被一个
+// 已软删除的账号占用，则原地复活那一行而非插入新行——保留原 id，清空 deleted_at，
+// 角色强制改回 user（永久 admin 绝不会走到复活分支，因为它永远不会被删除），
+// 密码哈希整行覆盖为本次提交的新密码。若该用户名当前被一个未删除的账号占用
+// （含永久 admin），返回 ErrActiveUsernameConflict。
+//
+// 用 Unscoped() + SELECT ... FOR UPDATE 在同一个事务里完成「查找 → 判断 → 建/复活」：
+// MySQL 下这会真正锁住命中的行（若已存在），阻止两个并发的「新建同用户名账号」请求
+// 同时判断出「可以复活」而各自提交出不一致的结果（同一行被并发改两次，或一个复活
+// 成功、一个误判成活跃冲突）；SQLite 没有行锁，但同一连接内的事务本身是串行执行的，
+// 足够开发期的正确性。
+func (r *Repo) CreateOrReactivateUser(ctx context.Context, username, passwordHash string) (*model.AdminUser, error) {
+	var result model.AdminUser
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing model.AdminUser
+		err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("LOWER(username) = LOWER(?)", username).First(&existing).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			result = model.AdminUser{Username: username, PasswordHash: passwordHash, Role: model.RoleUser}
+			return tx.Create(&result).Error
+		case err != nil:
+			return fmt.Errorf("查询账号失败: %w", err)
+		}
+
+		if !existing.DeletedAt.Valid {
+			return ErrActiveUsernameConflict
+		}
+
+		updates := map[string]any{
+			"deleted_at":    nil,
+			"role":          model.RoleUser,
+			"password_hash": passwordHash,
+			"username":      username, // 规范化为本次提交的写法，避免与旧大小写混淆
+		}
+		if err := tx.Unscoped().Model(&model.AdminUser{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
+			return fmt.Errorf("复活账号失败: %w", err)
+		}
+		return tx.Unscoped().First(&result, existing.ID).Error
+	})
 	if err != nil {
-		return false, fmt.Errorf("校验用户名唯一性失败: %w", err)
+		return nil, err
 	}
-	return n > 0, nil
+	return &result, nil
 }
 
 // DeleteUser 软删除账号（GORM 对 DeletedAt 字段的默认行为：UPDATE ... SET deleted_at=now()，

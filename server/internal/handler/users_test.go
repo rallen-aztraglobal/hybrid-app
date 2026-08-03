@@ -153,7 +153,14 @@ func TestUsersAPI_AdminCanDeleteUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("建账号失败: %v", err)
 	}
-	targetTok, _, err := mgr.Issue(&model.AdminUser{ID: target.ID, Username: target.Username, Role: target.Role})
+	// 必须用真实落库的记录（含真实 password_hash）签发 token：Issue 现在会把密码指纹
+	// 编进 claims，用只填 ID/Username/Role 的 synthetic struct 会因为 PasswordHash 为空
+	// 而算出与真实哈希不同的指纹，导致 RequireActiveAccount 在「删除前」这一步就误判失败。
+	realTarget, err := r.GetUserByID(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("查询账号失败: %v", err)
+	}
+	targetTok, _, err := mgr.Issue(realTarget)
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)
 	}
@@ -180,6 +187,75 @@ func TestUsersAPI_AdminCanDeleteUser(t *testing.T) {
 	rec = doReq(e, http.MethodPost, "/api/auth/login", "", `{"username":"deleteme","password":"Passw0rd!1"}`)
 	if rec.Code == http.StatusOK {
 		t.Errorf("已删除账号不应能登录，实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestUsersAPI_StaleTokenInvalidAfterUsernameReuse 验证「删除前」签发的旧 token，在该
+// 用户名被复用重建（原地复活同一行/同一 id）后仍然无效——必须重新登录才能拿到能用的
+// 新 token。这正是 auth.Claims.PwFp 密码指纹校验要解决的场景：复活让同一个 id 重新
+// 「查得到」，仅凭 RequireActiveAccount 原来的「账号是否存在」检查无法区分「删除前的
+// 旧会话」与「复用后的新会话」。
+func TestUsersAPI_StaleTokenInvalidAfterUsernameReuse(t *testing.T) {
+	e, mgr, svc, r := testServer(t)
+	ctx := context.Background()
+
+	first, err := svc.CreateUser(ctx, service.CreateUserInput{Username: "petra", Password: "OldPassw0rd!"})
+	if err != nil {
+		t.Fatalf("建账号失败: %v", err)
+	}
+	realFirst, err := r.GetUserByID(ctx, first.ID)
+	if err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+	staleTok, _, err := mgr.Issue(realFirst)
+	if err != nil {
+		t.Fatalf("签发 token 失败: %v", err)
+	}
+
+	// 删除前：token 有效。
+	rec := doReq(e, http.MethodGet, "/api/channels?pageSize=10", staleTok, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("删除前应能正常访问，实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	adminTok := issueToken(t, mgr, r, model.RoleAdmin)
+	rec = doReq(e, http.MethodDelete, fmt.Sprintf("/api/users/%d", first.ID), adminTok, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("删除应成功，实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 删除后：旧 token 立即失效。
+	rec = doReq(e, http.MethodGet, "/api/channels?pageSize=10", staleTok, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("删除后旧 token 应 401，实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 用同一个用户名重建（复活同一行/同一 id）。
+	rec = doReq(e, http.MethodPost, "/api/users", adminTok, `{"username":"petra","password":"NewPassw0rd!"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("复用用户名创建应 201，实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 关键断言：复活后同一个 id 又「查得到」了，但删除前签发的旧 token 必须仍然无效。
+	rec = doReq(e, http.MethodGet, "/api/channels?pageSize=10", staleTok, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("复用用户名重建后，删除前的旧 token 仍应无效，实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 旧 refresh token 同理必须失效（否则可以绕过 access token 检查凭旧 refresh 换出新 token）。
+	_, staleRefresh, err := mgr.Issue(realFirst)
+	if err != nil {
+		t.Fatalf("签发 refresh token 失败: %v", err)
+	}
+	rec = doReq(e, http.MethodPost, "/api/auth/refresh", "", fmt.Sprintf(`{"refreshToken":%q}`, staleRefresh))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("复用用户名重建后，旧 refresh token 应失效，实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 只有重新登录（新密码）才能拿到能用的新 token。
+	loginRec := doReq(e, http.MethodPost, "/api/auth/login", "", `{"username":"petra","password":"NewPassw0rd!"}`)
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("新密码登录应成功，实际 %d body=%s", loginRec.Code, loginRec.Body.String())
 	}
 }
 

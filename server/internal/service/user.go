@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
+	"github.com/hybrid-app/server/internal/repo"
 )
 
 // maxPasswordBytes 是 bcrypt（auth.HashPassword 底层实现）本身的硬限制：超出即哈希失败。
@@ -57,8 +59,13 @@ type CreateUserInput struct {
 	Password string `json:"password" validate:"required"`
 }
 
-// CreateUser 新建一个普通用户账号（admin-only）。角色恒为 user；用户名大小写不敏感唯一；
+// CreateUser 新建一个普通用户账号（admin-only）。角色恒为 user；用户名大小写不敏感唯一。
 // 密码用与登录同一套 bcrypt 机制哈希，绝不明文落库。
+//
+// 若该用户名曾经存在但已被删除（软删除），本次创建会原地复活那一行而不是报「已存在」——
+// 见 repo.CreateOrReactivateUser 与 docs/admin/10-user-management.md「用户名复用」一节。
+// 永久 admin 的用户名恒判定为「已被启用中的账号占用」（它从不会被删除），故不会被复活，
+// 也不会被这条路径创建出第二个 admin。
 func (s *Service) CreateUser(ctx context.Context, in CreateUserInput) (*UserView, error) {
 	username := strings.TrimSpace(in.Username)
 	if username == "" {
@@ -70,19 +77,15 @@ func (s *Service) CreateUser(ctx context.Context, in CreateUserInput) (*UserView
 	if len([]byte(in.Password)) > maxPasswordBytes {
 		return nil, errBadRequest("password 过长")
 	}
-	exists, err := s.repo.ExistsUsernameCI(ctx, username)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, errConflict("用户名已存在")
-	}
 	hash, err := auth.HashPassword(in.Password)
 	if err != nil {
 		return nil, errBadRequest("密码哈希失败")
 	}
-	u := &model.AdminUser{Username: username, PasswordHash: hash, Role: model.RoleUser}
-	if err := s.repo.CreateUser(ctx, u); err != nil {
+	u, err := s.repo.CreateOrReactivateUser(ctx, username, hash)
+	if err != nil {
+		if errors.Is(err, repo.ErrActiveUsernameConflict) {
+			return nil, errConflict("用户名已存在")
+		}
 		return nil, err
 	}
 	view := toUserView(*u)

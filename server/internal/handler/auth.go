@@ -74,6 +74,13 @@ func (h *Handler) Refresh(c echo.Context) error {
 	if err != nil {
 		return fail(c, err)
 	}
+	// 密码指纹校验：删除后复用同用户名会复活同一行（见 repo.CreateOrReactivateUser），
+	// 此时 GetUserByUsername 又能查到人——但如果这个 refresh token 是复用前签发的旧票据，
+	// 指纹对不上当前密码哈希，必须拒绝，否则等于绕开 RequireActiveAccount 的等价检查
+	// 凭一个旧 refresh token 换出一个全新有效的 access token。
+	if auth.PasswordFingerprint(u.PasswordHash) != claims.PwFp {
+		return httpx.Fail(c, http.StatusUnauthorized, "refresh token 无效")
+	}
 	access, refresh, err := h.authMgr.Issue(u)
 	if err != nil {
 		return fail(c, err)

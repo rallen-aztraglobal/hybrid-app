@@ -3,6 +3,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -33,7 +35,20 @@ type Claims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
 	Type     string `json:"typ"`
+	// PwFp 是签发时账号密码哈希的指纹（见 PasswordFingerprint）。密码哈希一变
+	// （重置密码、或删除后用同用户名复用同一行重新激活），旧 token 携带的指纹
+	// 就对不上当前哈希，RequireActiveAccount / Refresh 据此判定旧 token 失效，
+	// 而不是靠账号是否「查得到」——软删除+复用用户名会让同一个 id 重新变得
+	// 「查得到」，仅凭这一点无法区分「删除前的旧会话」与「复用后的新会话」。
+	PwFp string `json:"pwfp,omitempty"`
 	jwt.RegisteredClaims
+}
+
+// PasswordFingerprint 返回密码哈希的短摘要（sha256 前 8 字节的十六进制），随 token 一起签发。
+// 只依赖 admin_user.password_hash 已有内容计算，不新增任何数据库列。
+func PasswordFingerprint(passwordHash string) string {
+	sum := sha256.Sum256([]byte(passwordHash))
+	return hex.EncodeToString(sum[:8])
 }
 
 // Manager 负责签发与解析 token。
@@ -87,6 +102,7 @@ func (m *Manager) sign(u *model.AdminUser, typ string, ttl time.Duration) (strin
 		Username: u.Username,
 		Role:     u.Role,
 		Type:     typ,
+		PwFp:     PasswordFingerprint(u.PasswordHash),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    m.issuer,
 			Subject:   u.Username,

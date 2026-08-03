@@ -25,7 +25,7 @@
 
 - **列表**：`GET /api/users`，返回 `id / username / role / createdAt / protected`，**绝不下发密码哈希**——`service.UserView` 是专门的响应 DTO，响应形状上就不存在密码相关字段，不依赖某个 json 标签「不被误删」这种脆弱保证。
 - **新建用户**：`POST /api/users`，`{ username, password }`，角色恒为 `user`。
-  - `username` 去空白、非空、大小写不敏感全局唯一（应用层 `LOWER()` 比较，见 `repo.ExistsUsernameCI`，且用 `Unscoped()` 把已软删除的账号也计入——见 §4 的用户名复用限制）。
+  - `username` 去空白、非空、大小写不敏感（应用层 `LOWER()` 比较）。若该用户名当前被一个**未删除**的账号占用（含永久 admin）→ 409「用户名已存在」；若被一个**已软删除**的账号占用 → 原地复活那一行（见 §4「用户名复用」），不算冲突、不报错。
   - 密码用与登录同一套 bcrypt（`auth.HashPassword`）哈希；唯一的「既有密码规则」是 bcrypt 本身 72 字节上限，超出提前拒绝为 400。
 - **重置密码**：`POST /api/users/:id/reset-password`，`{ password }`；只能作用于 `role=user` 的账号（对 admin 恒 409）。
 - **删除用户**：`DELETE /api/users/:id`；只能作用于 `role=user` 的账号（对 admin 恒 409）。见 §4 「删除是软删除」。
@@ -45,9 +45,18 @@
   - **登录**（`GetUserByUsername`）查不到已删除账号 → 登录失败，走与「用户名不存在」相同的错误提示，不需要单独判断。
   - **鉴权中间件**（`GetUserByID`，见 §5）查不到已删除账号 → 判定为「账号不存在」→ 401，已签发、未过期的旧 token 立即失效。
   - **列表**（`ListUsers`）自然不包含已删除账号。
-- 只有显式 `.Unscoped()` 才能看到/操作已删除的行——`ExistsUsernameCI` 用它来防止「用户名从应用层看起来可用，插入却撞上数据库唯一索引」的不一致。
+- 只有显式 `.Unscoped()` 才能看到/操作已删除的行——`repo.CreateOrReactivateUser` 用它查找「同用户名的已软删除行」并原地复活。
 
-**已知限制（V1 接受，故意不做更复杂的方案）**：`admin_user.username` 是单列全局唯一索引，一个用户名一旦被使用过，即使对应账号已被删除，这个用户名也**不能再被复用**创建新账号。要支持"删除后用户名可复用"需要局部唯一索引之类的方案，MySQL 又不原生支持部分唯一索引，会显著增加复杂度；这不是 V1 的产品要求，故未做。
+**用户名复用**：`admin_user.username` 仍是单列全局唯一索引（本轮未改 schema/迁移），删除后同一个用户名**可以复用**，但复用的方式是**复活原有的行**，而不是插入一条新记录：
+
+- `repo.CreateOrReactivateUser` 在一个事务里用 `Unscoped() + SELECT ... FOR UPDATE` 查找同用户名（大小写不敏感）的行：
+  - 查不到 → 正常插入新行。
+  - 查到但**未删除**（含永久 admin）→ 返回冲突，服务层映射为 409「用户名已存在」。
+  - 查到且**已软删除** → 原地更新这一行：清空 `deleted_at`、角色强制改回 `user`、`password_hash` 替换为本次提交的新密码——**保留原 `id` 与原 `created_at`**，作为创建结果返回。
+- `SELECT ... FOR UPDATE` 锁住命中行（MySQL 生效；SQLite 无行锁但同一连接事务天然串行），防止两个并发的创建请求同时判断「可以复活」而产生不一致的结果。
+- **接受的 V1 权衡**：复活复用的是同一个数据库行/同一个 `id`，这意味着该用户名此前留下的历史记录（`channel.created_by`、`listing_app.created_by`、`audit_log.user_id` 等引用这个 `id` 的记录）在复用后仍然与这个"新"账号关联在一起——即使 admin 实际上是为另一个不同的人重建了这个用户名，也会共享同一份历史身份。这是刻意的简化：为了在不改 schema 的前提下支持用户名复用，把"复用用户名"等同于"延续同一个账号身份"，而不是"分配一个全新、无历史包袱的账号"。若未来需要让两者区分开（如可审计地区分"谁在何时使用过这个用户名"），需要引入新的身份/版本概念，不在 V1 范围内。
+- **权限保护同样适用于复活**：复活恒把角色写为 `user`，绝不会把一个曾经存在过的账号复活成 `admin`；永久 admin 的用户名恒被判定为"未删除"（它永远不会被删除），因此既不会被复活，也不会被这条创建路径改动或替换密码。
+- **已签发的旧 token 不会因复用而重新变得有效**：JWT 里带有签发时密码哈希的指纹（`auth.Claims.PwFp` / `auth.PasswordFingerprint`），复用/复活必然产生新的 `password_hash`，旧指纹对不上 → `RequireActiveAccount`（及 `POST /api/auth/refresh`）判定旧 token/旧 refresh token 失效，逼迫必须用新密码重新登录才能拿到能用的新 token。这一步不依赖任何新增数据库列，纯粹基于已有的 `password_hash` 内容计算。
 
 ## 5. 本轮从 V0（多管理员设计）移除的内容
 
