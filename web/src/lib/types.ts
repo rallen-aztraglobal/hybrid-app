@@ -253,30 +253,24 @@ export interface AuthUser {
 // =========================================================================
 
 /**
- * 后台账号（对应后端 model.AdminUser）。后端 PasswordHash 字段 json 标签是 "-"，
- * 接口天然不会下发密码哈希，故本类型没有、也不应该有密码相关字段。
+ * 后台账号（对应后端 service.UserView）。V1 单管理员 MVP：系统里只有一个永久 admin
+ * （bootstrap 创建，不可通过本模块新建/改角色/删除），User Management 只管理 role=user
+ * 的普通账号。protected=true 标记该行不可编辑/删除（V1 恒等于 role==='admin'，
+ * 用显式字段而非让前端重复判断，是为未来多 admin 演进预留的扩展点）。
+ * 后端不下发密码哈希，本类型没有、也不应该有密码相关字段。
  */
 export interface AdminAccount {
   id: string;
   username: string;
   role: 'admin' | 'user';
-  enabled: boolean;
   createdAt: string;
-  updatedAt?: string;
+  protected: boolean;
 }
 
-/** 新增账号入参（POST /api/users，admin-only）。enabled 缺省 true。 */
+/** 新增用户入参（POST /api/users，admin-only）。没有 role 字段：角色恒为 user。 */
 export interface CreateUserInput {
   username: string;
   password: string;
-  role: AdminAccount['role'];
-  enabled?: boolean;
-}
-
-/** 修改账号入参（PUT /api/users/:id，admin-only）：仅角色 / 启用状态可改。 */
-export interface UpdateUserInput {
-  role?: AdminAccount['role'];
-  enabled?: boolean;
 }
 
 /** 后端登录端点返回体（auth.go tokenResp）。 */

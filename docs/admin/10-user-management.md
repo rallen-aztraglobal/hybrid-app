@@ -1,59 +1,85 @@
-# 10 · 账号管理（Admin-only User Management）
+# 10 · 账号管理（Admin-only User Management，V1 单管理员 MVP）
 
-> RBAC 收敛为两档角色（admin / user）见 `server/internal/auth/auth.go`、`server/internal/model/model.go` 顶部注释与迁移 `000010_role_collapse`。本文档只讲在此之上新增的「账号管理」能力：谁能管理账号、账号能被怎样操作、以及几条不可绕过的安全护栏。
+> RBAC 收敛为两档角色（admin / user）见 `server/internal/auth/auth.go`、`server/internal/model/model.go` 顶部注释与迁移 `000010_role_collapse`。本文档只讲在此之上新增的「账号管理」能力。
+>
+> **V1 的产品定位**：系统里只有一个永久 admin（bootstrap 创建），账号管理只负责「admin 管理普通 user」这一件事——不支持多管理员、不支持改角色、不支持启停用。这是有意的简化：先把最小可用的账号管理跑起来，多管理员等更复杂的场景放到未来版本（见 §7 扩展点）。
 
 ## 1. 角色
 
-只有两档，历史上的 `operator`/`viewer` 已在 `000010_role_collapse` 迁移中一次性归一为 `user`，本模块的新建/修改接口也只认这两个值：
+只有两档，历史上的 `operator`/`viewer` 已在 `000010_role_collapse` 迁移中一次性归一为 `user`：
 
 | 角色 | 权限 |
 | --- | --- |
-| `admin` | 全部权限：系统设置（商店管理）、渠道归档/删除、**账号管理**，以及全部日常业务操作 |
+| `admin` | 全部权限：系统设置（商店管理）、渠道归档/删除、账号管理，以及全部日常业务操作。**V1 恒只有一个 admin。** |
 | `user` | 除系统设置、渠道归档/删除、账号管理外的全部日常操作：渠道、域名、打包、推送等 |
 
-## 2. 账号管理能力（仅 admin 可见 / 可调用）
+## 2. 永久 admin
 
-- **列表**：`GET /api/users`，返回 `id / username / role / enabled / createdAt / updatedAt`，**绝不下发密码哈希**（`model.AdminUser.PasswordHash` 的 json 标签是 `"-"`，天然做不到误下发）。
-- **新建账号**：`POST /api/users`，`{ username, password, role, enabled? }`；`enabled` 缺省 `true`。
-  - `username` 去空白、非空、大小写不敏感全局唯一（应用层 `LOWER()` 比较，见 `repo.ExistsUsernameCI`，不依赖 sqlite/MySQL 各自不同的 collation 默认行为）。
-  - `role` 只允许 `admin`/`user`，拒绝 `operator`/`viewer` 等历史值。
-  - 密码用与登录同一套 bcrypt（`auth.HashPassword`）哈希；唯一的「既有密码规则」是 bcrypt 本身 72 字节上限，超出提前拒绝为 400（而不是让哈希在库内部报错）。
-- **修改角色 / 启停用**：`PUT /api/users/:id`，`{ role?, enabled? }`，见 §3 安全护栏。
-- **重置密码**：`POST /api/users/:id/reset-password`，`{ password }`；同一套 bcrypt 哈希，旧密码哈希被整行覆盖，此后旧密码必然登录失败。
-- **不提供硬删除**：见 §4。
+- 由 `seed.EnsureBootstrapAdmin` 在数据库无任何账号时创建（`BOOTSTRAP_ADMIN=user:password` 环境变量），角色恒为 `admin`。
+- **不可通过 User Management 新建**：`POST /api/users` 的入参（`CreateUserInput`）根本没有 `role` 字段，请求体里塞 `"role":"admin"` 会被解码器直接忽略（Go 的 `encoding/json` 默认忽略未声明字段），落库角色恒为 `user`。
+- **不可通过 User Management 修改**：整个 API 没有「改角色」「启停用」端点。
+- **不可被重置密码 / 删除**：`POST /api/users/:id/reset-password` 与 `DELETE /api/users/:id` 在服务层都会先查目标账号的角色，若为 `admin` 直接拒绝（409），见 `server/internal/service/user.go` 的 `ResetUserPassword` / `DeleteUser`。
+- **列表里标记为 protected**：`GET /api/users` 返回的 `UserView.Protected` 字段（V1 恒等于 `role === "admin"`）供前端判断「这一行不可编辑/删除」，前端据此隐藏重置密码/删除按钮（见 §6）。
 
-## 3. 安全护栏
+## 3. Version 1 支持的能力（仅此 4 项）
 
-服务端强制（`server/internal/service/user.go` + `server/internal/repo/user.go`），前端只是把这些规则做成更友好的 UX（禁用按钮/开关），**不是权限的最终来源**：
+- **列表**：`GET /api/users`，返回 `id / username / role / createdAt / protected`，**绝不下发密码哈希**——`service.UserView` 是专门的响应 DTO，响应形状上就不存在密码相关字段，不依赖某个 json 标签「不被误删」这种脆弱保证。
+- **新建用户**：`POST /api/users`，`{ username, password }`，角色恒为 `user`。
+  - `username` 去空白、非空、大小写不敏感全局唯一（应用层 `LOWER()` 比较，见 `repo.ExistsUsernameCI`，且用 `Unscoped()` 把已软删除的账号也计入——见 §4 的用户名复用限制）。
+  - 密码用与登录同一套 bcrypt（`auth.HashPassword`）哈希；唯一的「既有密码规则」是 bcrypt 本身 72 字节上限，超出提前拒绝为 400。
+- **重置密码**：`POST /api/users/:id/reset-password`，`{ password }`；只能作用于 `role=user` 的账号（对 admin 恒 409）。
+- **删除用户**：`DELETE /api/users/:id`；只能作用于 `role=user` 的账号（对 admin 恒 409）。见 §4 「删除是软删除」。
 
-- 不能修改自己的角色、不能禁用自己的账号（`actorID == targetID` 时直接拒绝，409）。
-- 不能让系统里「启用中的 admin」归零：`repo.UpdateUserRoleEnabled` 在**同一个事务**里用 `SELECT ... FOR UPDATE`（MySQL 生效）锁住目标行，重新统计「其余启用中的 admin」数，只有 >0 才放行禁用/降级——避免两个并发请求同时把最后一个 admin 弄没了。
-  - 这条护栏甚至能防住"过期 JWT 角色声明"的边界情况：一个 token 里 `role=admin` 但其账号在此之后已被别人降级为 `user` 的操作者，仍会在这条护栏前被拒绝去禁用/降级真正唯一剩下的启用 admin（已用真实 HTTP 请求验证，见交付报告「人工验证」一节）。
-- 角色 / `enabled` 只允许 `admin`/`user` 与布尔值，非法输入一律 400。
+**明确不支持**（V1 故意去掉，见 §5）：创建管理员、改角色（提升/降级）、启用/禁用账号、多管理员、「最后一个启用 admin」保护逻辑。
 
-## 4. 删除 vs 停用
+## 4. 用户删除：软删除，而非物理删除
 
-**不提供硬删除接口。** 决策依据：`audit_log.user_id`、`channel.created_by`、`listing_app.created_by` 均以整数列引用 `admin_user.id`，且都**没有外键级联**——硬删一个账号不会报错，但会让这些字段变成指向一个不存在账号的悬空 ID，讲不清"这条渠道/上架包/审计记录到底是谁建的"。这类破坏审计与归属追溯的代价，在一个自托管、单租户的后台里没有必要为了"能删除"这一个功能而承担。
+`DELETE /api/users/:id` 在数据库层面是**软删除**（`AdminUser.DeletedAt gorm.DeletedAt`），不是物理 `DELETE FROM`。
 
-因此：**禁用（`enabled=false`）是唯一支持的"移除"手段**。禁用不会删除任何历史归属数据，只是让该账号无法再登录/操作。
+**为什么不是硬删除**：`channel.created_by`、`listing_app.created_by`、`audit_log.user_id` 都以整数列引用 `admin_user.id`，且都**没有外键级联**。物理删除一个账号不会报错，但会让这些字段变成指向一个不存在账号的悬空 ID，讲不清"这条渠道/上架包/审计记录到底是谁建的"。这类破坏审计与归属追溯的代价，在一个自托管、单租户的后台里没有必要为了"物理删除"这一个技术细节而承担。
 
-## 5. 禁用账号的生效时机
+**GORM 软删除的具体效果**（`AdminUser.DeletedAt` 字段的默认行为，不需要额外代码）：
 
-JWT access token 一旦签发，在自然过期前仅凭签名校验即可通过——单纯禁用数据库里的账号，并不会让这个账号已经拿到手的 token 失效（access token 有效期见 `config.AccessTokenTTL`，默认较长）。
+- `.Delete(&AdminUser{}, id)` 自动变成 `UPDATE admin_user SET deleted_at = now() WHERE id = ?`，行本身保留。
+- 常规查询（`First` / `Find`）自动加 `WHERE deleted_at IS NULL` 过滤：
+  - **登录**（`GetUserByUsername`）查不到已删除账号 → 登录失败，走与「用户名不存在」相同的错误提示，不需要单独判断。
+  - **鉴权中间件**（`GetUserByID`，见 §5）查不到已删除账号 → 判定为「账号不存在」→ 401，已签发、未过期的旧 token 立即失效。
+  - **列表**（`ListUsers`）自然不包含已删除账号。
+- 只有显式 `.Unscoped()` 才能看到/操作已删除的行——`ExistsUsernameCI` 用它来防止「用户名从应用层看起来可用，插入却撞上数据库唯一索引」的不一致。
 
-为了让"禁用"立即生效而不是等 token 自然过期，`handler.RequireEnabled` 中间件挂在鉴权中间件之后、所有 `/api/*` 受保护路由之前，对每个请求按 `claims.UserID` 重新查一次库确认账号当前仍启用；查不到或 `enabled=false` 一律 401（见 `server/internal/handler/routes.go` 的 `api.Use(h.authMgr.Middleware(), h.RequireEnabled)`）。
+**已知限制（V1 接受，故意不做更复杂的方案）**：`admin_user.username` 是单列全局唯一索引，一个用户名一旦被使用过，即使对应账号已被删除，这个用户名也**不能再被复用**创建新账号。要支持"删除后用户名可复用"需要局部唯一索引之类的方案，MySQL 又不原生支持部分唯一索引，会显著增加复杂度；这不是 V1 的产品要求，故未做。
 
-构建机静态令牌（`RUNNER_TOKEN`）注入的机器身份（`claims.UserID == 0`）不对应 `admin_user` 记录，跳过此项检查——机器身份的可用性不受账号启停用影响。
+## 5. 本轮从 V0（多管理员设计）移除的内容
 
-**已知的相关限制（未在本轮修复，超出"禁用"这条明确需求）**：本方案只做了"启停用"的会话即时撤销，**没有**做"角色变更"的会话即时撤销——一个账号被降级后，其手里未过期的旧 token 仍带着旧的 `role=admin` 声明，直到该 token 自然过期或刷新前，仍可能通过 `RequireRole` 检查（但会在 §3 的"最后一个启用 admin"护栏前被拦下，如涉及该护栏范围内的操作）。如需堵上这个口子，需要把 `RequireEnabled` 类似的"按请求重新查库"逻辑也套用到角色上，或改造 token 撤销机制（如 token 版本号/黑名单），本轮未做，留作后续风险项。
+上一版实现（commit `f6e5456`）是按「支持任意数量管理员、可互相改角色/启停用」设计的，本轮按产品要求收敛为单管理员 MVP，移除了：
+
+- `POST /api/users` 的 `role` 入参与「角色只允许 admin/user」的运行时校验（现在从类型层面就不存在这个字段，无需校验）。
+- `PUT /api/users/:id` 整个端点（改角色 / 启停用）。
+- `AdminUser.Enabled` 字段与 `enabled`/`updated_at` 两列（迁移 `000011` 已重写，见下）。
+- 「最后一个启用中的 admin」保护：`repo.CountEnabledAdmins`、`repo.UpdateUserRoleEnabled` 里 `SELECT ... FOR UPDATE` 事务锁 + 重新计数的并发保护逻辑、`ErrLastEnabledAdmin` 哨兵错误——V1 只有一个 admin 且不可删除/改角色，这类保护没有存在的必要。
+- 自身账号保护检查（不能改自己的角色、不能禁用自己）——同样因为「改角色」「启停用」整个能力都不存在了，检查对象消失。
+- `handler.RequireEnabled` 中间件（按 `enabled` 字段判断会话是否失效）→ 替换为更简单的 `handler.RequireActiveAccount`（按账号是否还能查到判断，语义等价，但不再需要一个专门的布尔字段）。
+- 前端：`changeRole`、`toggleEnabled`、创建表单的角色下拉与启用勾选框、表格行的角色 Select 与启停用 Switch。
 
 ## 6. 前端
 
-`Settings（系统设置）→ 账号管理` 区块（`web/src/pages/SettingsPage.tsx` 内 `UsersManager` 组件），复用 `StoresManager` 的既有交互约定（新增表单 / 行内编辑 / 行级错误提示）：
+`Settings（系统设置）→ 账号管理` 区块（`web/src/pages/SettingsPage.tsx` 内 `UsersManager` 组件）：
 
-- 列表：用户名、角色（下拉可改）、状态胶囊 + 启停用开关、创建时间、"重置密码"（行内展开的新密码/确认密码表单）。
-- 新增账号表单：用户名、密码、确认密码、角色（admin/user）、启用勾选（默认勾选）。
-- 自身账号行的角色下拉与启停用开关禁用（按 `username` 与当前登录用户比对），避免用户操作后才被后端 409 拒绝——真正的拒绝仍在后端。
+- 列表：用户名、角色（纯文本 Admin/User，不可编辑）、创建时间、操作列。
+- Admin 行：显示「受保护」徽标，**不显示**重置密码/删除按钮。
+- User 行：显示「重置密码」「删除」两个操作。
+- 新建用户表单：仅用户名、密码、确认密码三个字段——**没有**角色下拉、没有启用勾选框。
+- 删除流程：`confirm()` 弹窗明确点名用户名，确认后调用删除；成功后列表自动刷新（TanStack Query invalidate）。
+- 重置密码流程：行内展开新密码 / 确认密码两个输入框，从不预填，成功后清空并收起表单。
 - 非 admin：`AppShell` 侧栏不显示"系统设置"入口；直接访问 `/settings` 路由会被重定向到 `/channels`（`App.tsx`）；对应 API 一律后端 403，不依赖前端隐藏。
 - 密码字段：`type="password"`，从不回显、从不预填。
-- 不提供"删除"操作（对应 §4 的删除/停用决策）。
+
+## 7. 未来多管理员支持的扩展点
+
+如果后续产品需求变为「支持多个管理员」，改动集中在：
+
+1. `service.CreateUserInput` 加回 `Role` 字段 + 角色合法性校验。
+2. 新增 `PUT /api/users/:id` 改角色端点，并在改角色时排除"把最后一个 admin 降级"的场景（可参考本次移除前的 `repo.UpdateUserRoleEnabled` 实现思路：事务 + 重新计数，历史版本见 commit `f6e5456`）。
+3. `ResetUserPassword` / `DeleteUser` 的「目标是 admin 就拒绝」规则需要改为「目标是**最后一个** admin 才拒绝」。
+4. `UserView.Protected` 的判定逻辑从「role==admin」改为「是否为最后一个 admin」或其他业务规则——前端不需要跟着改，因为它只消费这个字段，不自己重新判断。
+5. 是否需要「启用/禁用」这个独立于删除之外的状态，取决于届时的产品需求，不是多管理员本身必须的。

@@ -13,7 +13,6 @@ import type {
   PushSendResult,
   StoreInput,
   StoreUpdateInput,
-  UpdateUserInput,
 } from '@/lib/types';
 
 /**
@@ -165,21 +164,21 @@ export function useCreateUser() {
   });
 }
 
-/** 改角色 / 启停用（admin-only）；自身账号与最后一个启用中的 admin 的保护规则由后端强制。 */
-export function useUpdateUser() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateUserInput }) => usersApi.update(id, input),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: qk.users });
-    },
-  });
-}
-
 /** 重置密码（admin-only）。不影响账号列表数据，成功后无需 invalidate。 */
 export function useResetUserPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) => usersApi.resetPassword(id, password),
+  });
+}
+
+/** 删除用户（admin-only；后端拒绝删除永久 admin）。 */
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => usersApi.remove(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.users });
+    },
   });
 }
 

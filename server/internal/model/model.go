@@ -6,6 +6,8 @@ package model
 import (
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // 渠道状态枚举。
@@ -198,21 +200,26 @@ type BuildArtifact struct {
 
 func (BuildArtifact) TableName() string { return "build_artifact" }
 
-// AdminUser 后台账号。
+// AdminUser 后台账号。V1 只有一个永久 admin（bootstrap 创建，见 seed.EnsureBootstrapAdmin），
+// User Management 只管理 role=user 的普通账号（见 docs/admin/10-user-management.md）。
 //
-// Enabled=false（账号管理，见 docs/admin 用户管理文档）：
-//   - 登录被拒绝（Service.Login 校验）；
-//   - 已签发、尚未过期的 access token 也立即失效——鉴权中间件在
-//     RequireEnabled 里对每次请求重新查库确认账号当前仍启用（见 handler.RequireEnabled），
-//     而不是等 token 自然过期（ADR-0008 access token 有效期较长，仅停用不足以立即生效）。
+// 删除用户是软删除（DeletedAt 非空 = 已删除）而非物理删除：channel.created_by /
+// listing_app.created_by / audit_log.user_id 均引用 admin_user.id 且无级联，物理删除会
+// 让这些外键字段悬空、破坏审计与归属追溯。GORM 对带 DeletedAt 字段的模型：
+//   - 常规查询（First/Find，包括 GetUserByUsername 登录查询、GetUserByID 鉴权查询、
+//     ListUsers 列表查询）自动加 `deleted_at IS NULL` 过滤，已删除账号天然「查不到」——
+//     登录自然失败、已签发的 token 在下一次 RequireActiveAccount 检查时自然被判无效，
+//     都不需要额外代码；
+//   - .Delete() 自动变成 UPDATE ... SET deleted_at=now()，不是真正的 DELETE。
+//   - 只有显式 .Unscoped() 才能看到/操作已删除的行（ExistsUsernameCI 用它防止用户名
+//     误判为可用、实际却撞上 DB 唯一索引）。
 type AdminUser struct {
-	ID           uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	Username     string    `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`
-	PasswordHash string    `gorm:"column:password_hash;type:varchar(255);not null" json:"-"`
-	Role         string    `gorm:"column:role;type:varchar(16);not null;default:user" json:"role"`
-	Enabled      bool      `gorm:"column:enabled;not null;default:true" json:"enabled"`
-	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
-	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+	ID           uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username     string         `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`
+	PasswordHash string         `gorm:"column:password_hash;type:varchar(255);not null" json:"-"`
+	Role         string         `gorm:"column:role;type:varchar(16);not null;default:user" json:"role"`
+	CreatedAt    time.Time      `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 }
 
 func (AdminUser) TableName() string { return "admin_user" }

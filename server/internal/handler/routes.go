@@ -46,10 +46,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	e.POST("/api/auth/login", h.Login)
 	e.POST("/api/auth/refresh", h.Refresh)
 
-	// 需要 JWT 的管理面。RequireEnabled 必须紧跟鉴权中间件之后：
-	// 禁用账号已签发的 token 要在这里就被拦下，而不是先跑到某个业务 handler 里才发现。
+	// 需要 JWT 的管理面。RequireActiveAccount 必须紧跟鉴权中间件之后：
+	// 已删除账号的旧 token 要在这里就被拦下，而不是先跑到某个业务 handler 里才发现。
 	api := e.Group("/api")
-	api.Use(h.authMgr.Middleware(), h.RequireEnabled)
+	api.Use(h.authMgr.Middleware(), h.RequireActiveAccount)
 
 	user := auth.RequireRole(model.RoleUser)   // 日常业务操作（读 + 大多数写）
 	admin := auth.RequireRole(model.RoleAdmin) // 系统设置（商店）、渠道归档/删除、账号管理
@@ -65,12 +65,12 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.PUT("/stores/:id", h.UpdateStore, admin)
 	api.DELETE("/stores/:id", h.DeleteStore, admin)
 
-	// 账号管理（Admin-only User Management）：admin-only。无硬删除端点——
-	// audit_log.user_id / channel.created_by / listing_app.created_by 均引用 admin_user.id
-	// 且无级联，硬删会破坏审计与归属追溯，故只提供启停用（见 service.DeleteUser 相关说明）。
+	// 账号管理（Admin-only User Management，V1 单管理员 MVP）：admin-only，
+	// 只管理 role=user 的普通账号——没有改角色 / 启停用接口（见 service/user.go 说明）。
+	// DELETE 是软删除（不物理删除行，见 repo.DeleteUser）。
 	api.GET("/users", h.ListUsers, admin)
 	api.POST("/users", h.CreateUser, admin)
-	api.PUT("/users/:id", h.UpdateUser, admin)
+	api.DELETE("/users/:id", h.DeleteUser, admin)
 	api.POST("/users/:id/reset-password", h.ResetUserPassword, admin)
 
 	// 上架包（Flutter/原生 App，独立于小渠道 APK 产线）。

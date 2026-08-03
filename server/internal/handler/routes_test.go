@@ -26,7 +26,7 @@ import (
 
 // testServer 起一个内存 sqlite + 本地临时存储的完整 Echo 实例，挂载 routes.go 里真实注册的路由与中间件。
 // 这样验证的是「实际生效的权限矩阵」，而不是重新写一遍规则去校验规则本身。
-// 额外返回 *repo.Repo：RequireEnabled 中间件对每个请求都会按 claims.UserID 查库确认账号仍启用，
+// 额外返回 *repo.Repo：RequireActiveAccount 中间件对每个请求都会按 claims.UserID 查库确认账号仍存在，
 // issueToken 因此需要真实写入 admin_user 表的账号，而不能只签一个不存在于库里的 token。
 func testServer(t *testing.T) (*echo.Echo, *auth.Manager, *service.Service, *repo.Repo) {
 	t.Helper()
@@ -73,9 +73,9 @@ func sanitizeDBName(s string) string {
 // 无需跨测试唯一，只需测试内唯一）。
 var testUserSeq int64
 
-// issueToken 建一个真实、启用中的账号并签发其 access token，供请求头 Authorization: Bearer 使用。
-// 必须真实建账号（而非只签一个不存在于库里的 token）：RequireEnabled 中间件按 UserID 查库
-// 确认账号仍启用，查不到/已禁用一律 401。
+// issueToken 建一个真实账号并签发其 access token，供请求头 Authorization: Bearer 使用。
+// 必须真实建账号（而非只签一个不存在于库里的 token）：RequireActiveAccount 中间件按 UserID
+// 查库确认账号仍存在，查不到（含已被软删除）一律 401。
 func issueToken(t *testing.T, mgr *auth.Manager, r *repo.Repo, role string) string {
 	t.Helper()
 	n := atomic.AddInt64(&testUserSeq, 1)
@@ -87,7 +87,6 @@ func issueToken(t *testing.T, mgr *auth.Manager, r *repo.Repo, role string) stri
 		Username:     fmt.Sprintf("t-%s-%d", role, n),
 		PasswordHash: hash,
 		Role:         role,
-		Enabled:      true,
 	}
 	if err := r.CreateUser(context.Background(), u); err != nil {
 		t.Fatalf("创建测试账号失败: %v", err)

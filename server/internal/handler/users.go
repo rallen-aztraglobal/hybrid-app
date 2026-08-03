@@ -10,7 +10,7 @@ import (
 )
 
 // ListUsers godoc
-// @Summary  账号列表（admin-only；不含密码哈希）
+// @Summary  账号列表（admin-only；不含密码哈希；含 protected 标记永久 admin）
 // @Tags     users
 // @Produce  json
 // @Success  200  {object}  httpx.Envelope
@@ -25,7 +25,7 @@ func (h *Handler) ListUsers(c echo.Context) error {
 }
 
 // CreateUser godoc
-// @Summary  新增账号（admin-only；角色仅 admin/user）
+// @Summary  新增普通用户（admin-only；角色恒为 user，不接受创建 admin）
 // @Tags     users
 // @Accept   json
 // @Produce  json
@@ -45,34 +45,8 @@ func (h *Handler) CreateUser(c echo.Context) error {
 	return httpx.Created(c, u)
 }
 
-// UpdateUser godoc
-// @Summary  修改账号角色/启用状态（admin-only；不能改自己、不能移除最后一个启用中的 admin）
-// @Tags     users
-// @Accept   json
-// @Produce  json
-// @Param    id    path      int                      true  "账号 ID"
-// @Param    body  body      service.UpdateUserInput  true  "可选更新字段"
-// @Success  200   {object}  httpx.Envelope
-// @Security BearerAuth
-// @Router   /api/users/{id} [put]
-func (h *Handler) UpdateUser(c echo.Context) error {
-	id, err := paramID(c)
-	if err != nil {
-		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
-	}
-	var in service.UpdateUserInput
-	if err := c.Bind(&in); err != nil {
-		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
-	}
-	u, err := h.svc.UpdateUser(c.Request().Context(), currentUserID(c), id, in)
-	if err != nil {
-		return fail(c, err)
-	}
-	return httpx.OK(c, u)
-}
-
 // ResetUserPassword godoc
-// @Summary  重置指定账号密码（admin-only；与登录同一套 bcrypt 哈希）
+// @Summary  重置普通用户密码（admin-only；不能重置管理员密码）
 // @Tags     users
 // @Accept   json
 // @Produce  json
@@ -94,4 +68,23 @@ func (h *Handler) ResetUserPassword(c echo.Context) error {
 		return fail(c, err)
 	}
 	return httpx.OK(c, map[string]any{"reset": true})
+}
+
+// DeleteUser godoc
+// @Summary  删除普通用户（admin-only；软删除；不能删除管理员）
+// @Tags     users
+// @Produce  json
+// @Param    id   path      int  true  "账号 ID"
+// @Success  200  {object}  httpx.Envelope
+// @Security BearerAuth
+// @Router   /api/users/{id} [delete]
+func (h *Handler) DeleteUser(c echo.Context) error {
+	id, err := paramID(c)
+	if err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	if err := h.svc.DeleteUser(c.Request().Context(), id); err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, map[string]any{"deleted": true})
 }

@@ -121,9 +121,7 @@ func EnsureBootstrapAdmin(ctx context.Context, r *repo.Repo, spec string) error 
 	if err != nil {
 		return err
 	}
-	// Enabled 显式置 true：repo.CreateUser 现在用 Select("*") 强制写入全部字段（含零值），
-	// 不再依赖 GORM 对 default-tag 零值字段的省略行为兜底。
-	u := &model.AdminUser{Username: parts[0], PasswordHash: hash, Role: model.RoleAdmin, Enabled: true}
+	u := &model.AdminUser{Username: parts[0], PasswordHash: hash, Role: model.RoleAdmin}
 	if err := r.CreateUser(ctx, u); err != nil {
 		return err
 	}
