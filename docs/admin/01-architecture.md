@@ -230,7 +230,7 @@ CREATE TABLE admin_user (
   id            BIGINT PRIMARY KEY AUTO_INCREMENT,
   username      VARCHAR(64) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  role          ENUM('admin','operator','viewer') NOT NULL DEFAULT 'operator',
+  role          VARCHAR(16) NOT NULL DEFAULT 'user',  -- 只有 admin / user 两档（迁移 000010 收敛）
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

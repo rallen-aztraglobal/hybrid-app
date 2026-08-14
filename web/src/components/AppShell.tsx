@@ -6,6 +6,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useBrands } from '@/hooks/queries';
 import { useAuthStore } from '@/store/authStore';
 import { useUiStore } from '@/store/uiStore';
+import { isAdmin } from '@/lib/roles';
 import { cn } from '@/lib/cn';
 import {
   BellIcon,
@@ -48,6 +49,8 @@ export function AppShell() {
 
   const total = (brands ?? []).reduce((sum, b) => sum + b.channelCount, 0);
 
+  // 系统设置整个模块是 admin-only（商店管理属于其中）：非 admin 侧栏不显示该入口。
+  // 后端仍是权限的最终权威——这里只是隐藏，真正的拒绝来自 /api/stores* 的 403。
   const items: NavItem[] = [
     { to: '/channels', label: '渠道管理', icon: GridIcon, group: '运营', badge: total || undefined },
     { to: '/listings', label: '上架包', icon: LayersIcon, group: '运营' },
@@ -55,7 +58,7 @@ export function AppShell() {
     { to: '/push', label: '推送管理', icon: MegaphoneIcon, group: '运营' },
     { to: '/pack', label: '打包中心', icon: PackageIcon, group: '交付' },
     { to: '/builds', label: '构建记录', icon: ClockIcon, group: '交付' },
-    { to: '/settings', label: '系统设置', icon: SettingsIcon, group: '系统' },
+    ...(isAdmin(user) ? [{ to: '/settings', label: '系统设置', icon: SettingsIcon, group: '系统' }] : []),
   ];
 
   const meta = META[pathname] ?? META['/channels'];
@@ -193,5 +196,5 @@ export function AppShell() {
 }
 
 function roleLabel(role?: string): string {
-  return role === 'admin' ? '管理员' : role === 'viewer' ? '只读' : '运营';
+  return role === 'admin' ? '管理员' : '用户';
 }

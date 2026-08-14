@@ -7,11 +7,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useBrands, useChannels, useSubmitBuildJob } from '@/hooks/queries';
+import { useBrands, useChannels, useCurrentVersion, useSubmitBuildJob } from '@/hooks/queries';
 import { useBuildLogStream } from '@/hooks/useBuildLogStream';
 import { useUiStore } from '@/store/uiStore';
 import { iconInitials } from '@/lib/brands';
 import { defaultJobName, validateVersionName } from '@/lib/validation';
+import { isVersionLowerThanCurrent } from '@/lib/version';
 import type { Channel } from '@/lib/types';
 import { BrandTabs } from '@/components/BrandTabs';
 import { AppIcon, Button, SectionHeading, Switch } from '@/components/ui';
@@ -36,6 +37,12 @@ export function PackPage() {
     [channels, currentBrand],
   );
 
+  // 当前版本：取自后端权威端点 GET /api/build/current-version（全量扫描该品牌全部成功
+  // 构建，语义版本最高的一条），与 CreateBuildJob 的强制版本校验共用同一实现——不在前端
+  // 自己用一份可能被分页截断的构建记录列表重新聚合，避免两边算出不一致的结果。
+  // 展示 + 提交前即时提示用途，不做强制拦截；真正的拦截仍由后端 CreateBuildJob 完成。
+  const { data: currentVersion = null } = useCurrentVersion(currentBrand);
+
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [testEvents, setTestEvents] = useState(false);
   const [versionName, setVersionName] = useState(DEFAULT_VERSION);
@@ -45,6 +52,7 @@ export function PackPage() {
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
   const versionErr = validateVersionName(versionName);
+  const versionTooLow = !versionErr && isVersionLowerThanCurrent(versionName, currentVersion);
   const computedDefaultName = defaultJobName(currentBrand, versionErr ? DEFAULT_VERSION : versionName);
 
   // 切品牌：清空选择 + 重置日志，任务名回到默认。
@@ -75,7 +83,7 @@ export function PackPage() {
   }
 
   const selected = list.filter((c) => picked.has(c.id));
-  const canRun = selected.length > 0 && !versionErr && !submit.isPending && !log.streaming;
+  const canRun = selected.length > 0 && !versionErr && !versionTooLow && !submit.isPending && !log.streaming;
 
   async function run() {
     setSubmitErr(null);
@@ -85,6 +93,10 @@ export function PackPage() {
     }
     if (versionErr) {
       setSubmitErr(versionErr);
+      return;
+    }
+    if (versionTooLow) {
+      setSubmitErr(`版本号不能低于当前版本 ${currentVersion}`);
       return;
     }
     log.reset();
@@ -175,6 +187,18 @@ export function PackPage() {
           <div className="section-card">
             <SectionHeading num="⚙">打包配置</SectionHeading>
 
+            {/* 当前版本：该品牌全部成功构建里语义版本最高的一个（不是最近一条记录）。 */}
+            <div className="mb-[13px] flex items-center gap-2 text-[12.5px]">
+              <span className="text-ink-2 font-semibold">当前版本</span>
+              {currentVersion ? (
+                <span className="font-mono px-2 py-0.5 rounded-md bg-[#ede9fe] text-[#6d28d9]">
+                  v{currentVersion}
+                </span>
+              ) : (
+                <span className="text-muted">暂无成功构建</span>
+              )}
+            </div>
+
             {/* 版本号 */}
             <div className="mb-[13px]">
               <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">
@@ -188,6 +212,11 @@ export function PackPage() {
                 onChange={(e) => setVersionName(e.target.value)}
               />
               {versionErr && <div className="mt-1 text-[12px] text-down">{versionErr}</div>}
+              {!versionErr && versionTooLow && (
+                <div className="mt-1 text-[12px] text-down">
+                  版本号不能低于当前版本 {currentVersion}（后端会拒绝提交，此处仅提前提示）
+                </div>
+              )}
             </div>
 
             {/* 任务名 */}

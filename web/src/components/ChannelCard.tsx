@@ -14,11 +14,14 @@ export function ChannelCard({
   brand,
   onEdit,
   onArchive,
+  canArchive,
 }: {
   channel: Channel;
   brand: Brand;
   onEdit: () => void;
   onArchive: () => void;
+  /** 归档是破坏性操作，admin-only；user 不渲染该按钮（后端 403 仍是最终权威）。 */
+  canArchive: boolean;
 }) {
   const on = channel.status === 'enabled';
   // 实际生效域名：继承品牌则用 brand.domains，否则用渠道覆盖
@@ -94,21 +97,23 @@ export function ChannelCard({
           </span>
         </div>
         <div className="ml-auto flex gap-[6px] items-center">
-          {/* 编辑/归档：悬浮显现，靠左 */}
+          {/* 编辑（全员可用）/ 归档（admin-only）：悬浮显现，靠左 */}
           <div className="flex gap-[6px] opacity-0 group-hover:opacity-100 transition">
             <MiniBtn title="编辑" onClick={onEdit}>
               <EditIcon className="w-[15px] h-[15px]" />
             </MiniBtn>
-            <MiniBtn
-              title="归档"
-              danger
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm('确认归档该渠道？（软删除，保留归因历史）')) onArchive();
-              }}
-            >
-              <TrashIcon className="w-[15px] h-[15px]" />
-            </MiniBtn>
+            {canArchive && (
+              <MiniBtn
+                title="归档"
+                danger
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm('确认归档该渠道？（软删除，保留归因历史）')) onArchive();
+                }}
+              >
+                <TrashIcon className="w-[15px] h-[15px]" />
+              </MiniBtn>
+            )}
           </div>
           {/* 下载最新包：纯图标、固定在最右（小屏不挤文字）。tooltip 说明用途。 */}
           {channel.latestApkUrl && (

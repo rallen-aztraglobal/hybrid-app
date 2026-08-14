@@ -1,5 +1,5 @@
 // Package auth 提供 JWT 签发/校验、密码哈希与基于角色的访问控制（RBAC）。
-// 角色：admin（全部）> operator（写渠道/图标/域名、构建）> viewer（只读）。
+// 角色：admin（全部权限，含系统设置/商店/渠道归档）> user（其余全部日常业务操作）。
 package auth
 
 import (
@@ -43,7 +43,8 @@ type Manager struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	// RunnerToken 构建机长期静态令牌（ADR-0008）：非空时，Middleware 接受等于它的 Bearer，
-	// 并注入「机器 operator」身份直接放行。用于 hybrid-pack runner 常驻轮询（避免 2h access token 过期）。
+	// 并注入「机器 user」身份直接放行（构建机是机器身份，不是管理员：不能碰 Store / 渠道归档）。
+	// 用于 hybrid-pack runner 常驻轮询（避免 2h access token 过期）。
 	RunnerToken string
 }
 
@@ -131,10 +132,11 @@ func (m *Manager) Middleware() echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized, "缺少 Bearer token")
 			}
 			raw := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
-			// 构建机静态令牌：非空且匹配时，注入机器 operator 身份直接放行（ADR-0008 runner 长期凭证）。
-			// 它无过期、不依赖登录，专供 /build/* 机器接口；其余路由仍受 RequireRole 约束（机器=operator）。
+			// 构建机静态令牌：非空且匹配时，注入机器 user 身份直接放行（ADR-0008 runner 长期凭证）。
+			// 它无过期、不依赖登录，专供 /build/* 机器接口；其余路由仍受 RequireRole 约束
+			// （机器=user，永远不是 admin：碰不到 Store 管理与渠道归档/删除）。
 			if m.RunnerToken != "" && raw == m.RunnerToken {
-				c.Set(ctxClaims, &Claims{Username: "runner", Role: model.RoleOperator, Type: TokenAccess})
+				c.Set(ctxClaims, &Claims{Username: "runner", Role: model.RoleUser, Type: TokenAccess})
 				return next(c)
 			}
 			claims, err := m.Parse(raw)
@@ -150,11 +152,10 @@ func (m *Manager) Middleware() echo.MiddlewareFunc {
 	}
 }
 
-// roleRank 用于角色比较。数值越大权限越高。
+// roleRank 用于角色比较。数值越大权限越高。只有两档：user(1) < admin(2)。
 var roleRank = map[string]int{
-	model.RoleViewer:   1,
-	model.RoleOperator: 2,
-	model.RoleAdmin:    3,
+	model.RoleUser:  1,
+	model.RoleAdmin: 2,
 }
 
 // RequireRole 返回一个中间件，要求当前用户角色 >= minRole。

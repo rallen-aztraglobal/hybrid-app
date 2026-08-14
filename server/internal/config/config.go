@@ -53,7 +53,7 @@ type Config struct {
 	JWTAccessTTL      time.Duration
 	JWTRefreshTTL     time.Duration
 	JWTIssuer         string
-	RunnerToken       string // 构建机(runner)长期静态令牌：非空时 /build/* 机器接口接受该 Bearer（机器身份=operator，ADR-0008）
+	RunnerToken       string // 构建机(runner)长期静态令牌：非空时 /build/* 机器接口接受该 Bearer（机器身份=user，ADR-0008）
 	BootstrapAdmin    string // 启动时若无任何用户则建一个 admin，格式 user:password
 	DefaultProbePath  string // /api/app/config 返回的 probePath，默认 /healthz
 	AppConfigTTLSecs  int    // /api/app/config 的 ttlSeconds

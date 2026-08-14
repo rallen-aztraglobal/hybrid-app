@@ -26,6 +26,7 @@ export const qk = {
   channel: (id: string) => ['channels', id] as const,
   builds: (brand?: BrandCode) => ['builds', brand ?? 'all'] as const,
   buildLogs: (jobId: string) => ['builds', 'logs', jobId] as const,
+  currentVersion: (brand: BrandCode) => ['builds', 'current-version', brand] as const,
   pushStatus: ['push', 'status'] as const,
   pushCampaigns: (brand?: BrandCode) => ['push', 'campaigns', brand ?? 'all'] as const,
   pushCampaign: (id: string) => ['push', 'campaigns', id] as const,
@@ -58,6 +59,15 @@ export function useBrandDomains(code: BrandCode) {
 
 export function useBuildJobs(brand?: BrandCode) {
   return useQuery({ queryKey: qk.builds(brand), queryFn: () => buildApi.listJobs(brand) });
+}
+
+/**
+ * 该品牌「当前版本」——全部成功构建里语义版本最高的一条，与后端 CreateBuildJob 的
+ * 强制版本校验共用同一权威来源（GET /api/build/current-version 全量扫描，不受
+ * /build/records 的分页/上限约束）。打包中心用它展示，不做前端自行聚合。
+ */
+export function useCurrentVersion(brand: BrandCode) {
+  return useQuery({ queryKey: qk.currentVersion(brand), queryFn: () => buildApi.currentVersion(brand) });
 }
 
 /** 应用商店清单（含 disabled）。渠道表单只取 enabled 项，设置页展示全部。 */

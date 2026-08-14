@@ -45,7 +45,7 @@ func (h *Handler) RegisterPushToken(c echo.Context) error {
 }
 
 // GetPushStatus godoc
-// @Summary  FCM 配置状态（viewer）
+// @Summary  FCM 配置状态（user+）
 // @Tags     push
 // @Produce  json
 // @Success  200  {object}  httpx.Envelope
@@ -56,7 +56,7 @@ func (h *Handler) GetPushStatus(c echo.Context) error {
 }
 
 // ListPushCampaigns godoc
-// @Summary  推送活动列表（viewer）
+// @Summary  推送活动列表（user+）
 // @Tags     push
 // @Produce  json
 // @Param    brand  query  string  false  "按品牌 code 筛选"
@@ -72,7 +72,7 @@ func (h *Handler) ListPushCampaigns(c echo.Context) error {
 }
 
 // CreatePushCampaign godoc
-// @Summary  创建推送活动草稿（operator）
+// @Summary  创建推送活动草稿（user+）
 // @Tags     push
 // @Accept   json
 // @Produce  json
@@ -97,7 +97,7 @@ func (h *Handler) CreatePushCampaign(c echo.Context) error {
 }
 
 // GetPushCampaign godoc
-// @Summary  推送活动详情（viewer）
+// @Summary  推送活动详情（user+）
 // @Tags     push
 // @Produce  json
 // @Param    id  path  int  true  "活动 ID"
@@ -117,7 +117,7 @@ func (h *Handler) GetPushCampaign(c echo.Context) error {
 }
 
 // UpdatePushCampaign godoc
-// @Summary  修改推送活动草稿（operator，仅 draft 可改）
+// @Summary  修改推送活动草稿（user+，仅 draft 可改）
 // @Tags     push
 // @Accept   json
 // @Produce  json
@@ -148,7 +148,7 @@ type sendCampaignReq struct {
 }
 
 // SendPushCampaign godoc
-// @Summary  立即发送推送活动（operator）；dryRun=true 走完统计但不真发
+// @Summary  立即发送推送活动（user+）；dryRun=true 走完统计但不真发
 // @Tags     push
 // @Accept   json
 // @Produce  json
@@ -177,7 +177,7 @@ type scheduleCampaignReq struct {
 }
 
 // SchedulePushCampaign godoc
-// @Summary  设置推送活动定时发送（operator）
+// @Summary  设置推送活动定时发送（user+）
 // @Tags     push
 // @Accept   json
 // @Produce  json
@@ -207,7 +207,7 @@ func (h *Handler) SchedulePushCampaign(c echo.Context) error {
 }
 
 // UploadPushImage godoc
-// @Summary  上传推送图片（operator）
+// @Summary  上传推送图片（user+）
 // @Tags     push
 // @Accept   multipart/form-data
 // @Produce  json
@@ -249,7 +249,7 @@ func (h *Handler) UploadPushImage(c echo.Context) error {
 }
 
 // GetPushAudience godoc
-// @Summary  预估目标活跃设备数（viewer）
+// @Summary  预估目标活跃设备数（user+）
 // @Tags     push
 // @Produce  json
 // @Param    appIds  query  string  true  "逗号分隔的 applicationId 列表"

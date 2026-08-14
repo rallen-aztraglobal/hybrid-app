@@ -21,11 +21,10 @@ const (
 	StoreDisabled = "disabled"
 )
 
-// 账号角色枚举（RBAC）。
+// 账号角色枚举（RBAC）。只有两档：admin 全部权限；user 除 Store/系统设置与渠道归档外的全部日常操作。
 const (
-	RoleAdmin    = "admin"    // 全部权限
-	RoleOperator = "operator" // 渠道/图标/域名写，构建
-	RoleViewer   = "viewer"   // 只读
+	RoleAdmin = "admin" // 全部权限（含系统设置/商店管理/渠道归档）
+	RoleUser  = "user"  // 日常业务操作：渠道读写、域名、打包、推送等；不含系统设置与渠道归档
 )
 
 // 域名健康状态枚举。
@@ -204,7 +203,7 @@ type AdminUser struct {
 	ID           uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username     string    `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`
 	PasswordHash string    `gorm:"column:password_hash;type:varchar(255);not null" json:"-"`
-	Role         string    `gorm:"column:role;type:varchar(16);not null;default:operator" json:"role"`
+	Role         string    `gorm:"column:role;type:varchar(16);not null;default:user" json:"role"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 }
 

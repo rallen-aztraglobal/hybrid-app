@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +19,68 @@ var versionNameRe = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 // validVersionName 返回 versionName 是否形如 X.Y.Z。
 func validVersionName(v string) bool { return versionNameRe.MatchString(v) }
+
+// semver 是解析后的 X.Y.Z 三段版本号（均为非负整数），供数值比较而非字符串字典序比较
+// （字典序会把 "1.10.0" 误判为小于 "1.2.0"）。
+type semver [3]int
+
+// parseSemver 解析形如 X.Y.Z 的版本号。历史脏数据/非法格式返回 ok=false，绝不 panic。
+func parseSemver(v string) (sv semver, ok bool) {
+	if !validVersionName(v) {
+		return semver{}, false
+	}
+	parts := strings.SplitN(v, ".", 3)
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return semver{}, false
+		}
+		sv[i] = n
+	}
+	return sv, true
+}
+
+// compareSemver 返回 a 相对 b 的大小：-1 表示 a<b，0 表示相等，1 表示 a>b（逐段数值比较，非字符串比较）。
+func compareSemver(a, b semver) int {
+	for i := 0; i < 3; i++ {
+		if a[i] != b[i] {
+			if a[i] < b[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+// CurrentVersion 取某品牌全部 success 构建记录里「语义版本最高」的 versionName
+// （不是按 created_at/id 取最新一条——后者可能因手误提交了一个更低的版本号）。
+// 忽略无法解析的历史脏版本号，不中断查询；一个合法版本都没有时 found=false，
+// 视为「当前版本不存在」，据此放行第一次构建。
+//
+// 这是 CreateBuildJob 版本校验与 GetCurrentVersion（GET /api/build/current-version，
+// 供打包中心展示）共用的唯一实现——前端不应该、也不需要自己在一份可能被分页截断的
+// 构建记录列表上重新算一遍「最高版本」，两处算出来的结果必须永远一致。
+func (s *Service) CurrentVersion(ctx context.Context, brandCode string) (name string, found bool) {
+	names, err := s.repo.ListSuccessfulVersionNames(ctx, brandCode)
+	if err != nil {
+		// 查询失败不应阻断正常打包流程：按「当前版本不存在」处理，跳过本次版本比较（其余校验仍然生效）。
+		log.Printf("[build] 查询品牌 %s 当前版本失败，本次跳过版本比较: %v", brandCode, err)
+		return "", false
+	}
+	var best semver
+	for _, n := range names {
+		sv, ok := parseSemver(n)
+		if !ok {
+			log.Printf("[build] 品牌 %s 存在无法解析的历史版本号 %q，已忽略", brandCode, n)
+			continue
+		}
+		if !found || compareSemver(sv, best) > 0 {
+			name, best, found = n, sv, true
+		}
+	}
+	return name, found
+}
 
 // CreateBuildJobInput 是 POST /api/build/jobs 入参（Web「打包中心」触发）。
 type CreateBuildJobInput struct {
@@ -48,6 +112,15 @@ func (s *Service) CreateBuildJob(ctx context.Context, in CreateBuildJobInput) (*
 	brand, err := s.repo.GetBrandByCode(ctx, in.Brand)
 	if err != nil {
 		return nil, errBadRequest(fmt.Sprintf("品牌 %q 不存在", in.Brand))
+	}
+
+	// 版本号不能低于该品牌当前（最高语义版本的成功构建）版本；相等允许，更高允许（YW 需求）。
+	// newSv 必然可解析：上面 validVersionName 已校验过 in.VersionName 的格式。
+	newSv, _ := parseSemver(in.VersionName)
+	if current, ok := s.CurrentVersion(ctx, brand.Code); ok {
+		if curSv, curOK := parseSemver(current); curOK && compareSemver(newSv, curSv) < 0 {
+			return nil, errBadRequest(fmt.Sprintf("versionName %q 不能低于当前版本 %s", in.VersionName, current))
+		}
 	}
 
 	// 去重 + 归一 flavors，并校验都属于该品牌的 enabled 渠道（避免给构建机不存在/未启用的 flavor）。

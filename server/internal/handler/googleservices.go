@@ -38,7 +38,7 @@ func (h *Handler) GetGoogleServices(c echo.Context) error {
 }
 
 // UploadGoogleServices godoc
-// @Summary  上传品牌合并 google-services.json（operator+）
+// @Summary  上传品牌合并 google-services.json（user+）
 // @Description 接受 multipart file 字段 "file" 或 raw JSON body；校验 project_info/client 后存入 Storage（key=fcm/<brand>/google-services.json）。
 // @Tags     push
 // @Accept   multipart/form-data
