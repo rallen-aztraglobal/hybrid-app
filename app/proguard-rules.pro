@@ -64,12 +64,16 @@
 -keep class com.google.android.gms.ads.identifier.AdvertisingIdClient$Info { *; }
 -keep public class com.android.installreferrer.** { *; }
 
-# Adjust OAID 插件（adjust-android-oaid）对 MSA 移动安全联盟 SDK 的引用。
-# 本工程【不打包】MSA：com.appsflyer:oaid 只含 com.appsflyer.oaid.*，靠反射调 MSA，
-# 故上面 OAID 段那些 com.bun.miitmdid.** keep 规则一直是对不存在的类生效（no-op）。
-# 但 Adjust 的插件是【直接类引用】且 AAR 里没带 consumer proguard 规则，R8 会以
-# "Missing classes detected" 直接失败（AdjustOaid.readOaid / MsaSdkClient.getOaidInfo）。
-# 运行时安全（已核对字节码）：readOaid 里 MdidSdkHelper.InitCert 的调用点在 catch Throwable
-# 的异常表内，缺类走 isMsaSdkAvailable=false；Util 取 OAID 前先判该标志，MsaSdkClient
-# 永不被加载。华为 OAID 走的是另一条 HmsSdkClient 路径，不受影响。
+# Adjust OAID 插件（adjust-android-oaid）对外部 SDK 是【直接类引用】且 AAR 没带 consumer
+# proguard 规则，被引用的 SDK 不在包里时 R8 会以 "Missing classes detected" 直接失败。
+# 插件本身全量入 classpath（见 build.gradle），但它引用的两个外部 SDK 都不一定在：
+# 1) MSA（com.bun.miitmdid.**）：本工程任何包都【不打包】MSA（com.appsflyer:oaid 只含
+#    com.appsflyer.oaid.*，靠反射调 MSA）。运行时安全（已核对字节码）：readOaid 里
+#    MdidSdkHelper.InitCert 的调用点在 catch Throwable 的异常表内，缺类走
+#    isMsaSdkAvailable=false；Util 取 OAID 前先判该标志，MsaSdkClient 永不被加载。
+# 2) HMS（com.huawei.hms.ads.identifier.**）：ads-identifier 只按 flavor 注入 bp/_hw 包，
+#    普通 ap/gp 渠道包里没有。运行时安全（已核对 5.4.1 字节码）：全插件仅 HmsSdkClient$1.call()
+#    一处引用华为类，跑在 FutureTask 里，外层 getOaidInfo 整个方法体在 catch Throwable 内，
+#    缺类只打一条 "Fail to read oaid info using hms" 日志并返回 null。
 -dontwarn com.bun.miitmdid.**
+-dontwarn com.huawei.hms.ads.identifier.**
