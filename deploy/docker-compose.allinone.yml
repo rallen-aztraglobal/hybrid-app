@@ -120,6 +120,9 @@ services:
     volumes:
       - repo:/workspace
       - apks:/apks
+      # Gradle 缓存持久化（发行包 + 依赖缓存）：不挂卷的话每次发版重建容器都会清空，
+      # 冷启动要重新从 services.gradle.org / dl.google.com 下载，网络一抖打包就失败。
+      - gradle-cache:/home/builder/.gradle
     depends_on:
       go-api:
         condition: service_started
@@ -166,6 +169,7 @@ volumes:
   api-data:
   apks:
   repo:
+  gradle-cache:
 
 networks:
   hybrid:
