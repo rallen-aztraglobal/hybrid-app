@@ -29,6 +29,7 @@ export interface ListingGateDraft {
 
 export function ListingGateSection({
   listingId,
+  canGate,
   gateEnabled,
   onGateEnabledChange,
   draft,
@@ -36,6 +37,8 @@ export function ListingGateSection({
 }: {
   /** null = 尚未保存过（新建未提交），此时试算/流水不可用。 */
   listingId: string | null;
+  /** listing:gate（10-rbac.md：AB 面网关配置与试算）；无权限时本区块整体只读。 */
+  canGate: boolean;
   gateEnabled: boolean;
   onGateEnabledChange: (v: boolean) => void;
   draft: ListingGateDraft;
@@ -43,7 +46,7 @@ export function ListingGateSection({
 }) {
   const canEnable = draft.countries.length > 0;
   // 只在「当前关闭、且还不能开启」时禁用——已开启的开关任何时候都允许关闭，不因草稿变化被锁死。
-  const switchDisabled = !gateEnabled && !canEnable;
+  const switchDisabled = !canGate || (!gateEnabled && !canEnable);
 
   function patch(partial: Partial<ListingGateDraft>) {
     onDraftChange({ ...draft, ...partial });
@@ -51,6 +54,12 @@ export function ListingGateSection({
 
   return (
     <div className="flex flex-col gap-4">
+      {!canGate && (
+        <Note>
+          <InfoIcon className="w-[17px] h-[17px] flex-none mt-0.5" style={{ color: 'var(--brand)' }} />
+          <div>当前账号无 AB 面网关权限（listing:gate），以下配置为只读展示，试算工具已隐藏。</div>
+        </Note>
+      )}
       <div className="flex items-center gap-[10px] p-[11px_13px] bg-panel-2 border border-line rounded-[10px]">
         <Switch checked={gateEnabled} onChange={onGateEnabledChange} disabled={switchDisabled} />
         <div className="flex-1">
@@ -68,7 +77,7 @@ export function ListingGateSection({
         )}
       </div>
 
-      <div>
+      <div className={cn(!canGate && 'opacity-60 pointer-events-none')}>
         <div className="mb-[6px] text-[12.5px] font-semibold text-ink-2">
           国家白名单 <span className="text-down">*</span>{' '}
           <span className="font-normal text-muted text-[11.5px]">
@@ -78,7 +87,7 @@ export function ListingGateSection({
         <CountryPicker value={draft.countries} onChange={(countries) => patch({ countries })} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className={cn('grid grid-cols-2 gap-3', !canGate && 'opacity-60 pointer-events-none')}>
         <div>
           <div className="mb-[6px] text-[12.5px] font-semibold text-ink-2">
             IP 白名单 <span className="font-normal text-muted text-[11.5px]">· 选填，每行一个 CIDR / IP</span>
@@ -103,7 +112,7 @@ export function ListingGateSection({
         </div>
       </div>
 
-      <div>
+      <div className={cn(!canGate && 'opacity-60 pointer-events-none')}>
         <div className="mb-[6px] text-[12.5px] font-semibold text-ink-2">
           时区黑名单 <span className="font-normal text-muted text-[11.5px]">· 选填；命中即强制 A 面（客户端上报，与 IP 黑名单同类）</span>
         </div>
@@ -123,7 +132,7 @@ export function ListingGateSection({
 
       {listingId ? (
         <>
-          <GateTestTool listingId={listingId} />
+          {canGate && <GateTestTool listingId={listingId} />}
           <GateLogsPanel listingId={listingId} />
         </>
       ) : (

@@ -13,6 +13,8 @@ import { deriveApplicationId, type BrandMeta } from '@/lib/brands';
 import type { Channel, ChannelInput, DomainEntry } from '@/lib/types';
 import { useBrands, useChannels, useSaveChannel, useStores } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
+import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { validateChannel, composeFlavor, type FieldError } from '@/lib/validation';
 import { loadImageFile, urlToDataUrl } from '@/lib/icon';
 import { cn } from '@/lib/cn';
@@ -34,6 +36,9 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const { data: brands } = useBrands();
   const { data: stores } = useStores();
   const save = useSaveChannel();
+  // 域名管理是独立权限点（10-rbac.md domain:edit「修改品牌域名、渠道域名」），
+  // 即便拥有 channel:edit 也不代表能改渠道级覆盖域名——本区块单独按 domain:edit 收紧。
+  const canEditDomain = useAuthStore((s) => s.hasPerm(PERM.DOMAIN_EDIT));
 
   // 表单可选商店：仅 enabled，按 sort 升序（停用的商店不应再被选用于新渠道）。
   const storeOptions = useMemo(
@@ -415,6 +420,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               <Switch
                 checked={form.useBrandDomains}
                 onChange={(v) => set('useBrandDomains', v)}
+                disabled={!canEditDomain}
               />
               <div className="flex-1">
                 <div className="text-[13px] font-semibold">继承大渠道默认域名</div>
@@ -429,11 +435,15 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
                 <DomainEditor
                   domains={form.domains ?? EMPTY_DOMAINS}
                   onChange={(next) => set('domains', next)}
+                  disabled={!canEditDomain}
                 />
                 {errOf('domains') && (
                   <div className="text-[12px] text-down mb-2">{errOf('domains')}</div>
                 )}
               </>
+            )}
+            {!canEditDomain && (
+              <div className="text-[11.5px] text-muted">当前账号无域名编辑权限（domain:edit），此区块为只读展示。</div>
             )}
 
             <Note>

@@ -6,6 +6,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useBrands } from '@/hooks/queries';
 import { useAuthStore } from '@/store/authStore';
 import { useUiStore } from '@/store/uiStore';
+import { PERM } from '@/lib/permissions';
 import { cn } from '@/lib/cn';
 import {
   BellIcon,
@@ -25,6 +26,7 @@ interface NavItem {
   label: string;
   icon: typeof GridIcon;
   group: string;
+  perm: string;
   badge?: number;
 }
 
@@ -36,6 +38,7 @@ const META: Record<string, { title: string; crumb: string }> = {
   '/pack': { title: '打包中心', crumb: '交付 / 拉取后台配置并跨平台打包' },
   '/builds': { title: '构建记录', crumb: '交付 / CLI 回传的打包历史' },
   '/settings': { title: '系统设置', crumb: '系统 / 账号权限与探针配置' },
+  '/no-access': { title: '渠道中台', crumb: '当前账号未分配任何页面权限' },
 };
 
 export function AppShell() {
@@ -43,22 +46,25 @@ export function AppShell() {
   const { data: brands } = useBrands();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const hasPerm = useAuthStore((s) => s.hasPerm);
   const search = useUiStore((s) => s.search);
   const setSearch = useUiStore((s) => s.setSearch);
 
   const total = (brands ?? []).reduce((sum, b) => sum + b.channelCount, 0);
 
-  const items: NavItem[] = [
-    { to: '/channels', label: '渠道管理', icon: GridIcon, group: '运营', badge: total || undefined },
-    { to: '/listings', label: '上架包', icon: LayersIcon, group: '运营' },
-    { to: '/domains', label: '域名配置', icon: GlobeIcon, group: '运营' },
-    { to: '/push', label: '推送管理', icon: MegaphoneIcon, group: '运营' },
-    { to: '/pack', label: '打包中心', icon: PackageIcon, group: '交付' },
-    { to: '/builds', label: '构建记录', icon: ClockIcon, group: '交付' },
-    { to: '/settings', label: '系统设置', icon: SettingsIcon, group: '系统' },
+  const allItems: NavItem[] = [
+    { to: '/channels', label: '渠道管理', icon: GridIcon, group: '运营', perm: PERM.PAGE_CHANNELS, badge: total || undefined },
+    { to: '/listings', label: '上架包', icon: LayersIcon, group: '运营', perm: PERM.PAGE_LISTINGS },
+    { to: '/domains', label: '域名配置', icon: GlobeIcon, group: '运营', perm: PERM.PAGE_DOMAINS },
+    { to: '/push', label: '推送管理', icon: MegaphoneIcon, group: '运营', perm: PERM.PAGE_PUSH },
+    { to: '/pack', label: '打包中心', icon: PackageIcon, group: '交付', perm: PERM.PAGE_PACK },
+    { to: '/builds', label: '构建记录', icon: ClockIcon, group: '交付', perm: PERM.PAGE_BUILDS },
+    { to: '/settings', label: '系统设置', icon: SettingsIcon, group: '系统', perm: PERM.PAGE_SETTINGS },
   ];
+  // 侧边栏按 page:* 权限过滤（10-rbac.md：无权限的路由菜单不展示）。
+  const items = allItems.filter((it) => hasPerm(it.perm));
 
-  const meta = META[pathname] ?? META['/channels'];
+  const meta = META[pathname] ?? META['/no-access'];
 
   // 按 group 分组渲染
   const groups = items.reduce<Record<string, NavItem[]>>((acc, it) => {
@@ -140,8 +146,9 @@ export function AppShell() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[13px] text-[#e2e8f0] font-semibold truncate">{user?.username ?? 'Daly'}</div>
-              <div className="text-[11px] text-[#7c89a3]">
-                {roleLabel(user?.role)} · {user?.role ?? 'admin'}
+              <div className="text-[11px] text-[#7c89a3] truncate">
+                {user?.role.name ?? '—'}
+                {user?.role.builtin && ' · 内置'}
               </div>
             </div>
             <button
@@ -190,8 +197,4 @@ export function AppShell() {
       </div>
     </div>
   );
-}
-
-function roleLabel(role?: string): string {
-  return role === 'admin' ? '管理员' : role === 'viewer' ? '只读' : '运营';
 }

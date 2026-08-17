@@ -1,6 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { brandApi, buildApi, channelApi, listingApi, listingCampaignApi, pushApi, storeApi } from '@/lib/api';
+import {
+  brandApi,
+  buildApi,
+  channelApi,
+  listingApi,
+  listingCampaignApi,
+  permsApi,
+  pushApi,
+  rolesApi,
+  storeApi,
+  usersApi,
+} from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 import type {
+  AdminUserInput,
   BrandCode,
   BuildJobRequest,
   ChannelInput,
@@ -10,6 +23,7 @@ import type {
   ListingInput,
   PushCampaignInput,
   PushSendResult,
+  RoleInput,
   StoreInput,
   StoreUpdateInput,
 } from '@/lib/types';
@@ -34,6 +48,9 @@ export const qk = {
   listings: ['listings'] as const,
   listingGateLogs: (id: string) => ['listings', id, 'gateLogs'] as const,
   listingCampaigns: ['push', 'listing-campaigns'] as const,
+  permsCatalog: ['perms', 'catalog'] as const,
+  roles: ['roles'] as const,
+  users: ['users'] as const,
 };
 
 export function useBrands() {
@@ -291,6 +308,92 @@ export function useSendListingCampaign() {
     mutationFn: ({ id, dryRun }) => listingCampaignApi.sendCampaign(id, dryRun),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: qk.listingCampaigns });
+    },
+  });
+}
+
+// =========================================================================
+// RBAC：权限点清单 + 角色 + 用户（10-rbac.md）
+// =========================================================================
+
+/** 权限点清单（登录即可），渲染角色管理的勾选树；变化极少，长缓存。 */
+export function usePermsCatalog() {
+  return useQuery({ queryKey: qk.permsCatalog, queryFn: permsApi.catalog, staleTime: 5 * 60_000 });
+}
+
+/** 角色列表（需 role:manage，仅在角色管理分区渲染时才会被组件挂载触发请求）。 */
+export function useRoles() {
+  return useQuery({ queryKey: qk.roles, queryFn: rolesApi.list });
+}
+
+export function useSaveRole() {
+  const qc = useQueryClient();
+  const refreshMe = useAuthStore((s) => s.refreshMe);
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: RoleInput }) => (id ? rolesApi.update(id, input) : rolesApi.create(input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.roles });
+      // 编辑的可能正是当前登录用户所属的角色（权限即时收紧/放宽）：立即拉最新 perms 自愈
+      // 侧边栏/按钮显隐，不必等下一次 401 才被踢、或手动刷新页面。
+      void refreshMe();
+    },
+  });
+}
+
+export function useDeleteRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => rolesApi.remove(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.roles });
+    },
+  });
+}
+
+/** 用户列表（需 user:manage）。 */
+export function useUsers() {
+  return useQuery({ queryKey: qk.users, queryFn: usersApi.list });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AdminUserInput) => usersApi.create(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.users });
+      // 新用户挂到某角色下，该角色 userCount 变化。
+      void qc.invalidateQueries({ queryKey: qk.roles });
+    },
+  });
+}
+
+export function useUpdateUserRole() {
+  const qc = useQueryClient();
+  const refreshMe = useAuthStore((s) => s.refreshMe);
+  return useMutation({
+    mutationFn: ({ id, roleId }: { id: string; roleId: string }) => usersApi.updateRole(id, roleId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.users });
+      void qc.invalidateQueries({ queryKey: qk.roles });
+      // 可能改的正是当前登录用户自己的角色：立即拉最新 perms 自愈界面，不必等下一次 401。
+      void refreshMe();
+    },
+  });
+}
+
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) => usersApi.resetPassword(id, password),
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => usersApi.remove(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.users });
+      void qc.invalidateQueries({ queryKey: qk.roles });
     },
   });
 }

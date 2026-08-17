@@ -9,44 +9,46 @@
 import { useMemo, useState } from 'react';
 import { resolveAppConfig, type ResolveResult } from '@/lib/runtimeConfig';
 import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { useChannels, useCreateStore, useDeleteStore, useStores, useUpdateStore } from '@/hooks/queries';
 import { BRAND_META } from '@/lib/brands';
 import type { Store } from '@/lib/types';
 import { ApiError } from '@/lib/api';
 import { Button, Note, Select, Switch } from '@/components/ui';
 import { EditIcon, InfoIcon, PlusIcon, ShieldIcon, TrashIcon } from '@/components/icons';
+import { RoleManager } from '@/components/RoleManager';
+import { UserManager } from '@/components/UserManager';
 import { cn } from '@/lib/cn';
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user);
+  const hasPerm = useAuthStore((s) => s.hasPerm);
+  const canManageRoles = hasPerm(PERM.ROLE_MANAGE);
+  const canManageUsers = hasPerm(PERM.USER_MANAGE);
 
   return (
     <section className="flex flex-col gap-4 max-w-[760px]">
-      {/* 账号与权限 */}
+      {/* 账号与权限（RBAC，10-rbac.md：role + perms 取代旧的 admin/operator/viewer 三档硬编码） */}
       <div className="section-card">
         <h3 className="text-[13px] font-bold mb-3">账号与权限（RBAC）</h3>
-        <div className="text-[12.5px] text-ink-2 mb-3">
-          当前登录：<b>{user?.username}</b>（{user?.role}）
+        <div className="text-[12.5px] text-ink-2 mb-1">
+          当前登录：<b>{user?.username}</b> · 角色 <b>{user?.role.name ?? '—'}</b>
+          {user?.role.builtin && (
+            <span className="ml-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1d4ed8]">
+              内置
+            </span>
+          )}
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { role: 'admin', desc: '全部权限：账号、域名、渠道、打包' },
-            { role: 'operator', desc: '渠道 CRUD、图标、触发打包' },
-            { role: 'viewer', desc: '只读：查看渠道与构建记录' },
-          ].map((r) => (
-            <div
-              key={r.role}
-              className={cn(
-                'rounded-[10px] border p-3',
-                user?.role === r.role ? 'border-brand bg-[rgba(99,102,241,.05)]' : 'border-line bg-panel-2',
-              )}
-            >
-              <div className="font-semibold text-[13px]">{r.role}</div>
-              <div className="text-[11.5px] text-muted mt-1">{r.desc}</div>
-            </div>
-          ))}
+        <div className="text-[11.5px] text-muted">
+          拥有 {user?.perms.length ?? 0} 项权限点；具体角色的权限分配见下方「角色管理」。
         </div>
       </div>
+
+      {/* 角色管理（需 role:manage 可见） */}
+      {canManageRoles && <RoleManager />}
+
+      {/* 用户管理（需 user:manage 可见） */}
+      {canManageUsers && <UserManager />}
 
       {/* 探针 / CDN */}
       <div className="section-card">
@@ -113,6 +115,7 @@ const STORE_CODE_RE = /^[a-z][a-z0-9]*$/;
  * code 一经创建不可改（会影响既有渠道的 flavor/包名语义）；删除被引用的商店会被后端拒绝。
  */
 function StoresManager() {
+  const canManage = useAuthStore((s) => s.hasPerm(PERM.STORE_MANAGE));
   const { data: stores, isLoading } = useStores();
   const createStore = useCreateStore();
   const updateStore = useUpdateStore();
@@ -212,17 +215,19 @@ function StoresManager() {
     <div className="section-card">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-[13px] font-bold">应用商店</h3>
-        <Button onClick={() => setAdding((v) => !v)}>
-          <PlusIcon className="w-4 h-4" />
-          新增商店
-        </Button>
+        {canManage && (
+          <Button onClick={() => setAdding((v) => !v)}>
+            <PlusIcon className="w-4 h-4" />
+            新增商店
+          </Button>
+        )}
       </div>
       <p className="text-[12px] text-muted mb-3">
         新增渠道时可选择发布到的应用商店；选中后其代号会作为后缀拼入 flavor（如 <span className="mono">_hw</span>），
         派生包名相应带上点号后缀。代号一经创建不可修改；被渠道引用的商店无法删除，请改为停用。
       </p>
 
-      {adding && (
+      {adding && canManage && (
         <div className="flex flex-wrap items-end gap-2 p-3 mb-3 rounded-[10px] border border-line bg-panel-2">
           <div className="flex-1 min-w-[100px]">
             <label className="block text-[11.5px] text-muted mb-1">代号 code</label>
@@ -308,21 +313,25 @@ function StoresManager() {
                 >
                   {s.status === 'enabled' ? '启用' : '停用'}
                 </span>
-                <Switch checked={s.status === 'enabled'} onChange={() => toggleStatus(s)} />
-                <button
-                  title="编辑"
-                  onClick={() => startEdit(s)}
-                  className="grid place-items-center w-[30px] h-[30px] rounded-lg border border-line bg-panel text-ink-2 hover:bg-bg hover:text-ink transition flex-none"
-                >
-                  <EditIcon className="w-[15px] h-[15px]" />
-                </button>
-                <button
-                  title="删除"
-                  onClick={() => remove(s)}
-                  className="grid place-items-center w-[30px] h-[30px] rounded-lg border border-line bg-panel text-ink-2 hover:text-down hover:border-[#fecaca] hover:bg-[#fef2f2] transition flex-none"
-                >
-                  <TrashIcon className="w-[15px] h-[15px]" />
-                </button>
+                {canManage && (
+                  <>
+                    <Switch checked={s.status === 'enabled'} onChange={() => toggleStatus(s)} />
+                    <button
+                      title="编辑"
+                      onClick={() => startEdit(s)}
+                      className="grid place-items-center w-[30px] h-[30px] rounded-lg border border-line bg-panel text-ink-2 hover:bg-bg hover:text-ink transition flex-none"
+                    >
+                      <EditIcon className="w-[15px] h-[15px]" />
+                    </button>
+                    <button
+                      title="删除"
+                      onClick={() => remove(s)}
+                      className="grid place-items-center w-[30px] h-[30px] rounded-lg border border-line bg-panel text-ink-2 hover:text-down hover:border-[#fecaca] hover:bg-[#fef2f2] transition flex-none"
+                    >
+                      <TrashIcon className="w-[15px] h-[15px]" />
+                    </button>
+                  </>
+                )}
               </div>
             )}
             {rowError?.id === s.id && <div className="mt-2 text-[12px] text-down">{rowError.message}</div>}

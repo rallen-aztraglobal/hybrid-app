@@ -6,6 +6,8 @@ import type { Brand, Channel, DomainEntry } from '@/lib/types';
 import { iconInitials } from '@/lib/brands';
 import { apkFileName } from '@/lib/text';
 import { cn } from '@/lib/cn';
+import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { AppIcon, HealthDot } from './ui';
 import { DownloadIcon, EditIcon, TrashIcon } from './icons';
 
@@ -21,6 +23,8 @@ export function ChannelCard({
   onArchive: () => void;
 }) {
   const on = channel.status === 'enabled';
+  const canEdit = useAuthStore((s) => s.hasPerm(PERM.CHANNEL_EDIT));
+  const canArchive = useAuthStore((s) => s.hasPerm(PERM.CHANNEL_ARCHIVE));
   // 实际生效域名：继承品牌则用 brand.domains，否则用渠道覆盖
   const effective: DomainEntry[] = channel.useBrandDomains
     ? brand.domains
@@ -94,22 +98,28 @@ export function ChannelCard({
           </span>
         </div>
         <div className="ml-auto flex gap-[6px] items-center">
-          {/* 编辑/归档：悬浮显现，靠左 */}
-          <div className="flex gap-[6px] opacity-0 group-hover:opacity-100 transition">
-            <MiniBtn title="编辑" onClick={onEdit}>
-              <EditIcon className="w-[15px] h-[15px]" />
-            </MiniBtn>
-            <MiniBtn
-              title="归档"
-              danger
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm('确认归档该渠道？（软删除，保留归因历史）')) onArchive();
-              }}
-            >
-              <TrashIcon className="w-[15px] h-[15px]" />
-            </MiniBtn>
-          </div>
+          {/* 编辑/归档：悬浮显现，靠左；无权限直接不渲染（10-rbac.md） */}
+          {(canEdit || canArchive) && (
+            <div className="flex gap-[6px] opacity-0 group-hover:opacity-100 transition">
+              {canEdit && (
+                <MiniBtn title="编辑" onClick={onEdit}>
+                  <EditIcon className="w-[15px] h-[15px]" />
+                </MiniBtn>
+              )}
+              {canArchive && (
+                <MiniBtn
+                  title="归档"
+                  danger
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('确认归档该渠道？（软删除，保留归因历史）')) onArchive();
+                  }}
+                >
+                  <TrashIcon className="w-[15px] h-[15px]" />
+                </MiniBtn>
+              )}
+            </div>
+          )}
           {/* 下载最新包：纯图标、固定在最右（小屏不挤文字）。tooltip 说明用途。 */}
           {channel.latestApkUrl && (
             <a

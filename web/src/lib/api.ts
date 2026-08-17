@@ -1,4 +1,6 @@
 import type {
+  AdminUser,
+  AdminUserInput,
   ApiEnvelope,
   AuthUser,
   Brand,
@@ -21,12 +23,16 @@ import type {
   ListingOpenMode,
   ListResult,
   LoginResponse,
+  MeResponse,
+  PermCatalogModule,
   ProbeResult,
   PushAudience,
   PushCampaign,
   PushCampaignInput,
   PushSendResult,
   PushStatus,
+  Role,
+  RoleInput,
   Store,
   StoreInput,
   StoreUpdateInput,
@@ -34,6 +40,7 @@ import type {
 import { mockDb } from './mock/db';
 import { mockListingDb } from './mock/listings';
 import { mockListingCampaignDb } from './mock/listingCampaigns';
+import { mockRbacDb } from './mock/rbac';
 import { BRAND_META } from './brands';
 
 /**
@@ -74,8 +81,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     /* 空响应体 */
   }
   // token 失效/过期（401）：清登录态并跳回登录页，而不是把空数据丢给页面
-  // （否则用户会误以为"数据没了"）。登录请求自身的 401（账号密码错）不在此列。
-  if (res.status === 401 && token && !path.startsWith('/auth/')) {
+  // （否则用户会误以为"数据没了"）。仅豁免登录/刷新本身的 401（账号密码错 / refresh token
+  // 过期，属业务错误，不代表当前登录态失效）。注意用路径前缀（`?` 之前）比对，避免带 query
+  // 的写法（理论上这两个端点不带 query，此处仍做防御）被误判命中/漏判。
+  // /auth/me 的 401 **必须**触发清态——账号被删/token 失效后启动时静默刷新 perms 失败，
+  // 不能让用户顶着旧权限留在界面上，直到踩到下一个 401 才被踢下线。
+  const pathname = path.split('?')[0];
+  const exemptFrom401Handling = pathname === '/auth/login' || pathname === '/auth/refresh';
+  if (res.status === 401 && token && !exemptFrom401Handling) {
     setToken(null);
     try {
       localStorage.removeItem('hybrid:auth'); // 清 zustand persist 的登录态
@@ -135,6 +148,23 @@ async function withFallback<T>(real: () => Promise<T>, mock: () => T): Promise<T
     }
     return delay(mock());
   }
+}
+
+/**
+ * 写操作专用：只有 VITE_USE_MOCK=1 显式开启时才走 mock；真实模式下即便后端 404/5xx
+ * 也直接把错误原样抛给调用方，绝不能悄悄落到 mock 兜底再对着真后端发 DELETE/PUT。
+ *
+ * 背景（评审「应修2」）：RBAC 的 rolesApi/usersApi 列表读接口用 withFallback——后端
+ * RBAC 路由未就绪时回退到 mock 的演示数据（id 从 1 开始）。但如果写操作也用同一套
+ * withFallback，会出现「列表因为 404/5xx 显示了 mock 的 id=2，用户点删除/改角色时，
+ * 单条写请求 DELETE/PUT /api/users/2 却是发去真实后端」的场景——一旦真库里恰好也有
+ * id=2 的账号，就会被误删/误改，而不是「本来就应该失败」。因此角色/用户的
+ * create/update/remove/resetPassword 一律走这里：真实模式下 100% 直达后端，
+ * 失败就如实报错，不静默兜底伪装成功。
+ */
+async function realOnly<T>(real: () => Promise<T>, mock: () => T): Promise<T> {
+  if (FORCE_MOCK) return delay(mock());
+  return real();
 }
 
 // ---------- token 存取（与 auth store 共用 localStorage key） ----------
@@ -371,14 +401,24 @@ export const authApi = {
           method: 'POST',
           body: JSON.stringify({ username, password }),
         });
-        return { username: r.username, role: r.role, token: r.accessToken, refreshToken: r.refreshToken };
+        return {
+          username: r.username,
+          role: r.role,
+          perms: r.perms ?? [],
+          token: r.accessToken,
+          refreshToken: r.refreshToken,
+        };
       },
-      () => {
-        // mock：任意非空账号密码即登录，演示 RBAC 角色
-        if (!username || !password) throw new ApiError('请输入账号密码', 400);
-        const role: AuthUser['role'] = username === 'admin' ? 'admin' : 'operator';
-        return { username, role, token: `mock-token-${username}-${Date.now()}` };
-      },
+      // mock：仅接受种子账号（与真实后端 bootstrap 账号一致：admin / admin12345）
+      () => mockRbacDb.login(username, password),
+    );
+  },
+
+  /** 启动时/角色变更后刷新 role+perms（10-rbac.md：无需重登即可生效）。失败由调用方静默兜底。 */
+  me(): Promise<{ role: AuthUser['role']; perms: string[] }> {
+    return withFallback(
+      () => request<MeResponse>('/auth/me'),
+      () => mockRbacDb.me(getToken()),
     );
   },
 };
@@ -799,6 +839,156 @@ export const storeApi = {
       },
       () => {
         mockStores = mockStores.filter((s) => s.id !== id);
+      },
+    );
+  },
+};
+
+// =========================================================================
+// RBAC：权限点清单 + 角色 + 用户（10-rbac.md，唯一契约文档）
+// =========================================================================
+
+/** 后端 role 视图（数字 id）。 */
+interface RoleDTO {
+  id: number;
+  name: string;
+  description: string;
+  builtin: boolean;
+  permCodes: string[];
+  userCount: number;
+}
+function adaptRole(r: RoleDTO): Role {
+  return {
+    id: String(r.id),
+    name: r.name,
+    description: r.description ?? '',
+    builtin: r.builtin,
+    permCodes: r.permCodes ?? [],
+    userCount: r.userCount ?? 0,
+  };
+}
+
+/** 后端 admin_user 视图（数字 id/roleId）。 */
+interface AdminUserDTO {
+  id: number;
+  username: string;
+  roleId: number;
+  roleName: string;
+  builtinRole: boolean;
+  createdAt: string;
+}
+function adaptAdminUser(u: AdminUserDTO): AdminUser {
+  return {
+    id: String(u.id),
+    username: u.username,
+    roleId: String(u.roleId),
+    roleName: u.roleName,
+    builtinRole: u.builtinRole,
+    createdAt: u.createdAt,
+  };
+}
+
+/** 权限点清单：登录即可拉取，渲染角色管理的勾选树。 */
+export const permsApi = {
+  catalog(): Promise<PermCatalogModule[]> {
+    return withFallback(
+      () => request<PermCatalogModule[]>('/perms/catalog'),
+      () => mockRbacDb.catalog(),
+    );
+  },
+};
+
+/**
+ * 角色 CRUD（需 role:manage）。列表读走 withFallback（后端 RBAC 路由未就绪时回退演示数据）；
+ * 写操作一律走 realOnly（见其注释）——真实模式下不兜底，避免拿 mock 的 id 打真后端。
+ */
+export const rolesApi = {
+  list(): Promise<Role[]> {
+    return withFallback(
+      async () => (await request<RoleDTO[]>('/roles')).map(adaptRole),
+      () => mockRbacDb.listRoles(),
+    );
+  },
+  create(input: RoleInput): Promise<Role> {
+    return realOnly(
+      async () => adaptRole(await request<RoleDTO>('/roles', { method: 'POST', body: JSON.stringify(input) })),
+      () => mockRbacDb.createRole(input),
+    );
+  },
+  update(id: string, input: RoleInput): Promise<Role> {
+    return realOnly(
+      async () => adaptRole(await request<RoleDTO>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(input) })),
+      () => mockRbacDb.updateRole(id, input),
+    );
+  },
+  remove(id: string): Promise<void> {
+    return realOnly(
+      async () => {
+        await request(`/roles/${id}`, { method: 'DELETE' });
+      },
+      () => mockRbacDb.removeRole(id),
+    );
+  },
+};
+
+/**
+ * 后台用户 CRUD + 重置密码（需 user:manage）。列表读走 withFallback；
+ * 写操作一律走 realOnly（见其注释）——真实模式下不兜底，避免拿 mock 的 id 打真后端。
+ */
+export const usersApi = {
+  list(): Promise<AdminUser[]> {
+    return withFallback(
+      async () => (await request<AdminUserDTO[]>('/users')).map(adaptAdminUser),
+      () => mockRbacDb.listUsers(),
+    );
+  },
+  create(input: AdminUserInput): Promise<AdminUser> {
+    return realOnly(
+      async () =>
+        adaptAdminUser(
+          await request<AdminUserDTO>('/users', {
+            method: 'POST',
+            body: JSON.stringify({ username: input.username.trim(), password: input.password, roleId: Number(input.roleId) || input.roleId }),
+          }),
+        ),
+      () => mockRbacDb.createUser(input),
+    );
+  },
+  updateRole(id: string, roleId: string): Promise<AdminUser> {
+    return realOnly(
+      async () =>
+        adaptAdminUser(
+          await request<AdminUserDTO>(`/users/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ roleId: Number(roleId) || roleId }),
+          }),
+        ),
+      () => mockRbacDb.updateUserRole(id, roleId),
+    );
+  },
+  resetPassword(id: string, password: string): Promise<void> {
+    return realOnly(
+      async () => {
+        await request(`/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) });
+      },
+      () => mockRbacDb.resetPassword(id, password),
+    );
+  },
+  remove(id: string): Promise<void> {
+    return realOnly(
+      async () => {
+        await request(`/users/${id}`, { method: 'DELETE' });
+      },
+      // mock 层用当前登录用户名判断「不能删除自己」（真实后端从 JWT 里取，前端仅本地演示用）。
+      () => {
+        let currentUsername: string | null = null;
+        try {
+          const raw = localStorage.getItem('hybrid:auth');
+          if (raw) currentUsername = (JSON.parse(raw)?.state?.user?.username as string | undefined) ?? null;
+        } catch {
+          /* ignore */
+        }
+        mockRbacDb.removeUser(id, currentUsername);
       },
     );
   },
