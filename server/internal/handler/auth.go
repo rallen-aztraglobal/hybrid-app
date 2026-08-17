@@ -2,11 +2,13 @@ package handler
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/labstack/echo/v4"
 
 	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/httpx"
+	"github.com/hybrid-app/server/internal/model"
 )
 
 type loginReq struct {
@@ -14,12 +16,34 @@ type loginReq struct {
 	Password string `json:"password"`
 }
 
+// roleSummary 是登录/刷新/me 响应里的角色摘要（docs/admin/10-rbac.md）。
+type roleSummary struct {
+	ID      uint64 `json:"id"`
+	Name    string `json:"name"`
+	Builtin bool   `json:"builtin"`
+}
+
 type tokenResp struct {
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
-	ExpiresIn    int    `json:"expiresIn"`
-	Role         string `json:"role"`
-	Username     string `json:"username"`
+	AccessToken  string      `json:"accessToken"`
+	RefreshToken string      `json:"refreshToken"`
+	ExpiresIn    int         `json:"expiresIn"`
+	Username     string      `json:"username"`
+	Role         roleSummary `json:"role"`
+	Perms        []string    `json:"perms"` // 超级管理员返回完整 catalog code 列表
+}
+
+// authInfo 把当前用户的角色摘要 + 权限集组装成响应片段，Login/Refresh/Me 共用。
+func (h *Handler) authInfo(c echo.Context, u *model.AdminUser) (roleSummary, []string, error) {
+	info, permSet, err := h.rbac.Resolve(c.Request().Context(), u.ID)
+	if err != nil {
+		return roleSummary{}, nil, err
+	}
+	perms := make([]string, 0, len(permSet))
+	for code := range permSet {
+		perms = append(perms, code)
+	}
+	sort.Strings(perms)
+	return roleSummary{ID: info.ID, Name: info.Name, Builtin: info.Builtin}, perms, nil
 }
 
 // Login godoc
@@ -43,9 +67,13 @@ func (h *Handler) Login(c echo.Context) error {
 	if err != nil {
 		return fail(c, err)
 	}
+	role, perms, err := h.authInfo(c, u)
+	if err != nil {
+		return fail(c, err)
+	}
 	return httpx.OK(c, tokenResp{
-		AccessToken: access, RefreshToken: refresh,
-		ExpiresIn: h.authMgr.AccessTTLSeconds(), Role: u.Role, Username: u.Username,
+		AccessToken: access, RefreshToken: refresh, ExpiresIn: h.authMgr.AccessTTLSeconds(),
+		Username: u.Username, Role: role, Perms: perms,
 	})
 }
 
@@ -78,8 +106,41 @@ func (h *Handler) Refresh(c echo.Context) error {
 	if err != nil {
 		return fail(c, err)
 	}
+	role, perms, err := h.authInfo(c, u)
+	if err != nil {
+		return fail(c, err)
+	}
 	return httpx.OK(c, tokenResp{
-		AccessToken: access, RefreshToken: refresh,
-		ExpiresIn: h.authMgr.AccessTTLSeconds(), Role: u.Role, Username: u.Username,
+		AccessToken: access, RefreshToken: refresh, ExpiresIn: h.authMgr.AccessTTLSeconds(),
+		Username: u.Username, Role: role, Perms: perms,
 	})
+}
+
+type meResp struct {
+	Username string      `json:"username"`
+	Role     roleSummary `json:"role"`
+	Perms    []string    `json:"perms"`
+}
+
+// Me godoc
+// @Summary  当前登录用户的角色与权限(前端启动时拉新，角色被改后无需重登即可生效)
+// @Tags     auth
+// @Produce  json
+// @Success  200  {object}  httpx.Envelope{data=meResp}
+// @Security BearerAuth
+// @Router   /api/auth/me [get]
+func (h *Handler) Me(c echo.Context) error {
+	claims := auth.FromContext(c)
+	if claims == nil {
+		return httpx.Fail(c, http.StatusUnauthorized, "未鉴权")
+	}
+	u, err := h.repo.GetUserByID(c.Request().Context(), claims.UserID)
+	if err != nil {
+		return httpx.Fail(c, http.StatusUnauthorized, "账号不存在或已被删除")
+	}
+	role, perms, err := h.authInfo(c, u)
+	if err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, meResp{Username: u.Username, Role: role, Perms: perms})
 }

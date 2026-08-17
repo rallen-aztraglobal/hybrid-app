@@ -92,8 +92,16 @@ func build(cfg *config.Config) (*application, error) {
 		return nil, err
 	}
 
-	// seed。
+	// RBAC 基础数据（角色 + 存量账号 role_id 回填 + 清理失效权限点）：无条件执行，不受 DB_AUTOSEED
+	// 开关影响（B3）。它是幂等的纯数据自愈操作，不像 EnsureBrands/EnsureBootstrapAdmin 那样会
+	// 「无中生有」创建业务数据——线上关掉 AutoSeed（不想自动导入品牌/渠道/CSV）也必须让角色表
+	// 就绪，否则 role 表为空会导致全站鉴权 401、登录响应也拿不到角色，且无法自愈。
 	ctx := context.Background()
+	if err := seed.EnsureRBAC(ctx, db); err != nil {
+		return nil, err
+	}
+
+	// seed。
 	if cfg.AutoSeed {
 		if err := seed.EnsureBrands(ctx, db); err != nil {
 			return nil, err
@@ -101,6 +109,7 @@ func build(cfg *config.Config) (*application, error) {
 		if err := seed.EnsureStores(ctx, db); err != nil {
 			return nil, err
 		}
+		// EnsureBootstrapAdmin 依赖上面已无条件跑过的 EnsureRBAC（超级管理员角色须已存在）。
 		if err := seed.EnsureBootstrapAdmin(ctx, r, cfg.BootstrapAdmin); err != nil {
 			return nil, err
 		}

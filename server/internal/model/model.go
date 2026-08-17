@@ -21,11 +21,12 @@ const (
 	StoreDisabled = "disabled"
 )
 
-// 账号角色枚举（RBAC）。
+// 账号角色枚举（旧字符串角色，RBAC 落地后仅供 seed.EnsureRBAC 做一次性存量回填用，
+// 鉴权已不再依赖它，见 internal/perm + internal/auth.RBAC + docs/admin/10-rbac.md）。
 const (
-	RoleAdmin    = "admin"    // 全部权限
-	RoleOperator = "operator" // 渠道/图标/域名写，构建
-	RoleViewer   = "viewer"   // 只读
+	RoleAdmin    = "admin"    // 全部权限 → 回填为「超级管理员」角色
+	RoleOperator = "operator" // 渠道/图标/域名写，构建 → 回填为「运营」角色
+	RoleViewer   = "viewer"   // 只读 → 回填为「只读」角色
 )
 
 // 域名健康状态枚举。
@@ -199,16 +200,40 @@ type BuildArtifact struct {
 
 func (BuildArtifact) TableName() string { return "build_artifact" }
 
-// AdminUser 后台账号。
+// AdminUser 后台账号。RoleID 是 RBAC 落地后的鉴权依据（挂 Role）；
+// Role 字符串列保留但不再参与鉴权，仅 seed.EnsureRBAC 一次性回填 RoleID 时读取（见 ADR 与 10-rbac.md）。
 type AdminUser struct {
 	ID           uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username     string    `gorm:"column:username;type:varchar(64);not null;uniqueIndex" json:"username"`
 	PasswordHash string    `gorm:"column:password_hash;type:varchar(255);not null" json:"-"`
-	Role         string    `gorm:"column:role;type:varchar(16);not null;default:operator" json:"role"`
+	Role         string    `gorm:"column:role;type:varchar(16);not null;default:operator" json:"-"`
+	RoleID       uint64    `gorm:"column:role_id;not null;default:0;index" json:"roleId"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 }
 
 func (AdminUser) TableName() string { return "admin_user" }
+
+// Role RBAC 角色：一组权限点。超级管理员角色内置（Builtin=true），拥有全部权限、不可编辑/删除
+// （鉴权解析时对 builtin 角色恒等取 perm.AllCodes()，不依赖 role_permission 落库，见 internal/auth.RBAC）。
+type Role struct {
+	ID          uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name        string    `gorm:"column:name;type:varchar(64);not null;uniqueIndex" json:"name"`
+	Description string    `gorm:"column:description;type:varchar(255)" json:"description"`
+	Builtin     bool      `gorm:"column:builtin;not null;default:false" json:"builtin"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+}
+
+func (Role) TableName() string { return "role" }
+
+// RolePermission 角色-权限点关联。(role_id, perm_code) 联合唯一。
+type RolePermission struct {
+	ID       uint64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	RoleID   uint64 `gorm:"column:role_id;not null;uniqueIndex:uk_role_perm" json:"roleId"`
+	PermCode string `gorm:"column:perm_code;type:varchar(64);not null;uniqueIndex:uk_role_perm" json:"permCode"`
+}
+
+func (RolePermission) TableName() string { return "role_permission" }
 
 // AuditLog 审计日志。Detail 用 JSON 字符串。
 type AuditLog struct {
@@ -233,6 +258,8 @@ func AllModels() []any {
 		&DomainHealth{},
 		&BuildRecord{},
 		&BuildArtifact{},
+		&Role{},
+		&RolePermission{},
 		&AdminUser{},
 		&AuditLog{},
 		// 推送功能（ADR-0012）

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/config"
 	"github.com/hybrid-app/server/internal/repo"
 	"github.com/hybrid-app/server/internal/storage"
@@ -25,6 +26,11 @@ type Service struct {
 	storage storage.Storage
 	fcm     *FCMManager
 	geo     CountryResolver // 可空：nil 时上架包网关把所有请求判为未知国家 → A 面（fail-closed）
+	// rbac 供角色/用户管理的最小权限校验（B2）复用 ResolveFresh/RolePermCodes 这套「角色 → 权限集」
+	// 算法，与 handler 层 RequirePerm 用的是同一份实现，避免两处判定逻辑各写一遍、随时间漂移。
+	// 这里只用它的无缓存方法（ResolveFresh/RolePermCodes），不共享 handler 那份带缓存的实例——
+	// 角色/用户管理写操作低频，值得每次现查现算，不依赖 30s 缓存的及时失效。
+	rbac *auth.RBAC
 }
 
 // New 创建 Service（同时初始化 FCM Manager，加载失败只警告不崩）。
@@ -48,7 +54,7 @@ func New(cfg *config.Config, r *repo.Repo, st storage.Storage) *Service {
 			fcmRouteKeyListings: cfg.FirebaseProjectListings,
 		},
 	)
-	return &Service{cfg: cfg, repo: r, storage: st, fcm: fcmMgr}
+	return &Service{cfg: cfg, repo: r, storage: st, fcm: fcmMgr, rbac: auth.NewRBAC(r)}
 }
 
 // SetCountryResolver 注入 GeoIP 解析器（在 main 里 resolver 构造完成后调用）。
@@ -70,6 +76,7 @@ func NewError(code int, msg string) *Error { return &Error{Code: code, Message: 
 func errBadRequest(msg string) *Error { return &Error{Code: http.StatusBadRequest, Message: msg} }
 func errConflict(msg string) *Error   { return &Error{Code: http.StatusConflict, Message: msg} }
 func errNotFound(msg string) *Error   { return &Error{Code: http.StatusNotFound, Message: msg} }
+func errForbidden(msg string) *Error  { return &Error{Code: http.StatusForbidden, Message: msg} }
 
 // AsError 把任意 error 归一化为 *Error（repo.ErrNotFound → 404，其余 → 500）。
 func AsError(err error) *Error {
@@ -82,6 +89,9 @@ func AsError(err error) *Error {
 	}
 	if errors.Is(err, repo.ErrNotFound) {
 		return errNotFound("资源不存在")
+	}
+	if errors.Is(err, auth.ErrRoleMissing) {
+		return errForbidden("账号未挂角色或角色已被删除，请联系管理员处理")
 	}
 	return &Error{Code: http.StatusInternalServerError, Message: err.Error()}
 }

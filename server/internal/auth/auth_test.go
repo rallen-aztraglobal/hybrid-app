@@ -65,12 +65,3 @@ func TestParseRejectsExpired(t *testing.T) {
 		t.Error("过期 token 应解析失败")
 	}
 }
-
-func TestRoleRanking(t *testing.T) {
-	if roleRank[model.RoleAdmin] <= roleRank[model.RoleOperator] {
-		t.Error("admin 应高于 operator")
-	}
-	if roleRank[model.RoleOperator] <= roleRank[model.RoleViewer] {
-		t.Error("operator 应高于 viewer")
-	}
-}
