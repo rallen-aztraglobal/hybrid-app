@@ -23,6 +23,8 @@ import { BRAND_META, BRAND_ORDER } from '@/lib/brands';
 import { FORCED_A_COUNTRIES, parseLines } from '@/lib/listingMeta';
 import { validateDomains } from '@/lib/validation';
 import { useBrands, useListings, useSaveListing } from '@/hooks/queries';
+import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { cn } from '@/lib/cn';
 import { Button, Select, SectionHeading, Switch } from './ui';
 import { CloseIcon, SaveCheckIcon } from './icons';
@@ -78,6 +80,8 @@ export function ListingDrawer({
   const { data: listings } = useListings();
   const { data: brands } = useBrands();
   const save = useSaveListing();
+  const canEdit = useAuthStore((s) => s.hasPerm(PERM.LISTING_EDIT));
+  const canGate = useAuthStore((s) => s.hasPerm(PERM.LISTING_GATE));
 
   const editing = target && target !== 'new' ? target.id : null;
   const editListing = useMemo(
@@ -346,6 +350,7 @@ export function ListingDrawer({
             </Field>
             <ListingGateSection
               listingId={editing}
+              canGate={canGate}
               gateEnabled={form.gateEnabled}
               onGateEnabledChange={(v) => set('gateEnabled', v)}
               draft={{
@@ -409,10 +414,12 @@ export function ListingDrawer({
           </div>
           <div className="flex gap-[10px] flex-none">
             <Button onClick={onClose}>关闭</Button>
-            <Button variant="primary" onClick={submit} disabled={save.isPending}>
-              <SaveCheckIcon />
-              {save.isPending ? '保存中…' : editing ? '保存' : '创建并继续配置'}
-            </Button>
+            {canEdit && (
+              <Button variant="primary" onClick={submit} disabled={save.isPending}>
+                <SaveCheckIcon />
+                {save.isPending ? '保存中…' : editing ? '保存' : '创建并继续配置'}
+              </Button>
+            )}
           </div>
         </div>
       </aside>

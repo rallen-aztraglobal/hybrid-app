@@ -237,23 +237,101 @@ export interface BuildLogChunk {
   status: BuildStatus;
 }
 
+/**
+ * 登录态角色（10-rbac.md）：取代旧的 admin/operator/viewer 三档硬编码。
+ * builtin=true 仅超级管理员，拥有全部权限、不可编辑/删除。
+ */
+export interface AuthRole {
+  id: string;
+  name: string;
+  builtin: boolean;
+}
+
 /** 登录态用户。token = accessToken（请求头携带）。 */
 export interface AuthUser {
   username: string;
-  role: 'admin' | 'operator' | 'viewer';
+  role: AuthRole;
+  /** 该用户拥有的全部权限点 code（超级管理员返回完整 catalog code 列表）。 */
+  perms: string[];
   /** access token（写入请求头 Authorization: Bearer） */
   token: string;
   /** refresh token（用于续期；本轮仅持有，未做自动刷新调度） */
   refreshToken?: string;
 }
 
-/** 后端登录端点返回体（auth.go tokenResp）。 */
+/** 后端登录端点返回体（auth.go tokenResp，10-rbac.md 增补 role+perms）。 */
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
-  role: AuthUser['role'];
+  role: AuthRole;
+  perms: string[];
   username: string;
+}
+
+/** GET /api/auth/me 返回体（登录后刷新 role+perms，角色被改后无需重登即可生效）。 */
+export interface MeResponse {
+  username: string;
+  role: AuthRole;
+  perms: string[];
+}
+
+// =========================================================================
+// RBAC：角色管理 + 权限点清单（10-rbac.md，唯一契约文档）
+// =========================================================================
+
+/** 权限点类型：route=路由权限（page:*，控制页面可见 + 读接口）；button=按钮权限（写接口 + 按钮显隐）。 */
+export type PermKind = 'route' | 'button';
+
+/** 单个权限点。 */
+export interface PermItem {
+  code: string;
+  label: string;
+  kind: PermKind;
+}
+
+/** 权限点分组（按模块，GET /api/perms/catalog 元素）。登录即可拉取，供角色管理渲染勾选树。 */
+export interface PermCatalogModule {
+  module: string;
+  label: string;
+  perms: PermItem[];
+}
+
+/** 角色（role 表 + role_permission 聚合视图，GET /api/roles 元素）。 */
+export interface Role {
+  id: string;
+  name: string;
+  description: string;
+  /** 内置角色（仅超级管理员）：拥有全部权限，不可编辑/删除。 */
+  builtin: boolean;
+  permCodes: string[];
+  /** 挂在该角色下的用户数（删除前置校验：有用户挂载则后端 409）。 */
+  userCount: number;
+}
+
+/** 新增/编辑角色入参（POST/PUT /api/roles）。 */
+export interface RoleInput {
+  name: string;
+  description: string;
+  permCodes: string[];
+}
+
+/** 后台用户（admin_user，GET /api/users 元素）。 */
+export interface AdminUser {
+  id: string;
+  username: string;
+  roleId: string;
+  roleName: string;
+  /** 所挂角色是否为内置超级管理员角色（列表展示用）。 */
+  builtinRole: boolean;
+  createdAt: string;
+}
+
+/** 新增用户入参（POST /api/users）。 */
+export interface AdminUserInput {
+  username: string;
+  password: string;
+  roleId: string;
 }
 
 /** 统一响应信封：{ code, message, data }（httpx.Envelope，成功 code=0）。 */

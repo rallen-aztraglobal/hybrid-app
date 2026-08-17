@@ -14,6 +14,7 @@ import (
 
 	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
+	"github.com/hybrid-app/server/internal/perm"
 	"github.com/hybrid-app/server/internal/repo"
 )
 
@@ -104,7 +105,8 @@ func EnsureStores(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
-// EnsureBootstrapAdmin 在无任何账号时按 "user:password" 建一个 admin。
+// EnsureBootstrapAdmin 在无任何账号时按 "user:password" 建一个账号，挂超级管理员角色（RBAC）。
+// 依赖 EnsureRBAC 已先执行（main.go 按此顺序调用）：超级管理员角色须已存在。
 func EnsureBootstrapAdmin(ctx context.Context, r *repo.Repo, spec string) error {
 	n, err := r.CountUsers(ctx)
 	if err != nil {
@@ -121,12 +123,130 @@ func EnsureBootstrapAdmin(ctx context.Context, r *repo.Repo, spec string) error 
 	if err != nil {
 		return err
 	}
-	u := &model.AdminUser{Username: parts[0], PasswordHash: hash, Role: model.RoleAdmin}
+	superAdmin, err := r.GetRoleByName(ctx, superAdminRoleName)
+	if err != nil {
+		return fmt.Errorf("bootstrap 账号需要超级管理员角色（请确认 EnsureRBAC 已先执行）: %w", err)
+	}
+	u := &model.AdminUser{Username: parts[0], PasswordHash: hash, Role: model.RoleAdmin, RoleID: superAdmin.ID}
 	if err := r.CreateUser(ctx, u); err != nil {
 		return err
 	}
-	log.Printf("[seed] 已创建初始管理员账号: %s（角色 admin）", parts[0])
+	log.Printf("[seed] 已创建初始管理员账号: %s（角色 %s）", parts[0], superAdminRoleName)
 	return nil
+}
+
+// ---------- RBAC（docs/admin/10-rbac.md）----------
+
+// 三个内置初始角色名。
+const (
+	superAdminRoleName = "超级管理员"
+	operatorRoleName   = "运营"
+	viewerRoleName     = "只读"
+)
+
+// EnsureRBAC 幂等地初始化 RBAC 基础数据——这是生产唯一会跑的数据迁移路径（SQL migration 只建表加列），
+// main.go 无条件调用（不受 DB_AUTOSEED 开关影响，见该处注释 / B3）：
+//  1. 建三个初始角色（仅按名称不存在时才创建；已存在则不覆盖其权限，尊重管理员后续的自定义调整——
+//     超级管理员是例外：其权限恒由 auth.RBAC 动态解析为 perm.AllCodes()，不依赖 role_permission 落库，
+//     因此“不存在才建”对它而言不存在“catalog 演进后权限过期”的问题）；
+//  2. 存量账号按旧 role 字符串映射回填 role_id：admin→超级管理员、operator→运营、viewer→只读，
+//     仅当 role_id 为 0（未回填过）时才动；
+//  3. 兜底：回填后仍 role_id=0 的账号（脏数据——role 字符串不在 admin/operator/viewer 三值内，
+//     比如手工改过库）统一挂「只读」，避免永久锁死（M2：以前这类账号会被 Resolve 判定角色缺失，
+//     报「账号不存在」这种误导排查的 401，现在直接给个最低权限兜底 + 打日志，运维可再手动升权）；
+//  4. 清理 role_permission 中已不在当前 catalog 内的权限点 code（catalog 演进时防悬挂）。
+func EnsureRBAC(ctx context.Context, db *gorm.DB) error {
+	superID, err := ensureRole(ctx, db, superAdminRoleName, "拥有全部权限，内置角色，不可编辑或删除", true, nil)
+	if err != nil {
+		return err
+	}
+	opID, err := ensureRole(ctx, db, operatorRoleName,
+		"渠道/域名/打包/推送/上架包的查看与写操作，不含系统设置（商店/用户/角色管理）", false, operatorDefaultPerms())
+	if err != nil {
+		return err
+	}
+	viewID, err := ensureRole(ctx, db, viewerRoleName, "仅可查看各页面，无写操作", false, perm.RouteCodes())
+	if err != nil {
+		return err
+	}
+
+	roleByOldString := map[string]uint64{
+		model.RoleAdmin:    superID,
+		model.RoleOperator: opID,
+		model.RoleViewer:   viewID,
+	}
+	for oldRole, roleID := range roleByOldString {
+		res := db.WithContext(ctx).Model(&model.AdminUser{}).
+			Where("role = ? AND role_id = 0", oldRole).Update("role_id", roleID)
+		if res.Error != nil {
+			return fmt.Errorf("按旧角色 %s 回填账号 role_id 失败: %w", oldRole, res.Error)
+		}
+		if res.RowsAffected > 0 {
+			log.Printf("[seed] 已为 %d 个旧角色=%s 的账号回填 role_id=%d", res.RowsAffected, oldRole, roleID)
+		}
+	}
+
+	// M2 兜底：role 字符串不在 admin/operator/viewer 三值内的脏数据账号，上面的映射回填不会碰到它们，
+	// role_id 会一直卡在 0（角色表里不存在 id=0 的角色）。挂「只读」兜底，不放大权限、只求不锁死。
+	fallback := db.WithContext(ctx).Model(&model.AdminUser{}).
+		Where("role_id = 0").Update("role_id", viewID)
+	if fallback.Error != nil {
+		return fmt.Errorf("兜底回填脏数据账号 role_id 失败: %w", fallback.Error)
+	}
+	if fallback.RowsAffected > 0 {
+		log.Printf("[seed] 警告：%d 个账号的旧 role 字符串无法识别，已兜底挂「只读」角色（role_id=%d），"+
+			"请核查后按需手动升权", fallback.RowsAffected, viewID)
+	}
+
+	if err := repo.New(db).DeleteStaleRolePermissions(ctx, perm.AllCodes()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// operatorDefaultPerms 「运营」角色的默认权限：全部 route + 除系统设置三个 button 外的全部 button。
+func operatorDefaultPerms() []string {
+	excluded := map[string]bool{perm.StoreManage: true, perm.UserManage: true, perm.RoleManage: true}
+	out := append([]string{}, perm.RouteCodes()...)
+	for _, code := range perm.ButtonCodes() {
+		if !excluded[code] {
+			out = append(out, code)
+		}
+	}
+	return out
+}
+
+// ensureRole 按名称幂等取或建角色；仅在角色不存在时创建并写入 perms（builtin 角色权限恒由
+// auth.RBAC 动态取 perm.AllCodes()，不落 role_permission 行，perms 参数对其被忽略）。
+func ensureRole(ctx context.Context, db *gorm.DB, name, desc string, builtin bool, perms []string) (uint64, error) {
+	var existing model.Role
+	err := db.WithContext(ctx).Where("name = ?", name).First(&existing).Error
+	if err == nil {
+		return existing.ID, nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		return 0, fmt.Errorf("查询角色 %s 失败: %w", name, err)
+	}
+	role := model.Role{Name: name, Description: desc, Builtin: builtin}
+	if err := db.WithContext(ctx).Create(&role).Error; err != nil {
+		return 0, fmt.Errorf("创建角色 %s 失败: %w", name, err)
+	}
+	if !builtin && len(perms) > 0 {
+		seen := map[string]bool{}
+		rows := make([]model.RolePermission, 0, len(perms))
+		for _, p := range perms {
+			if seen[p] {
+				continue
+			}
+			seen[p] = true
+			rows = append(rows, model.RolePermission{RoleID: role.ID, PermCode: p})
+		}
+		if err := db.WithContext(ctx).Create(&rows).Error; err != nil {
+			return 0, fmt.Errorf("写入角色 %s 权限失败: %w", name, err)
+		}
+	}
+	log.Printf("[seed] 已创建角色 %s (builtin=%v)", name, builtin)
+	return role.ID, nil
 }
 
 // ImportReport 汇总一次 CSV 导入的结果。

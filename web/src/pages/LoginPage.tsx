@@ -98,7 +98,8 @@ export function LoginPage() {
           </Button>
 
           <p className="text-[11.5px] text-[#6b7793] mt-4 text-center">
-            真实后端默认账号 <span className="mono">admin / admin12345</span>。后端不可达时回退演示模式（任意非空账号）。
+            默认账号 <span className="mono">admin / admin12345</span>（超级管理员）。后端不可达时回退本地
+            RBAC 演示，另有 <span className="mono">operator / operator123</span>（运营角色）可体验受限权限。
           </p>
         </form>
       </div>

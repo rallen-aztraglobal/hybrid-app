@@ -10,10 +10,13 @@ import { EditIcon, TrashIcon } from './icons';
 
 export function ListingCard({
   listing,
+  canEdit,
   onEdit,
   onDelete,
 }: {
   listing: Listing;
+  /** listing:edit（10-rbac.md：新建/编辑/删除上架包、改域名） */
+  canEdit: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -90,27 +93,29 @@ export function ListingCard({
         <div className="text-[11.5px] text-muted truncate flex-1" title={listing.remark || undefined}>
           {listing.remark || ' '}
         </div>
-        <div className="flex gap-[6px] opacity-0 group-hover:opacity-100 transition">
-          <MiniBtn title="编辑" onClick={onEdit}>
-            <EditIcon className="w-[15px] h-[15px]" />
-          </MiniBtn>
-          <MiniBtn
-            title="删除"
-            danger
-            onClick={(e) => {
-              e.stopPropagation();
-              if (
-                confirm(
-                  `确认删除「${listing.name}」（${platformMeta.label}）？此操作不可恢复，将级联删除其域名覆盖 / 网关规则 / 判定流水。`,
-                )
-              ) {
-                onDelete();
-              }
-            }}
-          >
-            <TrashIcon className="w-[15px] h-[15px]" />
-          </MiniBtn>
-        </div>
+        {canEdit && (
+          <div className="flex gap-[6px] opacity-0 group-hover:opacity-100 transition">
+            <MiniBtn title="编辑" onClick={onEdit}>
+              <EditIcon className="w-[15px] h-[15px]" />
+            </MiniBtn>
+            <MiniBtn
+              title="删除"
+              danger
+              onClick={(e) => {
+                e.stopPropagation();
+                if (
+                  confirm(
+                    `确认删除「${listing.name}」（${platformMeta.label}）？此操作不可恢复，将级联删除其域名覆盖 / 网关规则 / 判定流水。`,
+                  )
+                ) {
+                  onDelete();
+                }
+              }}
+            >
+              <TrashIcon className="w-[15px] h-[15px]" />
+            </MiniBtn>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -19,6 +19,9 @@ type Handler struct {
 	svc     *service.Service
 	authMgr *auth.Manager
 	repo    *repo.Repo
+	// rbac 按用户 ID 解析角色 + 权限集（30s TTL 进程内缓存），供路由中间件与
+	// 登录/刷新/me 响应组装 role+perms 复用（docs/admin/10-rbac.md）。
+	rbac *auth.RBAC
 	// trustedProxies 用于从 X-Forwarded-For 安全提取真实客户端 IP（上架包网关判定用）。
 	trustedProxies *httpx.TrustedProxies
 }
@@ -30,6 +33,7 @@ func New(cfg *config.Config, svc *service.Service, authMgr *auth.Manager, r *rep
 		svc:            svc,
 		authMgr:        authMgr,
 		repo:           r,
+		rbac:           auth.NewRBAC(r),
 		trustedProxies: httpx.NewTrustedProxies(cfg.TrustedProxyCIDRs),
 	}
 }

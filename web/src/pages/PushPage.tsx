@@ -28,6 +28,8 @@ import {
   useSendPushCampaign,
 } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
+import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { iconInitials } from '@/lib/brands';
 import { pushApi } from '@/lib/api';
 import { validatePushBody, validatePushCampaign, validateDeeplinkPath, validatePushTitle, validateListingCampaign } from '@/lib/pushValidation';
@@ -57,12 +59,23 @@ type PushMode = 'channel' | 'listing';
 function CoverUploader({
   value,
   onChange,
+  canUpload = true,
 }: {
   value: string | undefined;
   onChange: (url: string | undefined) => void;
+  /** push:create（10-rbac.md：新建/编辑活动、上传图片）；false 时仅展示已有封面，隐藏上传/移除入口。 */
+  canUpload?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+
+  if (!canUpload) {
+    return value ? (
+      <img src={value} alt="封面" className="w-[120px] h-[72px] rounded-[10px] object-cover border border-line" />
+    ) : (
+      <span className="text-[11.5px] text-muted">当前账号无权限上传封面图</span>
+    );
+  }
 
   async function handleFile(file: File) {
     if (!file.type.startsWith('image/')) return;
@@ -401,6 +414,8 @@ function EditPanel({
   accentColor: string;
 }) {
   const { data: channelsAll } = useChannels();
+  const canCreate = useAuthStore((s) => s.hasPerm(PERM.PUSH_CREATE));
+  const canSend = useAuthStore((s) => s.hasPerm(PERM.PUSH_SEND));
 
   const channels = useMemo(
     () => (channelsAll ?? []).filter((c) => c.brandCode === brand && c.status !== 'archived'),
@@ -509,8 +524,8 @@ function EditPanel({
   }
 
   const isPending = saveMutation.isPending || sendMutation.isPending || scheduleMutation.isPending;
-  const canSend = pickedAppIds.size > 0 && pushEnabled && !isPending;
-  const canDryRun = pickedAppIds.size > 0 && !isPending;
+  const canFireSend = canSend && pickedAppIds.size > 0 && pushEnabled && !isPending;
+  const canDryRun = canCreate && pickedAppIds.size > 0 && !isPending;
 
   return (
     <div className="grid gap-[18px] items-start" style={{ gridTemplateColumns: '1fr 360px' }}>
@@ -582,7 +597,7 @@ function EditPanel({
           {/* 封面图 */}
           <div className="mb-[13px]">
             <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">封面图（选填）</label>
-            <CoverUploader value={imageUrl} onChange={setImageUrl} />
+            <CoverUploader value={imageUrl} onChange={setImageUrl} canUpload={canCreate} />
           </div>
 
           {/* Deeplink path */}
@@ -699,42 +714,53 @@ function EditPanel({
             </div>
           )}
 
-          {/* 发送 & 保存草稿 */}
+          {/* 发送 & 保存草稿：按 push:send / push:create 分别显隐 */}
           <div className="flex flex-col gap-2">
-            <Button
-              variant="primary"
-              className="w-full justify-center"
-              disabled={!canSend}
-              onClick={() => void handleSend()}
-            >
-              <SendIcon className="w-4 h-4" />
-              {isPending
-                ? '处理中…'
-                : sendMode === 'instant'
-                ? `立即发送 (${pickedAppIds.size})`
-                : '确认定时'}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-center"
-              disabled={!canDryRun}
-              onClick={() => void handleDryRun()}
-            >
-              预发测试（dry-run）
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-center"
-              disabled={isPending}
-              onClick={() => void handleSaveDraft()}
-            >
-              保存草稿
-            </Button>
+            {canSend && (
+              <Button
+                variant="primary"
+                className="w-full justify-center"
+                disabled={!canFireSend}
+                onClick={() => void handleSend()}
+              >
+                <SendIcon className="w-4 h-4" />
+                {isPending
+                  ? '处理中…'
+                  : sendMode === 'instant'
+                  ? `立即发送 (${pickedAppIds.size})`
+                  : '确认定时'}
+              </Button>
+            )}
+            {canCreate && (
+              <>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-center"
+                  disabled={!canDryRun}
+                  onClick={() => void handleDryRun()}
+                >
+                  预发测试（dry-run）
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-center"
+                  disabled={isPending}
+                  onClick={() => void handleSaveDraft()}
+                >
+                  保存草稿
+                </Button>
+              </>
+            )}
           </div>
 
-          {!pushEnabled && (
+          {!pushEnabled && canSend && (
             <div className="mt-2 text-[11.5px] text-muted text-center">
               FCM 未配置，发送按钮已禁用；可编辑、选包、保存草稿、预发测试
+            </div>
+          )}
+          {!canSend && !canCreate && (
+            <div className="mt-2 text-[11.5px] text-muted text-center">
+              当前账号无推送编辑/发送权限（push:create / push:send），仅可查看
             </div>
           )}
           {submitErr && <div className="mt-2 text-[12px] text-down">{submitErr}</div>}
@@ -932,6 +958,8 @@ function ListingCampaignRow({ campaign, listings }: { campaign: ListingCampaign;
 
 // ── 上架包推送：编辑面板 ──────────────────────────────────────────────────────
 function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; listings: Listing[] }) {
+  const canCreate = useAuthStore((s) => s.hasPerm(PERM.PUSH_CREATE));
+  const canSend = useAuthStore((s) => s.hasPerm(PERM.PUSH_SEND));
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -1025,8 +1053,8 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
   }
 
   const isPending = createMutation.isPending || sendMutation.isPending;
-  const canDryRun = pickedListingIds.size > 0 && !isPending;
-  const canSend = locked && dryRunResult != null && pushEnabled && !isPending;
+  const canDryRun = canCreate && pickedListingIds.size > 0 && !isPending;
+  const canFireSend = canSend && locked && dryRunResult != null && pushEnabled && !isPending;
 
   return (
     <div className="flex flex-col gap-[14px]">
@@ -1103,7 +1131,7 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
 
               <div className="mb-[13px]">
                 <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">封面图（选填）</label>
-                <CoverUploader value={imageUrl} onChange={setImageUrl} />
+                <CoverUploader value={imageUrl} onChange={setImageUrl} canUpload={canCreate} />
               </div>
 
               <div className="mb-[13px]">
@@ -1173,33 +1201,43 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
 
             <div className="flex flex-col gap-2">
               {!locked ? (
-                <Button
-                  variant="ghost"
-                  className="w-full justify-center"
-                  disabled={!canDryRun}
-                  onClick={() => void handleDryRun()}
-                >
-                  {isPending ? '创建中…' : '试算受众（创建草稿并预演）'}
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    variant="primary"
-                    className="w-full justify-center"
-                    disabled={!canSend}
-                    onClick={() => void handleSend()}
-                  >
-                    <SendIcon className="w-4 h-4" />
-                    {isPending ? '处理中…' : '正式发送（仅投 B 面设备）'}
-                  </Button>
+                canCreate ? (
                   <Button
                     variant="ghost"
                     className="w-full justify-center"
-                    disabled={isPending}
+                    disabled={!canDryRun}
                     onClick={() => void handleDryRun()}
                   >
-                    重新预演
+                    {isPending ? '创建中…' : '试算受众（创建草稿并预演）'}
                   </Button>
+                ) : (
+                  <div className="text-[11.5px] text-muted text-center py-2">
+                    当前账号无推送草稿创建权限（push:create）
+                  </div>
+                )
+              ) : (
+                <>
+                  {canSend && (
+                    <Button
+                      variant="primary"
+                      className="w-full justify-center"
+                      disabled={!canFireSend}
+                      onClick={() => void handleSend()}
+                    >
+                      <SendIcon className="w-4 h-4" />
+                      {isPending ? '处理中…' : '正式发送（仅投 B 面设备）'}
+                    </Button>
+                  )}
+                  {canCreate && (
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center"
+                      disabled={isPending}
+                      onClick={() => void handleDryRun()}
+                    >
+                      重新预演
+                    </Button>
+                  )}
                   <Button variant="ghost" className="w-full justify-center" disabled={isPending} onClick={resetForm}>
                     重新开始（放弃当前草稿）
                   </Button>

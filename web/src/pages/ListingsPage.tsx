@@ -7,6 +7,8 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk, useDeleteListing, useListings } from '@/hooks/queries';
+import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { PLATFORM_ORDER } from '@/lib/listingMeta';
 import type { Listing, ListingPlatform, ListingStatus } from '@/lib/types';
 import { PlatformTabs } from '@/components/PlatformTabs';
@@ -30,6 +32,7 @@ export function ListingsPage() {
   const { data: listings, isLoading, isFetching } = useListings();
   const del = useDeleteListing();
   const qc = useQueryClient();
+  const canEdit = useAuthStore((s) => s.hasPerm(PERM.LISTING_EDIT));
 
   const [platform, setPlatform] = useState<ListingPlatform>('android');
   const [activeFilter, setActiveFilter] = useState<Filter>('all');
@@ -98,10 +101,12 @@ export function ListingsPage() {
             <RefreshIcon />
             {isFetching ? '刷新中…' : '刷新'}
           </Button>
-          <Button variant="primary" onClick={() => setDrawerTarget('new')}>
-            <PlusIcon />
-            新增上架包
-          </Button>
+          {canEdit && (
+            <Button variant="primary" onClick={() => setDrawerTarget('new')}>
+              <PlusIcon />
+              新增上架包
+            </Button>
+          )}
         </div>
       </div>
 
@@ -120,6 +125,7 @@ export function ListingsPage() {
             <ListingCard
               key={l.id}
               listing={l}
+              canEdit={canEdit}
               onEdit={() => setDrawerTarget({ id: l.id })}
               onDelete={() => handleDelete(l)}
             />

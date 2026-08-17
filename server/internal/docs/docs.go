@@ -85,6 +85,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/app/listing/gate": {
+            "post": {
+                "description": "服务端按请求真实 IP 查国家 + 校验时区/IP 规则，返回 mode=A（展示应用内容）或 mode=B（放行到配置 URL）。\nmode=B 时额外带 openMode（internal=内开/external=外开），告诉客户端用哪种方式打开该 URL；mode=A 时不含该字段。\n出于安全：不返回任何判定原因/国家/命中规则，审核方也无法从响应反推规则。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "app"
+                ],
+                "summary": "AB 面判定（公开，客户端 App 启动调用，不缓存）",
+                "parameters": [
+                    {
+                        "description": "platform/bundleId/timezone",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.gateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.GateResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/app/listing/register-token": {
+            "post": {
+                "description": "客户端拿到 gate 判定后注册 FCM/APNs token 并上报 gateMode；上架包推送强制只发 B 面设备。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "app"
+                ],
+                "summary": "上架包设备 push token 注册（公开，带 AB 面判定结果）",
+                "parameters": [
+                    {
+                        "description": "platform/bundleId/deviceToken/gateMode",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.registerListingTokenReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/app/push/register-token": {
             "post": {
                 "consumes": [
@@ -154,6 +222,42 @@ const docTemplate = `{
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/internal_handler.tokenResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "当前登录用户的角色与权限(前端启动时拉新，角色被改后无需重登即可生效)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_handler.meResp"
                                         }
                                     }
                                 }
@@ -1091,6 +1195,391 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/listings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "上架包列表（按平台/状态/关键词筛选，含品牌/域名/网关）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "android / ios",
+                        "name": "platform",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "enabled/disabled/archived",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词（名称/包名）",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "新增上架包（默认继承品牌域名、gate_enabled=false 只有 A 面）",
+                "parameters": [
+                    {
+                        "description": "上架包字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.createListingReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/listings/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "上架包详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "上架包 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "修改上架包（打开 gateEnabled 前服务端强制校验国家白名单非空）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "上架包 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "可选更新字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.updateListingReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "删除上架包（连带域名/网关/日志级联删除）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "上架包 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/listings/{id}/domains": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "设置上架包 B 面域名覆盖 / 切回继承品牌",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "上架包 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "inheritBrand=true 表示切回继承",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.setListingDomainsReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/listings/{id}/gate": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "保存上架包 AB 面网关规则（国家白名单必填、拒绝 CN/US）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "上架包 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "网关规则",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.setListingGateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/listings/{id}/gate/logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "上架包网关判定流水（排查「为什么没进 B 面」）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "上架包 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "条数，默认 100，上限 500",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/listings/{id}/gate/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "用指定 IP/时区试算 AB 面判定（后台自查，返回原因）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "上架包 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "试算输入",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.testListingGateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/perms/catalog": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "权限点清单(登录即可，供前端渲染角色勾选树)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/push/audience": {
             "get": {
                 "security": [
@@ -1401,6 +1890,110 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/push/listing-campaigns": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "上架包推送活动列表（kind=listing）",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "创建上架包推送活动（草稿；发送时强制只发 B 面设备）",
+                "parameters": [
+                    {
+                        "description": "活动字段 + 目标上架包 ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.createListingCampaignReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/push/listing-campaigns/{id}/send": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "发送上架包推送活动（dryRun 预览受众；真发只投 B 面设备）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "活动 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "dryRun",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.sendCampaignReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/push/status": {
             "get": {
                 "security": [
@@ -1448,6 +2041,142 @@ const docTemplate = `{
                         "description": "图片文件",
                         "name": "file",
                         "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/roles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "角色列表",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "新增角色",
+                "parameters": [
+                    {
+                        "description": "角色字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.RoleInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/roles/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "修改角色(builtin 不可改)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "角色 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "角色字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.RoleInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "删除角色(builtin 不可删；仍有用户挂靠返回 409；非超管仅能删权限集 ⊆ 自身的角色)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "角色 ID",
+                        "name": "id",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -1597,6 +2326,187 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "账号列表",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "新增账号",
+                "parameters": [
+                    {
+                        "description": "账号字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.createUserReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "修改账号角色",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "账号 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新角色 ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.updateUserReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "删除账号(不能删除自己；不能删除最后一个超级管理员)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "账号 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/reset-password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "重置账号密码",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "账号 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新密码",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.resetPasswordReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/healthz": {
             "get": {
                 "description": "返回约定 JSON {\"ok\":true,\"brand\":\"ap\",\"v\":1}。带 ?brand= 时回显品牌，供按品牌校验。",
@@ -1655,6 +2565,12 @@ const docTemplate = `{
                     "description": "人类可读信息",
                     "type": "string"
                 }
+            }
+        },
+        "github_com_hybrid-app_server_internal_model.AdjustEvents": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
             }
         },
         "github_com_hybrid-app_server_internal_service.AddBuildArtifactInput": {
@@ -1850,6 +2766,23 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_hybrid-app_server_internal_service.GateResponse": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "description": "\"A\" | \"B\"",
+                    "type": "string"
+                },
+                "openMode": {
+                    "description": "仅 mode=B 时有值：\"internal\"（内开）| \"external\"（外开）",
+                    "type": "string"
+                },
+                "url": {
+                    "description": "仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode=，客户端原样打开）",
+                    "type": "string"
+                }
+            }
+        },
         "github_com_hybrid-app_server_internal_service.ManifestChannel": {
             "type": "object",
             "properties": {
@@ -1944,6 +2877,23 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_hybrid-app_server_internal_service.RoleInput": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "permCodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "github_com_hybrid-app_server_internal_service.UpdateChannelInput": {
             "type": "object",
             "properties": {
@@ -1995,6 +2945,110 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.createListingCampaignReq": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "deeplinkPath": {
+                    "type": "string"
+                },
+                "extraData": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "imageUrl": {
+                    "type": "string"
+                },
+                "listingIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.createListingReq": {
+            "type": "object",
+            "properties": {
+                "adjustAppToken": {
+                    "type": "string"
+                },
+                "adjustEvents": {
+                    "$ref": "#/definitions/github_com_hybrid-app_server_internal_model.AdjustEvents"
+                },
+                "afAppId": {
+                    "type": "string"
+                },
+                "afDevKey": {
+                    "type": "string"
+                },
+                "brandCode": {
+                    "type": "string"
+                },
+                "bundleId": {
+                    "type": "string"
+                },
+                "displayName": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "openMode": {
+                    "type": "string"
+                },
+                "palCode": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "remark": {
+                    "type": "string"
+                },
+                "storeUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.createUserReq": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "roleId": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.gateReq": {
+            "type": "object",
+            "properties": {
+                "bundleId": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.healthzResp": {
             "type": "object",
             "properties": {
@@ -2020,10 +3074,48 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.meResp": {
+            "type": "object",
+            "properties": {
+                "perms": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "role": {
+                    "$ref": "#/definitions/internal_handler.roleSummary"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.refreshReq": {
             "type": "object",
             "properties": {
                 "refreshToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.registerListingTokenReq": {
+            "type": "object",
+            "properties": {
+                "bundleId": {
+                    "type": "string"
+                },
+                "deviceToken": {
+                    "type": "string"
+                },
+                "gateMode": {
+                    "description": "客户端上报的最近 AB 面判定结果 A/B（决定是否进 B 面推送受众）",
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "platform": {
                     "type": "string"
                 }
             }
@@ -2044,6 +3136,28 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.resetPasswordReq": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.roleSummary": {
+            "type": "object",
+            "properties": {
+                "builtin": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
                     "type": "string"
                 }
             }
@@ -2090,6 +3204,60 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.setListingDomainsReq": {
+            "type": "object",
+            "properties": {
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_domainutil.DomainInput"
+                    }
+                },
+                "inheritBrand": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_handler.setListingGateReq": {
+            "type": "object",
+            "properties": {
+                "countries": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ipAllowCidrs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ipDenyCidrs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "timezoneDeny": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_handler.testListingGateReq": {
+            "type": "object",
+            "properties": {
+                "ip": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.tokenResp": {
             "type": "object",
             "properties": {
@@ -2099,14 +3267,73 @@ const docTemplate = `{
                 "expiresIn": {
                     "type": "integer"
                 },
+                "perms": {
+                    "description": "超级管理员返回完整 catalog code 列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "refreshToken": {
                     "type": "string"
                 },
                 "role": {
-                    "type": "string"
+                    "$ref": "#/definitions/internal_handler.roleSummary"
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_handler.updateListingReq": {
+            "type": "object",
+            "properties": {
+                "adjustAppToken": {
+                    "type": "string"
+                },
+                "adjustEvents": {
+                    "$ref": "#/definitions/github_com_hybrid-app_server_internal_model.AdjustEvents"
+                },
+                "afAppId": {
+                    "type": "string"
+                },
+                "afDevKey": {
+                    "type": "string"
+                },
+                "brandCode": {
+                    "type": "string"
+                },
+                "displayName": {
+                    "type": "string"
+                },
+                "gateEnabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "openMode": {
+                    "type": "string"
+                },
+                "palCode": {
+                    "type": "string"
+                },
+                "remark": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "storeUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.updateUserReq": {
+            "type": "object",
+            "properties": {
+                "roleId": {
+                    "type": "integer"
                 }
             }
         }

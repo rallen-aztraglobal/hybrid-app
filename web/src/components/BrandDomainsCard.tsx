@@ -6,12 +6,15 @@
 import { useEffect, useState } from 'react';
 import type { Brand, DomainEntry } from '@/lib/types';
 import { useSaveBrandDomains } from '@/hooks/queries';
+import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { validateDomains } from '@/lib/validation';
 import { DomainEditor } from './DomainEditor';
 import { Button } from './ui';
 
 export function BrandDomainsCard({ brand }: { brand: Brand }) {
   const save = useSaveBrandDomains(brand.code);
+  const canEdit = useAuthStore((s) => s.hasPerm(PERM.DOMAIN_EDIT));
   const [domains, setDomains] = useState<DomainEntry[]>(brand.domains);
   const [saved, setSaved] = useState(false);
 
@@ -49,18 +52,20 @@ export function BrandDomainsCard({ brand }: { brand: Brand }) {
               HMS / OAID
             </span>
           )}
-          <Button
-            variant="primary"
-            className="text-[12px]"
-            disabled={save.isPending || errors.length > 0}
-            onClick={onSave}
-          >
-            {save.isPending ? '下发中…' : saved ? '✓ 已下发' : '保存并下发'}
-          </Button>
+          {canEdit && (
+            <Button
+              variant="primary"
+              className="text-[12px]"
+              disabled={save.isPending || errors.length > 0}
+              onClick={onSave}
+            >
+              {save.isPending ? '下发中…' : saved ? '✓ 已下发' : '保存并下发'}
+            </Button>
+          )}
         </div>
       </div>
 
-      <DomainEditor domains={domains} onChange={setDomains} />
+      <DomainEditor domains={domains} onChange={setDomains} disabled={!canEdit} />
 
       {errors.length > 0 && (
         <div className="mt-2 text-[12px] text-down">

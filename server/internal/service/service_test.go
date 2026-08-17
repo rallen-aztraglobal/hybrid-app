@@ -42,6 +42,9 @@ func newTestService(t *testing.T) (*Service, *repo.Repo) {
 	if err := seed.EnsureBrands(ctx, db); err != nil {
 		t.Fatalf("seed 品牌失败: %v", err)
 	}
+	if err := seed.EnsureRBAC(ctx, db); err != nil {
+		t.Fatalf("seed RBAC 失败: %v", err)
+	}
 	st, err := storage.NewLocal(t.TempDir(), "http://test/static")
 	if err != nil {
 		t.Fatalf("创建本地存储失败: %v", err)

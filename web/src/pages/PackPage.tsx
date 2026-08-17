@@ -10,6 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { useBrands, useChannels, useSubmitBuildJob } from '@/hooks/queries';
 import { useBuildLogStream } from '@/hooks/useBuildLogStream';
 import { useUiStore } from '@/store/uiStore';
+import { useAuthStore } from '@/store/authStore';
+import { PERM } from '@/lib/permissions';
 import { iconInitials } from '@/lib/brands';
 import { defaultJobName, validateVersionName } from '@/lib/validation';
 import type { Channel } from '@/lib/types';
@@ -26,6 +28,7 @@ export function PackPage() {
   const { data: channels } = useChannels();
   const submit = useSubmitBuildJob();
   const log = useBuildLogStream();
+  const canSubmit = useAuthStore((s) => s.hasPerm(PERM.BUILD_SUBMIT));
 
   const currentBrand = useUiStore((s) => s.currentBrand);
   const setCurrentBrand = useUiStore((s) => s.setCurrentBrand);
@@ -75,7 +78,7 @@ export function PackPage() {
   }
 
   const selected = list.filter((c) => picked.has(c.id));
-  const canRun = selected.length > 0 && !versionErr && !submit.isPending && !log.streaming;
+  const canRun = canSubmit && selected.length > 0 && !versionErr && !submit.isPending && !log.streaming;
 
   async function run() {
     setSubmitErr(null);
@@ -232,10 +235,14 @@ export function PackPage() {
               <input className="field-input" value="Release" readOnly tabIndex={-1} />
             </div>
 
-            <Button variant="primary" className="w-full justify-center mt-1" disabled={!canRun} onClick={run}>
-              <PlayIcon />
-              {submit.isPending ? '提交中…' : log.streaming ? '打包中…' : `开始打包 (${picked.size})`}
-            </Button>
+            {canSubmit ? (
+              <Button variant="primary" className="w-full justify-center mt-1" disabled={!canRun} onClick={run}>
+                <PlayIcon />
+                {submit.isPending ? '提交中…' : log.streaming ? '打包中…' : `开始打包 (${picked.size})`}
+              </Button>
+            ) : (
+              <div className="mt-1 text-center text-[12px] text-muted py-2">当前账号无打包权限（build:submit）</div>
+            )}
             {submitErr && <div className="mt-2 text-[12px] text-down">{submitErr}</div>}
           </div>
 
