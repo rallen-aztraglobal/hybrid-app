@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -13,7 +14,7 @@ import (
 )
 
 // ListChannels godoc
-// @Summary  渠道列表（分页/搜索/筛选）
+// @Summary  渠道列表（分页/搜索/筛选；按调用者数据范围过滤）
 // @Tags     channels
 // @Produce  json
 // @Param    brand   query     string  false  "品牌 code"
@@ -27,13 +28,19 @@ import (
 func (h *Handler) ListChannels(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("pageSize"))
-	list, total, err := h.svc.ListChannels(c.Request().Context(), repo.ChannelFilter{
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	f := repo.ChannelFilter{
 		BrandCode: c.QueryParam("brand"),
 		Status:    c.QueryParam("status"),
 		Q:         c.QueryParam("q"),
 		Page:      page,
 		PageSize:  pageSize,
-	})
+	}
+	service.ApplyChannelScope(&f, scope)
+	list, total, err := h.svc.ListChannels(c.Request().Context(), f)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -41,7 +48,7 @@ func (h *Handler) ListChannels(c echo.Context) error {
 }
 
 // GetChannel godoc
-// @Summary  渠道详情
+// @Summary  渠道详情（越界返回 404，不泄露存在性）
 // @Tags     channels
 // @Produce  json
 // @Param    id   path      int  true  "渠道 ID"
@@ -52,6 +59,9 @@ func (h *Handler) GetChannel(c echo.Context) error {
 	id, err := paramID(c)
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
 	}
 	ch, err := h.svc.GetChannel(c.Request().Context(), id)
 	if err != nil {
@@ -74,6 +84,21 @@ func (h *Handler) CreateChannel(c echo.Context) error {
 	if err := c.Bind(&in); err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
 	}
+	// 数据权限强制点：品牌必须在调用者范围内，且调用者是「全部渠道」范围——指定渠道范围的角色
+	// 新建完自己也看不见新渠道（不在其 role_channel 勾选里），是个死局，直接拒绝并说明原因
+	// （docs/admin/10-rbac.md「强制点」新建渠道一节）。
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	brandCode := strings.TrimSpace(in.BrandCode)
+	if !scope.BrandAllowed(brandCode) {
+		return httpx.Fail(c, http.StatusForbidden, "该品牌不在你的数据范围内，无法新建渠道")
+	}
+	if !scope.AllChannels {
+		return httpx.Fail(c, http.StatusForbidden,
+			"你的角色数据范围被限定为指定渠道，无法新建渠道（新建后自己也看不到，请联系管理员调整为「全部渠道」范围或代为创建）")
+	}
 	ch, err := h.svc.CreateChannel(c.Request().Context(), in)
 	if err != nil {
 		return fail(c, err)
@@ -82,7 +107,7 @@ func (h *Handler) CreateChannel(c echo.Context) error {
 }
 
 // UpdateChannel godoc
-// @Summary  修改渠道
+// @Summary  修改渠道（越界返回 404）
 // @Tags     channels
 // @Accept   json
 // @Produce  json
@@ -96,6 +121,9 @@ func (h *Handler) UpdateChannel(c echo.Context) error {
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
 	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
+	}
 	var in service.UpdateChannelInput
 	if err := c.Bind(&in); err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
@@ -108,7 +136,7 @@ func (h *Handler) UpdateChannel(c echo.Context) error {
 }
 
 // DeleteChannel godoc
-// @Summary  软删除渠道（置 archived）
+// @Summary  软删除渠道（置 archived；越界返回 404）
 // @Tags     channels
 // @Produce  json
 // @Param    id   path      int  true  "渠道 ID"
@@ -120,6 +148,9 @@ func (h *Handler) DeleteChannel(c echo.Context) error {
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
 	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
+	}
 	if err := h.svc.ArchiveChannel(c.Request().Context(), id); err != nil {
 		return fail(c, err)
 	}
@@ -127,7 +158,7 @@ func (h *Handler) DeleteChannel(c echo.Context) error {
 }
 
 // LatestApk godoc
-// @Summary  渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」）
+// @Summary  渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」；越界返回 404）
 // @Tags     channels
 // @Produce  json
 // @Param    id   path      int  true  "渠道 ID"
@@ -138,6 +169,9 @@ func (h *Handler) LatestApk(c echo.Context) error {
 	id, err := paramID(c)
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
 	}
 	a, err := h.svc.LatestApkForChannel(c.Request().Context(), id)
 	if err != nil {
@@ -168,6 +202,9 @@ func (h *Handler) SetChannelDomains(c echo.Context) error {
 	id, err := paramID(c)
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
 	}
 	var req setChannelDomainsReq
 	if err := c.Bind(&req); err != nil {

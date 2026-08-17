@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
 	"github.com/hybrid-app/server/internal/repo"
 )
@@ -16,8 +17,8 @@ type BuildManifest struct {
 	Brand         string            `json:"brand"`
 	Scheme        string            `json:"scheme"`
 	HMSEnabled    bool              `json:"hmsEnabled"`
-	BrandDomains  []string          `json:"brandDomains"` // 品牌默认域名（继承用）
-	ConfigBaseURL string            `json:"configBaseUrl"`// CDN 配置端点前缀（烧录进 bootstrap.json）
+	BrandDomains  []string          `json:"brandDomains"`  // 品牌默认域名（继承用）
+	ConfigBaseURL string            `json:"configBaseUrl"` // CDN 配置端点前缀（烧录进 bootstrap.json）
 	GeneratedAt   string            `json:"generatedAt"`
 	Channels      []ManifestChannel `json:"channels"`
 }
@@ -59,7 +60,11 @@ func (s *Service) appConfigBaseURL() string {
 }
 
 // BuildManifestForBrand 组装某品牌的构建 manifest。
-func (s *Service) BuildManifestForBrand(ctx context.Context, brandCode string) (*BuildManifest, error) {
+// scope 是调用者的数据范围（数据权限强制点：GET /build/manifest 按范围裁剪，见
+// docs/admin/10-rbac.md）：runner 恒 auth.FullScope()（不受数据权限约束，要拉全量才能构建）；
+// 非全量范围的人类账号请求一个不在范围内的品牌时，channels 会被过滤到空（不做硬性 404——
+// 品牌枚举本身不敏感，裁剪掉的是渠道明细）。
+func (s *Service) BuildManifestForBrand(ctx context.Context, scope auth.Scope, brandCode string) (*BuildManifest, error) {
 	brand, err := s.repo.GetBrandByCode(ctx, brandCode)
 	if err != nil {
 		return nil, errNotFound(fmt.Sprintf("品牌 %q 不存在", brandCode))
@@ -72,12 +77,14 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, brandCode string) (
 		}
 	}
 
-	// 拉取该品牌所有 enabled 渠道（archived/disabled 不下发给构建）。
-	list, _, err := s.repo.ListChannels(ctx, repo.ChannelFilter{
+	// 拉取该品牌所有 enabled 渠道（archived/disabled 不下发给构建），按数据范围裁剪。
+	chFilter := repo.ChannelFilter{
 		BrandCode: brandCode,
 		Status:    model.ChannelEnabled,
 		PageSize:  500,
-	})
+	}
+	ApplyChannelScope(&chFilter, scope)
+	list, _, err := s.repo.ListChannels(ctx, chFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -116,4 +123,3 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, brandCode string) (
 	}
 	return out, nil
 }
-

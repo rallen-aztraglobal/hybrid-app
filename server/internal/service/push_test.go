@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/hybrid-app/server/internal/auth"
 )
 
 // TestRegisterDeviceTokenUpsert 验证 token 注册的 upsert 语义：
@@ -28,7 +30,7 @@ func TestRegisterDeviceTokenUpsert(t *testing.T) {
 	}
 
 	// 统计：应有 1 台设备。
-	aud, err := svc.PushAudience(ctx, []string{appID})
+	aud, err := svc.PushAudience(ctx, auth.FullScope(), []string{appID})
 	if err != nil {
 		t.Fatalf("audience 查询失败: %v", err)
 	}
@@ -42,7 +44,7 @@ func TestRegisterDeviceTokenUpsert(t *testing.T) {
 	}
 
 	// 设备数仍应为 1（upsert 而非 insert）。
-	aud2, err := svc.PushAudience(ctx, []string{appID})
+	aud2, err := svc.PushAudience(ctx, auth.FullScope(), []string{appID})
 	if err != nil {
 		t.Fatalf("audience 查询失败: %v", err)
 	}
@@ -95,7 +97,7 @@ func TestPushAudienceStats(t *testing.T) {
 	}
 	_ = svc.RegisterDeviceToken(ctx, appID2, "tok-c", "P", "android", "")
 
-	aud, err := svc.PushAudience(ctx, []string{appID1, appID2})
+	aud, err := svc.PushAudience(ctx, auth.FullScope(), []string{appID1, appID2})
 	if err != nil {
 		t.Fatalf("audience 失败: %v", err)
 	}
@@ -110,7 +112,7 @@ func TestPushAudienceStats(t *testing.T) {
 	}
 
 	// 空 appIds 应返回 0。
-	aud0, err := svc.PushAudience(ctx, nil)
+	aud0, err := svc.PushAudience(ctx, auth.FullScope(), nil)
 	if err != nil {
 		t.Fatalf("空 appIds audience 失败: %v", err)
 	}
@@ -133,7 +135,7 @@ func TestSendGate_FCMNotConfigured(t *testing.T) {
 	_ = svc.RegisterDeviceToken(ctx, "com.arenaplus.ap01001", "tok-gate", "P1", "android", "")
 
 	// 创建活动。
-	camp, err := svc.CreateCampaign(ctx, PushCampaignInput{
+	camp, err := svc.CreateCampaign(ctx, auth.FullScope(), PushCampaignInput{
 		Name:         "gate-test",
 		Title:        "Hello",
 		Body:         "World",
@@ -144,7 +146,7 @@ func TestSendGate_FCMNotConfigured(t *testing.T) {
 	}
 
 	// 非 dry-run 发送 → 应被 PUSH_ENABLED 门控拦截。
-	_, err = svc.SendCampaign(ctx, camp.ID, false)
+	_, err = svc.SendCampaign(ctx, auth.FullScope(), camp.ID, false)
 	if err == nil {
 		t.Fatal("PUSH_ENABLED=false 时发送应被拒绝")
 	}
@@ -174,7 +176,7 @@ func TestSendGate_DryRun(t *testing.T) {
 	_ = svc.RegisterDeviceToken(ctx, "com.arenaplus.ap01002", "tok-dr2", "P2", "android", "Dev2")
 
 	// 创建活动。
-	camp, err := svc.CreateCampaign(ctx, PushCampaignInput{
+	camp, err := svc.CreateCampaign(ctx, auth.FullScope(), PushCampaignInput{
 		Name:         "dry-run-test",
 		Title:        "Test Title",
 		Body:         "Test Body",
@@ -187,7 +189,7 @@ func TestSendGate_DryRun(t *testing.T) {
 	originalName := camp.Name
 
 	// dry-run 发送（不论 PUSH_ENABLED 均可跑，无损预览）。
-	result, err := svc.SendCampaign(ctx, camp.ID, true)
+	result, err := svc.SendCampaign(ctx, auth.FullScope(), camp.ID, true)
 	if err != nil {
 		t.Fatalf("dry-run 发送失败: %v", err)
 	}
@@ -244,7 +246,7 @@ func TestSendGate_DryRun(t *testing.T) {
 
 	// ---- 核心：dry-run 后活动仍可真发（不被「已 done」拦截）----
 	// PUSH_ENABLED=false 时真发返回 FCM 未配置错误（而不是「已 done」错误）。
-	_, err = svc.SendCampaign(ctx, camp.ID, false)
+	_, err = svc.SendCampaign(ctx, auth.FullScope(), camp.ID, false)
 	if err == nil {
 		t.Fatal("PUSH_ENABLED=false 时真发应报错（FCM 未配置），而不是成功")
 	}
@@ -273,7 +275,7 @@ func TestCampaignCRUD(t *testing.T) {
 	}
 
 	// 创建草稿。
-	camp, err := svc.CreateCampaign(ctx, PushCampaignInput{
+	camp, err := svc.CreateCampaign(ctx, auth.FullScope(), PushCampaignInput{
 		Name:         "TestCamp",
 		Title:        "标题",
 		Body:         "正文",
@@ -291,7 +293,7 @@ func TestCampaignCRUD(t *testing.T) {
 	}
 
 	// 修改草稿。
-	updated, err := svc.UpdateCampaign(ctx, camp.ID, PushCampaignInput{
+	updated, err := svc.UpdateCampaign(ctx, auth.FullScope(), camp.ID, PushCampaignInput{
 		Name:         "TestCamp-v2",
 		Title:        "标题2",
 		Body:         "正文2",
@@ -305,7 +307,7 @@ func TestCampaignCRUD(t *testing.T) {
 	}
 
 	// 列表应有 1 条。
-	list, err := svc.ListCampaigns(ctx, "")
+	list, err := svc.ListCampaigns(ctx, "", auth.FullScope())
 	if err != nil {
 		t.Fatalf("列表失败: %v", err)
 	}
@@ -324,7 +326,7 @@ func TestCampaignCRUD(t *testing.T) {
 	}
 
 	// scheduled 状态不允许再修改。
-	_, err = svc.UpdateCampaign(ctx, camp.ID, PushCampaignInput{
+	_, err = svc.UpdateCampaign(ctx, auth.FullScope(), camp.ID, PushCampaignInput{
 		Name:         "X",
 		Title:        "Y",
 		Body:         "Z",
@@ -346,7 +348,7 @@ func TestDeeplinkPathValidation(t *testing.T) {
 		t.Fatalf("建渠道失败: %v", err)
 	}
 
-	_, err := svc.CreateCampaign(ctx, PushCampaignInput{
+	_, err := svc.CreateCampaign(ctx, auth.FullScope(), PushCampaignInput{
 		Name:         "bad-path",
 		Title:        "T",
 		Body:         "B",

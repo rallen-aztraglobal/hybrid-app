@@ -15,6 +15,7 @@ import { useBrands, useChannels, useSaveChannel, useStores } from '@/hooks/queri
 import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
+import { friendlyNotFoundMessage } from '@/lib/api';
 import { validateChannel, composeFlavor, type FieldError } from '@/lib/validation';
 import { loadImageFile, urlToDataUrl } from '@/lib/icon';
 import { cn } from '@/lib/cn';
@@ -82,6 +83,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   // 「从已有渠道复制」反馈：复制源名 + 图片抓取中标记
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
   const [copyingAssets, setCopyingAssets] = useState(false);
+  // 提交（create/update）失败时的展示文案；校验未通过不走这里（走下方 touched && !canSave 的计数提示）。
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // 打开/切换目标时初始化表单
   useEffect(() => {
@@ -89,6 +92,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
     setTouched(false);
     setCopiedFrom(null);
     setCopyingAssets(false);
+    setSubmitError(null);
     if (editChannel) {
       // 编辑态：从存量 flavorName 反解出 base + 商店 code（base = flavorName 去掉尾部 `_`+code）。
       const editStoreCode = editChannel.store?.code ?? '';
@@ -236,6 +240,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
 
   async function submit() {
     setTouched(true);
+    setSubmitError(null);
     if (!canSave) return;
     const payload: ChannelInput = {
       ...form,
@@ -249,8 +254,13 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       adjustAppToken: form.adjustAppToken?.trim() ?? '',
       adjustEvents: form.adjustEvents ?? {},
     };
-    await save.mutateAsync({ id: editing ?? undefined, input: payload });
-    close();
+    try {
+      await save.mutateAsync({ id: editing ?? undefined, input: payload });
+      close();
+    } catch (err) {
+      // 编辑态的渠道越界后端故意返回 404（10-rbac.md「数据权限」）：不能照搬「不存在」类文案。
+      setSubmitError(friendlyNotFoundMessage(err, '保存失败'));
+    }
   }
 
   return (
@@ -474,10 +484,15 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
 
         {/* 脚 */}
         <div className="flex-none flex justify-end gap-[10px] px-6 py-[14px] bg-panel border-t border-line">
-          {touched && !canSave && (
-            <span className="mr-auto self-center text-[12px] text-down">
-              有 {errors.length} 处校验未通过
-            </span>
+          {submitError ? (
+            <span className="mr-auto self-center text-[12px] text-down truncate">{submitError}</span>
+          ) : (
+            touched &&
+            !canSave && (
+              <span className="mr-auto self-center text-[12px] text-down">
+                有 {errors.length} 处校验未通过
+              </span>
+            )
           )}
           <Button onClick={close}>取消</Button>
           <Button variant="primary" onClick={submit} disabled={save.isPending || (touched && !canSave)}>

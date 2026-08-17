@@ -34,6 +34,9 @@ func (h *Handler) UploadIcon(c echo.Context) error {
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
 	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
+	}
 	f, err := openUpload(c, "file")
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "缺少 file 字段")
@@ -62,6 +65,9 @@ func (h *Handler) UploadSplash(c echo.Context) error {
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
 	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
+	}
 	f, err := openUpload(c, "file")
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "缺少 file 字段")
@@ -76,7 +82,7 @@ func (h *Handler) UploadSplash(c echo.Context) error {
 }
 
 // GetResZip godoc
-// @Summary  下载整套 res 资源 zip（CLI 用）
+// @Summary  下载整套 res 资源 zip（CLI/构建机用；越界返回 404，runner 不受数据权限约束）
 // @Tags     icon
 // @Produce  application/zip
 // @Param    id   path  int  true  "渠道 ID"
@@ -87,6 +93,9 @@ func (h *Handler) GetResZip(c echo.Context) error {
 	id, err := paramID(c)
 	if err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	if err := h.assertChannelIDInScope(c, id); err != nil {
+		return err
 	}
 	rc, err := h.svc.ResZip(c.Request().Context(), id)
 	if err != nil {

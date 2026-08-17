@@ -10,7 +10,10 @@ import type {
   BuildJobRequest,
   BuildLogChunk,
   Channel,
+  ChannelDevice,
   ChannelInput,
+  DeviceFilter,
+  DeviceListResult,
   DomainEntry,
   DomainInput,
   Listing,
@@ -33,11 +36,15 @@ import type {
   PushStatus,
   Role,
   RoleInput,
+  RoleScope,
+  ScopeDTO,
   Store,
   StoreInput,
   StoreUpdateInput,
 } from './types';
+import { FULL_ROLE_SCOPE } from './types';
 import { mockDb } from './mock/db';
+import { devicesByFilter, devicesByIds, queryDevices } from './mock/devices';
 import { mockListingDb } from './mock/listings';
 import { mockListingCampaignDb } from './mock/listingCampaigns';
 import { mockRbacDb } from './mock/rbac';
@@ -117,6 +124,22 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/**
+ * 单体资源（渠道 / 品牌域名等）404 的展示文案（10-rbac.md「数据权限」：越界返回 404 而非 403，
+ * 不泄露「存在一个你看不到的资源」这一事实）。裸的「资源不存在」对运营是误导性文案——
+ * 更常见的原因其实是角色数据范围被收紧了，而不是数据真的被删。这里统一措辞、
+ * 保留后端原始 message（如有），并加一句数据范围提示；非 404 原样透传 err.message。
+ * 覆盖端点：GET/PUT/DELETE /channels/:id、/channels/:id/{domains,icon,splash,...}、
+ * GET/PUT /brands/:code/domains。
+ */
+export function friendlyNotFoundMessage(err: unknown, fallback = '操作失败'): string {
+  if (err instanceof ApiError && err.status === 404) {
+    const raw = err.message && !/^HTTP 404\b/.test(err.message) ? err.message : '未找到该资源';
+    return `${raw}（可能已被删除，或不在你当前角色的数据范围内；如有疑问请联系管理员核对角色的品牌/渠道范围）`;
+  }
+  return err instanceof Error ? err.message : fallback;
 }
 
 /**
@@ -390,6 +413,28 @@ function adaptGateLog(g: ListingGateLogDTO): ListingGateLog {
   };
 }
 
+/**
+ * 数据范围（10-rbac.md「数据权限」）DTO ↔ UI 双向转换：ScopeDTO.channelIds 是数字数组，
+ * RoleScope.channelIds 是字符串（与其它「id 全部字符串化」的 UI 类型一致）。
+ */
+function adaptScope(s: ScopeDTO | null | undefined): RoleScope {
+  if (!s) return FULL_ROLE_SCOPE;
+  return {
+    allBrands: s.allBrands,
+    brands: (s.brands ?? []) as BrandCode[],
+    allChannels: s.allChannels,
+    channelIds: (s.channelIds ?? []).map(String),
+  };
+}
+function scopeToDTO(scope: RoleScope): ScopeDTO {
+  return {
+    allBrands: scope.allBrands,
+    brands: scope.allBrands ? [] : scope.brands,
+    allChannels: scope.allChannels,
+    channelIds: scope.allChannels ? [] : scope.channelIds.map((id) => Number(id)),
+  };
+}
+
 // =========================================================================
 // 鉴权
 // =========================================================================
@@ -405,6 +450,7 @@ export const authApi = {
           username: r.username,
           role: r.role,
           perms: r.perms ?? [],
+          scope: adaptScope(r.scope),
           token: r.accessToken,
           refreshToken: r.refreshToken,
         };
@@ -414,10 +460,13 @@ export const authApi = {
     );
   },
 
-  /** 启动时/角色变更后刷新 role+perms（10-rbac.md：无需重登即可生效）。失败由调用方静默兜底。 */
-  me(): Promise<{ role: AuthUser['role']; perms: string[] }> {
+  /** 启动时/角色变更后刷新 role+perms+scope（10-rbac.md：无需重登即可生效）。失败由调用方静默兜底。 */
+  me(): Promise<{ role: AuthUser['role']; perms: string[]; scope: RoleScope }> {
     return withFallback(
-      () => request<MeResponse>('/auth/me'),
+      async () => {
+        const r = await request<MeResponse>('/auth/me');
+        return { role: r.role, perms: r.perms ?? [], scope: adaptScope(r.scope) };
+      },
       () => mockRbacDb.me(getToken()),
     );
   },
@@ -538,6 +587,131 @@ export const channelApi = {
       },
       () => mockDb.archiveChannel(id),
     );
+  },
+};
+
+// =========================================================================
+// 设备管理：GET /api/devices（渠道包内 Android 设备注册流水）
+// =========================================================================
+
+/** CSV 单元格转义（含逗号/引号/换行时套双引号，内部引号转义为两个双引号）。 */
+function csvCell(v: string | number | undefined): string {
+  const s = v == null ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+const DEVICE_CSV_HEADER = ['设备名称', 'GAID', 'ADID', 'OAID', '应用名', 'PAL_CODE', '包名', '品牌', '注册时间'];
+
+function devicesToCsv(items: ChannelDevice[]): string {
+  const lines = [DEVICE_CSV_HEADER.map(csvCell).join(',')];
+  for (const d of items) {
+    lines.push(
+      [d.deviceName, d.gaid, d.adid, d.oaid, d.appName, d.palCode, d.applicationId, d.brandCode, d.createdAt]
+        .map(csvCell)
+        .join(','),
+    );
+  }
+  return lines.join('\r\n');
+}
+
+/** 触发浏览器下载一个 Blob（临时 <a> 元素 click，随后回收）。 */
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** CSV 文本 → Blob 下载（前置 BOM 保证 Excel 正确识别 UTF-8 中文）。 */
+function downloadCsvText(csv: string, filename: string): void {
+  triggerBlobDownload(new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' }), filename);
+}
+
+/** 设备筛选参数 → URLSearchParams（空值不带）。 */
+function deviceFilterParams(filter: Pick<DeviceFilter, 'applicationId' | 'from' | 'to'>): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filter.applicationId) params.set('applicationId', filter.applicationId);
+  if (filter.from) params.set('from', filter.from);
+  if (filter.to) params.set('to', filter.to);
+  return params;
+}
+
+export const deviceApi = {
+  /** 设备列表（分页 + 筛选）。翻页过深 / 其它业务错误由后端 400 中文 message 如实抛出，不回退 mock。 */
+  listDevices(filter: DeviceFilter): Promise<DeviceListResult> {
+    const params = deviceFilterParams(filter);
+    params.set('page', String(filter.page));
+    params.set('pageSize', String(filter.pageSize));
+    return withFallback(
+      () => request<DeviceListResult>(`/devices?${params.toString()}`),
+      () => queryDevices(filter),
+    );
+  },
+
+  /**
+   * 导出勾选设备（POST /api/devices/export，body {ids}，≤1000）。
+   * 真实模式：fetch → Blob → 临时 <a download> 触发下载；mock 模式：前端拼 CSV。
+   */
+  async exportDevicesSelected(ids: number[]): Promise<void> {
+    if (FORCE_MOCK) {
+      downloadCsvText(devicesToCsv(devicesByIds(ids)), 'devices_selected.csv');
+      return;
+    }
+    try {
+      const token = getToken();
+      const res = await fetch('/api/devices/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        let message = `HTTP ${res.status} ${res.statusText}`;
+        try {
+          const json = (await res.json()) as ApiEnvelope<unknown>;
+          if (json?.message) message = json.message;
+        } catch {
+          /* 非 JSON 错误体，保留默认 message */
+        }
+        throw new ApiError(message, res.status);
+      }
+      triggerBlobDownload(await res.blob(), 'devices_selected.xlsx');
+    } catch (err) {
+      if (!shouldFallback(err)) throw err;
+      downloadCsvText(devicesToCsv(devicesByIds(ids)), 'devices_selected.csv');
+    }
+  },
+
+  /**
+   * 按当前筛选导出全部（GET /api/devices/export-token 取一次性 token，再拼
+   * /api/devices/export.xlsx?token=… 原生 <a href> 下载，大文件不过 JS 内存）。
+   * 导出为美化 XLSX（中文表头/列宽/冻结首行）；原始 CSV 通道 export.csv 服务端仍保留。
+   */
+  async exportDevicesByFilter(filter: Pick<DeviceFilter, 'applicationId' | 'from' | 'to'>): Promise<void> {
+    if (FORCE_MOCK) {
+      downloadCsvText(devicesToCsv(devicesByFilter(filter)), 'devices_export.csv');
+      return;
+    }
+    try {
+      const { token } = await request<{ token: string; expiresIn: number }>('/devices/export-token');
+      const params = deviceFilterParams(filter);
+      params.set('token', token);
+      const a = document.createElement('a');
+      a.href = `/api/devices/export.csv?${params.toString()}`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      if (!shouldFallback(err)) throw err;
+      downloadCsvText(devicesToCsv(devicesByFilter(filter)), 'devices_export.csv');
+    }
   },
 };
 
@@ -856,6 +1030,8 @@ interface RoleDTO {
   builtin: boolean;
   permCodes: string[];
   userCount: number;
+  /** 数据权限（10-rbac.md「数据权限」节）；builtin 角色恒等价于 FULL_ROLE_SCOPE。 */
+  scope?: ScopeDTO;
 }
 function adaptRole(r: RoleDTO): Role {
   return {
@@ -865,6 +1041,7 @@ function adaptRole(r: RoleDTO): Role {
     builtin: r.builtin,
     permCodes: r.permCodes ?? [],
     userCount: r.userCount ?? 0,
+    scope: r.builtin ? FULL_ROLE_SCOPE : adaptScope(r.scope),
   };
 }
 
@@ -911,13 +1088,26 @@ export const rolesApi = {
   },
   create(input: RoleInput): Promise<Role> {
     return realOnly(
-      async () => adaptRole(await request<RoleDTO>('/roles', { method: 'POST', body: JSON.stringify(input) })),
+      async () =>
+        adaptRole(
+          await request<RoleDTO>('/roles', {
+            method: 'POST',
+            // scope.channelIds 需要转成后端的数字数组形态（见 scopeToDTO）；其余字段透传。
+            body: JSON.stringify({ name: input.name, description: input.description, permCodes: input.permCodes, scope: scopeToDTO(input.scope) }),
+          }),
+        ),
       () => mockRbacDb.createRole(input),
     );
   },
   update(id: string, input: RoleInput): Promise<Role> {
     return realOnly(
-      async () => adaptRole(await request<RoleDTO>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(input) })),
+      async () =>
+        adaptRole(
+          await request<RoleDTO>(`/roles/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name: input.name, description: input.description, permCodes: input.permCodes, scope: scopeToDTO(input.scope) }),
+          }),
+        ),
       () => mockRbacDb.updateRole(id, input),
     );
   },

@@ -187,12 +187,23 @@ func (r *Repo) CountChannelsByStore(ctx context.Context, storeID uint64) (int64,
 // ---------- Channel ----------
 
 // ChannelFilter 渠道列表筛选条件。
+//
+// Scope* 字段是数据权限过滤（docs/admin/10-rbac.md「数据权限」节），全部是**opt-in**：
+// ScopeRestricted=false（零值）时完全不生效，等价于不限——这保证了在本次改动之前就存在的
+// 调用点（构造 ChannelFilter 时不知道、也不需要知道数据权限这回事）行为不变，不用逐个改签名。
+// 只有 handler/service 层显式解析出「非全量范围」的调用者身份时才会置 ScopeRestricted=true。
 type ChannelFilter struct {
 	BrandCode string
 	Status    string
 	Q         string
 	Page      int
 	PageSize  int
+
+	ScopeRestricted  bool
+	ScopeAllBrands   bool
+	ScopeBrandCodes  []string
+	ScopeAllChannels bool
+	ScopeChannelIDs  []uint64
 }
 
 // ListChannels 分页/筛选/搜索渠道。返回当页数据与总数。
@@ -210,6 +221,22 @@ func (r *Repo) ListChannels(ctx context.Context, f ChannelFilter) ([]model.Chann
 		like := "%" + f.Q + "%"
 		q = q.Where("channel.flavor_name LIKE ? OR channel.application_id LIKE ? OR channel.app_name LIKE ? OR channel.pal_code LIKE ?",
 			like, like, like, like)
+	}
+	if f.ScopeRestricted {
+		if !f.ScopeAllBrands {
+			if len(f.ScopeBrandCodes) == 0 {
+				q = q.Where("1 = 0")
+			} else {
+				q = q.Where("brand.code IN ?", f.ScopeBrandCodes)
+			}
+		}
+		if !f.ScopeAllChannels {
+			if len(f.ScopeChannelIDs) == 0 {
+				q = q.Where("1 = 0")
+			} else {
+				q = q.Where("channel.id IN ?", f.ScopeChannelIDs)
+			}
+		}
 	}
 
 	var total int64
@@ -406,11 +433,16 @@ func (r *Repo) CreateBuildRecord(ctx context.Context, rec *model.BuildRecord) er
 	return nil
 }
 
-// BuildRecordFilter 构建记录列表筛选。
+// BuildRecordFilter 构建记录列表筛选。Scope* 字段同 ChannelFilter：opt-in，零值不生效
+// （数据权限，docs/admin/10-rbac.md）。构建记录只有品牌维度（BrandCode 列），没有更细的渠道维度。
 type BuildRecordFilter struct {
 	BrandCode string
 	Status    string
 	Limit     int
+
+	ScopeRestricted bool
+	ScopeAllBrands  bool
+	ScopeBrandCodes []string
 }
 
 // ListBuildRecords 按品牌/状态查构建历史（倒序），预加载产物。
@@ -426,6 +458,13 @@ func (r *Repo) ListBuildRecords(ctx context.Context, f BuildRecordFilter) ([]mod
 	}
 	if f.Status != "" {
 		q = q.Where("status = ?", f.Status)
+	}
+	if f.ScopeRestricted && !f.ScopeAllBrands {
+		if len(f.ScopeBrandCodes) == 0 {
+			q = q.Where("1 = 0")
+		} else {
+			q = q.Where("brand_code IN ?", f.ScopeBrandCodes)
+		}
 	}
 	var list []model.BuildRecord
 	if err := q.Find(&list).Error; err != nil {

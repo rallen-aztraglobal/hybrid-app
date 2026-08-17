@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
 	"github.com/hybrid-app/server/internal/repo"
 )
@@ -28,35 +29,35 @@ type PushStatusResult struct {
 
 // PushCampaignInput 创建/编辑活动的请求体（对应 API 契约 PushCampaignInput）。
 type PushCampaignInput struct {
-	Name          string            `json:"name"`
-	Title         string            `json:"title"`
-	Body          string            `json:"body"`
-	ImageURL      string            `json:"imageUrl"`
-	DeeplinkPath  string            `json:"deeplinkPath"`
-	ExtraData     map[string]string `json:"extraData"`
-	TargetAppIDs  []string          `json:"targetAppIds"`
+	Name         string            `json:"name"`
+	Title        string            `json:"title"`
+	Body         string            `json:"body"`
+	ImageURL     string            `json:"imageUrl"`
+	DeeplinkPath string            `json:"deeplinkPath"`
+	ExtraData    map[string]string `json:"extraData"`
+	TargetAppIDs []string          `json:"targetAppIds"`
 }
 
 // PushCampaignView 是对前端展示友好的活动响应（对应 API 契约 PushCampaign）。
 type PushCampaignView struct {
-	ID            uint64            `json:"id"`
-	Kind          string            `json:"kind"`                    // channel / listing
-	Name          string            `json:"name"`
-	Title         string            `json:"title"`
-	Body          string            `json:"body"`
-	ImageURL      string            `json:"imageUrl"`
-	DeeplinkPath  string            `json:"deeplinkPath"`
-	ExtraData     map[string]string `json:"extraData,omitempty"`
-	TargetAppIDs  []string          `json:"targetAppIds"`
-	ListingIDs    []uint64          `json:"listingIds,omitempty"`   // kind=listing 时的目标上架包
-	Status        string            `json:"status"`
-	ScheduledAt   *time.Time        `json:"scheduledAt,omitempty"`
-	SentAt        *time.Time        `json:"sentAt,omitempty"`
-	TotalDevices  int               `json:"totalDevices"`
-	SuccessCount  int               `json:"successCount"`
-	FailureCount  int               `json:"failureCount"`
-	CreatedBy     string            `json:"createdBy"`
-	CreatedAt     time.Time         `json:"createdAt"`
+	ID           uint64            `json:"id"`
+	Kind         string            `json:"kind"` // channel / listing
+	Name         string            `json:"name"`
+	Title        string            `json:"title"`
+	Body         string            `json:"body"`
+	ImageURL     string            `json:"imageUrl"`
+	DeeplinkPath string            `json:"deeplinkPath"`
+	ExtraData    map[string]string `json:"extraData,omitempty"`
+	TargetAppIDs []string          `json:"targetAppIds"`
+	ListingIDs   []uint64          `json:"listingIds,omitempty"` // kind=listing 时的目标上架包
+	Status       string            `json:"status"`
+	ScheduledAt  *time.Time        `json:"scheduledAt,omitempty"`
+	SentAt       *time.Time        `json:"sentAt,omitempty"`
+	TotalDevices int               `json:"totalDevices"`
+	SuccessCount int               `json:"successCount"`
+	FailureCount int               `json:"failureCount"`
+	CreatedBy    string            `json:"createdBy"`
+	CreatedAt    time.Time         `json:"createdAt"`
 }
 
 // PushRecordView 对应 API 契约 PushRecord。
@@ -82,16 +83,16 @@ type AudienceResult struct {
 
 // PushSendResult 发送接口返回（真发时 DryRun=false，Preview 为 nil）。
 type PushSendResult struct {
-	Campaign PushCampaignView  `json:"campaign"`
-	DryRun   bool              `json:"dryRun"`
+	Campaign PushCampaignView `json:"campaign"`
+	DryRun   bool             `json:"dryRun"`
 	// Preview 仅 dryRun=true 时填充：预览各 appId 的预计触达数，不持久化。
-	Preview  *DryRunPreview    `json:"preview,omitempty"`
+	Preview *DryRunPreview `json:"preview,omitempty"`
 }
 
 // DryRunPreview dry-run 预览数据（只存在于响应，绝不写回 campaign 持久字段）。
 type DryRunPreview struct {
-	TotalDevices int                `json:"totalDevices"`
-	ByApp        map[string]int     `json:"byApp"` // applicationId → 活跃 token 数
+	TotalDevices int            `json:"totalDevices"`
+	ByApp        map[string]int `json:"byApp"` // applicationId → 活跃 token 数
 }
 
 // ---------- Service 方法 ----------
@@ -134,9 +135,13 @@ func (s *Service) RegisterDeviceToken(ctx context.Context, appID, token, palCode
 	return nil
 }
 
-// CreateCampaign 创建推送活动草稿。
-func (s *Service) CreateCampaign(ctx context.Context, in PushCampaignInput, createdBy string) (*PushCampaignView, error) {
+// CreateCampaign 创建推送活动草稿。scope 是调用者的数据范围（数据权限强制点：活动的 brand
+// 在范围内才能建，有一个目标越界即整体拒绝，见 docs/admin/10-rbac.md）。
+func (s *Service) CreateCampaign(ctx context.Context, scope auth.Scope, in PushCampaignInput, createdBy string) (*PushCampaignView, error) {
 	if err := validateCampaignInput(in); err != nil {
+		return nil, err
+	}
+	if err := s.assertAppIDsInScope(ctx, scope, in.TargetAppIDs); err != nil {
 		return nil, err
 	}
 	c := &model.PushCampaign{
@@ -160,10 +165,12 @@ func (s *Service) CreateCampaign(ctx context.Context, in PushCampaignInput, crea
 	return s.campaignView(ctx, c, in.TargetAppIDs), nil
 }
 
-// ListCampaigns 查询推送活动列表。
-func (s *Service) ListCampaigns(ctx context.Context, brand string) ([]PushCampaignView, error) {
+// ListCampaigns 查询推送活动列表，按调用者数据范围过滤（见 docs/admin/10-rbac.md）。
+func (s *Service) ListCampaigns(ctx context.Context, brand string, scope auth.Scope) ([]PushCampaignView, error) {
 	// 只列渠道推送；上架包推送走 ListListingCampaigns，避免两类混在一起。
-	list, err := s.repo.ListCampaigns(ctx, repo.CampaignFilter{Brand: brand, Kind: model.CampaignKindChannel, Limit: 100})
+	f := repo.CampaignFilter{Brand: brand, Kind: model.CampaignKindChannel, Limit: 100}
+	applyCampaignScope(&f, scope)
+	list, err := s.repo.ListCampaigns(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -209,8 +216,9 @@ func (s *Service) GetCampaign(ctx context.Context, id uint64) (*PushCampaignDeta
 	return &PushCampaignDetail{PushCampaignView: *v, Records: recs}, nil
 }
 
-// UpdateCampaign 修改草稿活动（仅 draft 可改）。
-func (s *Service) UpdateCampaign(ctx context.Context, id uint64, in PushCampaignInput) (*PushCampaignView, error) {
+// UpdateCampaign 修改草稿活动（仅 draft 可改）。scope 见 CreateCampaign（"改" 同样要求
+// brand 在范围内）。
+func (s *Service) UpdateCampaign(ctx context.Context, scope auth.Scope, id uint64, in PushCampaignInput) (*PushCampaignView, error) {
 	c, err := s.repo.GetCampaign(ctx, id)
 	if err != nil {
 		return nil, err
@@ -219,6 +227,9 @@ func (s *Service) UpdateCampaign(ctx context.Context, id uint64, in PushCampaign
 		return nil, errBadRequest(fmt.Sprintf("活动状态为 %s，仅 draft 可编辑", c.Status))
 	}
 	if err := validateCampaignInput(in); err != nil {
+		return nil, err
+	}
+	if err := s.assertAppIDsInScope(ctx, scope, in.TargetAppIDs); err != nil {
 		return nil, err
 	}
 	c.Name = in.Name
@@ -267,7 +278,10 @@ func (s *Service) ScheduleCampaign(ctx context.Context, id uint64, scheduledAt t
 // dry-run=false（真发）：PUSH_ENABLED 门控 + service account 校验；
 // 置 sending → 异步 worker pool → 写 push_record → 终态 done/failed。
 // 已处于 sending/done 的活动不可重复触发。
-func (s *Service) SendCampaign(ctx context.Context, id uint64, dryRun bool) (*PushSendResult, error) {
+//
+// scope 是调用者的数据范围（数据权限强制点：活动的 brand 在范围内才能发，dry-run 预览同样
+// 受限——不能让一个只管 ap 的角色连预览都能看到 bp 的触达情况，见 docs/admin/10-rbac.md）。
+func (s *Service) SendCampaign(ctx context.Context, scope auth.Scope, id uint64, dryRun bool) (*PushSendResult, error) {
 	c, err := s.repo.GetCampaign(ctx, id)
 	if err != nil {
 		return nil, err
@@ -277,6 +291,9 @@ func (s *Service) SendCampaign(ctx context.Context, id uint64, dryRun bool) (*Pu
 	appIDs := extractTargetAppIDs(c.Targets)
 	if len(appIDs) == 0 {
 		return nil, errBadRequest("活动没有目标渠道（targetAppIds 为空）")
+	}
+	if err := s.assertAppIDsInScope(ctx, scope, appIDs); err != nil {
+		return nil, err
 	}
 
 	// 取目标 token（dry-run 只读，真发写 DB）。
@@ -347,8 +364,11 @@ func buildDryRunPreview(tokenMap map[string][]model.PushDeviceToken) *DryRunPrev
 	}
 }
 
-// PushAudience 预估目标活跃设备数（发送前展示）。
-func (s *Service) PushAudience(ctx context.Context, appIDs []string) (*AudienceResult, error) {
+// PushAudience 预估目标活跃设备数（发送前展示）。scope 是调用者的数据范围（数据权限强制点：
+// 按范围过滤——否则一个只管 ap 的角色能看到/给 bp 的用户发推送，见 docs/admin/10-rbac.md）。
+// 越界的 appId 静默丢弃（预览类端点，不报错，与 filterAppIDsByScope 语义一致）。
+func (s *Service) PushAudience(ctx context.Context, scope auth.Scope, appIDs []string) (*AudienceResult, error) {
+	appIDs = s.filterAppIDsByScope(ctx, scope, appIDs)
 	if len(appIDs) == 0 {
 		return &AudienceResult{TotalDevices: 0, ByApp: map[string]int64{}}, nil
 	}
@@ -387,7 +407,9 @@ func (s *Service) RunScheduledCampaigns(ctx context.Context) {
 	for _, c := range campaigns {
 		c := c
 		go func() {
-			if _, err := s.SendCampaign(ctx, c.ID, false); err != nil {
+			// cron 是系统触发，不是人类请求，不受数据权限约束（活动的 brand 范围已在创建/设置
+			// 定时时校验过一次，见 CreateCampaign/UpdateCampaign）。
+			if _, err := s.SendCampaign(ctx, auth.FullScope(), c.ID, false); err != nil {
 				fmt.Printf("[push-cron] 活动 %d 触发发送失败: %v\n", c.ID, err)
 			}
 		}()

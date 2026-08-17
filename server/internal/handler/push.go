@@ -64,7 +64,11 @@ func (h *Handler) GetPushStatus(c echo.Context) error {
 // @Security BearerAuth
 // @Router   /api/push/campaigns [get]
 func (h *Handler) ListPushCampaigns(c echo.Context) error {
-	list, err := h.svc.ListCampaigns(c.Request().Context(), c.QueryParam("brand"))
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	list, err := h.svc.ListCampaigns(c.Request().Context(), c.QueryParam("brand"), scope)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -89,7 +93,11 @@ func (h *Handler) CreatePushCampaign(c echo.Context) error {
 	if claims := auth.FromContext(c); claims != nil {
 		createdBy = claims.Username
 	}
-	v, err := h.svc.CreateCampaign(c.Request().Context(), in, createdBy)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	v, err := h.svc.CreateCampaign(c.Request().Context(), scope, in, createdBy)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -135,7 +143,11 @@ func (h *Handler) UpdatePushCampaign(c echo.Context) error {
 	if err := c.Bind(&in); err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
 	}
-	v, err := h.svc.UpdateCampaign(c.Request().Context(), id, in)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	v, err := h.svc.UpdateCampaign(c.Request().Context(), scope, id, in)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -164,7 +176,11 @@ func (h *Handler) SendPushCampaign(c echo.Context) error {
 	}
 	var req sendCampaignReq
 	_ = c.Bind(&req) // 可选 body，解析失败不阻断
-	v, err := h.svc.SendCampaign(c.Request().Context(), id, req.DryRun)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	v, err := h.svc.SendCampaign(c.Request().Context(), scope, id, req.DryRun)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -264,11 +280,13 @@ func (h *Handler) GetPushAudience(c echo.Context) error {
 			appIDs = append(appIDs, t)
 		}
 	}
-	result, err := h.svc.PushAudience(c.Request().Context(), appIDs)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	result, err := h.svc.PushAudience(c.Request().Context(), scope, appIDs)
 	if err != nil {
 		return fail(c, err)
 	}
 	return httpx.OK(c, result)
 }
-
-

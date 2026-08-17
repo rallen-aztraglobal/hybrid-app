@@ -253,19 +253,35 @@ export interface AuthUser {
   role: AuthRole;
   /** 该用户拥有的全部权限点 code（超级管理员返回完整 catalog code 列表）。 */
   perms: string[];
+  /** 当前用户自身的数据范围（10-rbac.md）；后端灰度上线过程中可能暂缺。本轮仅持有以备后用。 */
+  scope?: RoleScope;
   /** access token（写入请求头 Authorization: Bearer） */
   token: string;
   /** refresh token（用于续期；本轮仅持有，未做自动刷新调度） */
   refreshToken?: string;
 }
 
-/** 后端登录端点返回体（auth.go tokenResp，10-rbac.md 增补 role+perms）。 */
+/**
+ * 数据范围（scope）在线上（wire）的原始形态：channelIds 是数字数组（uint64），
+ * 与其它「id 全部字符串化」的 UI 类型一样需要适配层转换（api.ts adaptScope）——
+ * 与 RoleScope（UI 清洗后形态，channelIds 为字符串）刻意区分，避免弱类型直接混用。
+ */
+export interface ScopeDTO {
+  allBrands: boolean;
+  brands: string[];
+  allChannels: boolean;
+  channelIds: number[];
+}
+
+/** 后端登录端点返回体（auth.go tokenResp，10-rbac.md 增补 role+perms+scope）。 */
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
   role: AuthRole;
   perms: string[];
+  /** 数据权限（10-rbac.md「数据权限」节）；后端灰度上线过程中可能暂缺，前端按 FULL_ROLE_SCOPE 兜底。 */
+  scope?: ScopeDTO;
   username: string;
 }
 
@@ -274,7 +290,35 @@ export interface MeResponse {
   username: string;
   role: AuthRole;
   perms: string[];
+  /** 数据权限（10-rbac.md「数据权限」节）；后端灰度上线过程中可能暂缺，前端按 FULL_ROLE_SCOPE 兜底。 */
+  scope?: ScopeDTO;
 }
+
+/**
+ * 角色数据范围（10-rbac.md「数据权限：角色可见的品牌/渠道范围(scope)」）。
+ * 权限点回答「能不能做这件事」，scope 回答「能对哪些数据做」，两者正交。
+ *
+ * `allBrands`/`allChannels` 是**动态标志位**而非枚举快照：为 true 时以后新增的品牌/渠道
+ * 自动纳入范围，不需要回头改角色；为 false 时才用 brands/channelIds 精确指定，
+ * 且新增的品牌/渠道**不会**自动被这类角色看到（安全默认，也是最容易被运营误解的点）。
+ */
+export interface RoleScope {
+  /** true = 全部品牌（含以后新增）；false 时看 brands。 */
+  allBrands: boolean;
+  /** allBrands=false 时生效的品牌白名单。 */
+  brands: BrandCode[];
+  /** true = 上述品牌范围内的全部渠道（含以后新增）；false 时看 channelIds。 */
+  allChannels: boolean;
+  /**
+   * allChannels=false 时生效的渠道白名单（Channel.id 字符串）。
+   * 品牌范围收窄后，所属品牌已不在 brands 内的 channelIds 会被后端自动忽略
+   * （EffectiveScope 求交语义），前端也按同样规则实时收窄勾选。
+   */
+  channelIds: string[];
+}
+
+/** 未指定/未拿到 scope 时的兜底：等价于「全部品牌 + 全部渠道」（builtin 超管的真实语义）。 */
+export const FULL_ROLE_SCOPE: RoleScope = { allBrands: true, brands: [], allChannels: true, channelIds: [] };
 
 // =========================================================================
 // RBAC：角色管理 + 权限点清单（10-rbac.md，唯一契约文档）
@@ -302,11 +346,13 @@ export interface Role {
   id: string;
   name: string;
   description: string;
-  /** 内置角色（仅超级管理员）：拥有全部权限，不可编辑/删除。 */
+  /** 内置角色（仅超级管理员）：拥有全部权限，不可编辑/删除，数据范围恒为「全部品牌/全部渠道」。 */
   builtin: boolean;
   permCodes: string[];
   /** 挂在该角色下的用户数（删除前置校验：有用户挂载则后端 409）。 */
   userCount: number;
+  /** 数据范围（10-rbac.md「数据权限」节）：该角色能操作哪些品牌/渠道的数据。 */
+  scope: RoleScope;
 }
 
 /** 新增/编辑角色入参（POST/PUT /api/roles）。 */
@@ -314,6 +360,7 @@ export interface RoleInput {
   name: string;
   description: string;
   permCodes: string[];
+  scope: RoleScope;
 }
 
 /** 后台用户（admin_user，GET /api/users 元素）。 */
@@ -617,6 +664,44 @@ export interface ListingCampaign {
   failureCount: number;
   createdBy?: string;
   createdAt: string;
+}
+
+// =========================================================================
+// 设备管理（GET /api/devices）：渠道包内 Android 设备注册流水，供归因/合规排查。
+// =========================================================================
+
+/** 单条设备记录（GET /api/devices 元素）。 */
+export interface ChannelDevice {
+  id: number;
+  deviceKey: string;
+  deviceName: string;
+  /** Google Advertising ID；用户关闭广告追踪或未回传时为空。 */
+  gaid?: string;
+  /** Adjust/AppsFlyer 侧的归因设备 id；未归因时为空。 */
+  adid?: string;
+  /** 华为/无 GMS 设备的 OAID；仅部分设备回传。 */
+  oaid?: string;
+  applicationId: string;
+  appName: string;
+  palCode: string;
+  brandCode: BrandCode;
+  /** ISO 注册时间。 */
+  createdAt: string;
+}
+
+/** 设备列表信封（{items,total}，与 ListResult<T> 同构，单列一个类型便于语义清晰）。 */
+export interface DeviceListResult {
+  items: ChannelDevice[];
+  total: number;
+}
+
+/** 设备列表筛选 + 分页（GET /api/devices 查询参数）。from/to 为 YYYY-MM-DD。 */
+export interface DeviceFilter {
+  applicationId?: string;
+  from?: string;
+  to?: string;
+  page: number;
+  pageSize: number;
 }
 
 /**

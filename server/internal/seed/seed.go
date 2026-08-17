@@ -161,11 +161,12 @@ func EnsureRBAC(ctx context.Context, db *gorm.DB) error {
 		return err
 	}
 	opID, err := ensureRole(ctx, db, operatorRoleName,
-		"渠道/域名/打包/推送/上架包的查看与写操作，不含系统设置（商店/用户/角色管理）", false, operatorDefaultPerms())
+		"渠道/域名/打包/推送/上架包的查看与写操作，不含商店管理、角色管理、用户管理", false, operatorDefaultPerms())
 	if err != nil {
 		return err
 	}
-	viewID, err := ensureRole(ctx, db, viewerRoleName, "仅可查看各页面，无写操作", false, perm.RouteCodes())
+	viewID, err := ensureRole(ctx, db, viewerRoleName,
+		"仅可查看各页面，无写操作；不含角色管理、用户管理这类敏感管理页面", false, viewerDefaultPerms())
 	if err != nil {
 		return err
 	}
@@ -204,11 +205,47 @@ func EnsureRBAC(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
-// operatorDefaultPerms 「运营」角色的默认权限：全部 route + 除系统设置三个 button 外的全部 button。
+// systemManageSet 把 perm.SystemManageCodes()（商店/角色/用户管理三个敏感管理权限）转成
+// O(1) 查找的集合，供 operatorDefaultPerms/viewerDefaultPerms 共用同一份排除名单——
+// catalog 演进时只要维护 perm.SystemManageCodes() 一处，不必在这两个函数里各写一份字面量。
+func systemManageSet() map[string]bool {
+	set := make(map[string]bool, 4)
+	for _, c := range perm.SystemManageCodes() {
+		set[c] = true
+	}
+	return set
+}
+
+// operatorDefaultPerms 「运营」角色的默认权限：全部 route + 全部 button，减去
+// perm.SystemManageCodes()（商店管理、角色管理、用户管理）。
+// 注意：角色管理/用户管理现在 kind=route（各自独立菜单的进入权），会被 perm.RouteCodes() 收进去，
+// 所以 RouteCodes() 这半也必须过一遍排除名单，不能像以前那样只过滤 ButtonCodes() 那半。
 func operatorDefaultPerms() []string {
-	excluded := map[string]bool{perm.StoreManage: true, perm.UserManage: true, perm.RoleManage: true}
-	out := append([]string{}, perm.RouteCodes()...)
+	excluded := systemManageSet()
+	out := make([]string, 0, len(perm.RouteCodes())+len(perm.ButtonCodes()))
+	for _, code := range perm.RouteCodes() {
+		if !excluded[code] {
+			out = append(out, code)
+		}
+	}
 	for _, code := range perm.ButtonCodes() {
+		if !excluded[code] {
+			out = append(out, code)
+		}
+	}
+	return out
+}
+
+// viewerDefaultPerms 「只读」角色的默认权限：全部 route，减去 perm.SystemManageCodes()。
+//
+// 陷阱（见 perm.SystemManageCodes 注释）：角色管理/用户管理的 kind 从 button 改成 route 后，
+// 会被 perm.RouteCodes() 一并收进去——如果只读角色的默认权限直接等于 perm.RouteCodes()，
+// 就会自动白捡这两个本该只有超管才能授予的敏感管理页面权限。必须显式减去
+// perm.SystemManageCodes() 才能保持「只读=只看业务页面，不含系统级管理页面」的原意。
+func viewerDefaultPerms() []string {
+	excluded := systemManageSet()
+	out := make([]string, 0, len(perm.RouteCodes()))
+	for _, code := range perm.RouteCodes() {
 		if !excluded[code] {
 			out = append(out, code)
 		}
@@ -218,6 +255,10 @@ func operatorDefaultPerms() []string {
 
 // ensureRole 按名称幂等取或建角色；仅在角色不存在时创建并写入 perms（builtin 角色权限恒由
 // auth.RBAC 动态取 perm.AllCodes()，不落 role_permission 行，perms 参数对其被忽略）。
+//
+// 数据范围（ScopeAllBrands/ScopeAllChannels）显式写 true（= 全部）——不依赖 GORM 对
+// gorm:"default:true" 零值字段的省略插入行为，避免这个关键路径受 GORM/驱动版本细节影响；
+// 三个内置角色默认都是「全部品牌 + 全部渠道」，符合「已有角色默认全部范围」的契约。
 func ensureRole(ctx context.Context, db *gorm.DB, name, desc string, builtin bool, perms []string) (uint64, error) {
 	var existing model.Role
 	err := db.WithContext(ctx).Where("name = ?", name).First(&existing).Error
@@ -227,7 +268,7 @@ func ensureRole(ctx context.Context, db *gorm.DB, name, desc string, builtin boo
 	if err != gorm.ErrRecordNotFound {
 		return 0, fmt.Errorf("查询角色 %s 失败: %w", name, err)
 	}
-	role := model.Role{Name: name, Description: desc, Builtin: builtin}
+	role := model.Role{Name: name, Description: desc, Builtin: builtin, ScopeAllBrands: true, ScopeAllChannels: true}
 	if err := db.WithContext(ctx).Create(&role).Error; err != nil {
 		return 0, fmt.Errorf("创建角色 %s 失败: %w", name, err)
 	}

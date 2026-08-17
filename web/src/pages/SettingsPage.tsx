@@ -7,6 +7,7 @@
  *  - **安全红线提示**：keystore / 签名口令永不进后台（CLAUDE.md #4）。
  */
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { resolveAppConfig, type ResolveResult } from '@/lib/runtimeConfig';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
@@ -16,63 +17,81 @@ import type { Store } from '@/lib/types';
 import { ApiError } from '@/lib/api';
 import { Button, Note, Select, Switch } from '@/components/ui';
 import { EditIcon, InfoIcon, PlusIcon, ShieldIcon, TrashIcon } from '@/components/icons';
-import { RoleManager } from '@/components/RoleManager';
-import { UserManager } from '@/components/UserManager';
 import { cn } from '@/lib/cn';
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const hasPerm = useAuthStore((s) => s.hasPerm);
-  const canManageRoles = hasPerm(PERM.ROLE_MANAGE);
-  const canManageUsers = hasPerm(PERM.USER_MANAGE);
 
   return (
-    <section className="flex flex-col gap-4 max-w-[760px]">
-      {/* 账号与权限（RBAC，10-rbac.md：role + perms 取代旧的 admin/operator/viewer 三档硬编码） */}
-      <div className="section-card">
-        <h3 className="text-[13px] font-bold mb-3">账号与权限（RBAC）</h3>
-        <div className="text-[12.5px] text-ink-2 mb-1">
-          当前登录：<b>{user?.username}</b> · 角色 <b>{user?.role.name ?? '—'}</b>
-          {user?.role.builtin && (
-            <span className="ml-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1d4ed8]">
-              内置
-            </span>
-          )}
+    <section className="flex flex-col gap-4 max-w-[1560px]">
+      {/* 多列瀑布流（CSS columns）而不是 grid：这几张卡内容高矮差很多，grid 会按「行」对齐，
+          矮卡所在行的行尾就留出大片空洞（改版前的实际观感）。columns 按内容自然往下填，
+          不产生空行；break-inside-avoid 保证单张卡不会被拆到两列去。 */}
+      <div className="columns-1 lg:columns-2 2xl:columns-3 gap-4">
+        {/* 账号与权限（RBAC，10-rbac.md：role + perms 取代旧的 admin/operator/viewer 三档硬编码）。
+            角色/用户管理本身已拆成侧边栏「系统」分组下的独立菜单页（/roles、/users），
+            这里只留概览信息 + 跳转指引。 */}
+        <div className="section-card mb-4 break-inside-avoid">
+          <h3 className="text-[13px] font-bold mb-3">账号与权限（RBAC）</h3>
+          <div className="text-[12.5px] text-ink-2 mb-1">
+            当前登录：<b>{user?.username}</b> · 角色 <b>{user?.role.name ?? '—'}</b>
+            {user?.role.builtin && (
+              <span className="ml-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1d4ed8]">
+                内置
+              </span>
+            )}
+          </div>
+          <div className="text-[11.5px] text-muted">
+            拥有 {user?.perms.length ?? 0} 项权限点；具体角色的权限分配见侧边栏「系统 ·{' '}
+            {hasPerm(PERM.ROLE_MANAGE) ? (
+              <Link to="/roles" className="text-brand hover:underline">
+                角色管理
+              </Link>
+            ) : (
+              '角色管理'
+            )}
+            」菜单
+            {hasPerm(PERM.USER_MANAGE) && (
+              <>
+                ；账号增删改见「系统 ·{' '}
+                <Link to="/users" className="text-brand hover:underline">
+                  用户管理
+                </Link>
+                」菜单
+              </>
+            )}
+            。
+          </div>
         </div>
-        <div className="text-[11.5px] text-muted">
-          拥有 {user?.perms.length ?? 0} 项权限点；具体角色的权限分配见下方「角色管理」。
+
+        {/* 探针 / CDN */}
+        <div className="section-card mb-4 break-inside-avoid">
+          <h3 className="text-[13px] font-bold mb-3">探针端点 · CDN 快照</h3>
+          <KeyVal k="业务特征探针 probePath" v="/healthz" hint="供 APK 校验「确实是我们的站点」（ADR-0003）" />
+          <KeyVal
+            k="运行时配置端点"
+            v="GET /api/app/config?palcode="
+            hint="部署在抗封 CDN / 对象存储，保存域名即生成静态快照（ADR-0002）"
+          />
+          <KeyVal
+            k="中立连通性探针"
+            v="gstatic / cloudflare generate_204"
+            hint="裁决「域名故障 vs 本机网络」，绝不乱换（ADR-0003）"
+          />
+        </div>
+
+        {/* 应用商店 / 运行时预览：组件自带 section-card 根节点，外面包一层承载瀑布流的间距与断列控制 */}
+        <div className="mb-4 break-inside-avoid">
+          <StoresManager />
+        </div>
+
+        <div className="mb-4 break-inside-avoid">
+          <RuntimePreview />
         </div>
       </div>
 
-      {/* 角色管理（需 role:manage 可见） */}
-      {canManageRoles && <RoleManager />}
-
-      {/* 用户管理（需 user:manage 可见） */}
-      {canManageUsers && <UserManager />}
-
-      {/* 探针 / CDN */}
-      <div className="section-card">
-        <h3 className="text-[13px] font-bold mb-3">探针端点 · CDN 快照</h3>
-        <KeyVal k="业务特征探针 probePath" v="/healthz" hint="供 APK 校验「确实是我们的站点」（ADR-0003）" />
-        <KeyVal
-          k="运行时配置端点"
-          v="GET /api/app/config?palcode="
-          hint="部署在抗封 CDN / 对象存储，保存域名即生成静态快照（ADR-0002）"
-        />
-        <KeyVal
-          k="中立连通性探针"
-          v="gstatic / cloudflare generate_204"
-          hint="裁决「域名故障 vs 本机网络」，绝不乱换（ADR-0003）"
-        />
-      </div>
-
-      {/* 应用商店 */}
-      <StoresManager />
-
-      {/* 运行时配置预览 */}
-      <RuntimePreview />
-
-      {/* 安全红线 */}
+      {/* 安全红线：全宽警示条，不塞进网格（阅读体验上更像 banner 而非卡片） */}
       <div
         className="rounded-card p-[18px] border"
         style={{ borderColor: 'rgba(239,68,68,.3)', background: 'rgba(239,68,68,.04)' }}

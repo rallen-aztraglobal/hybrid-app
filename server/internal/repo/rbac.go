@@ -48,10 +48,26 @@ func (r *Repo) GetRoleByName(ctx context.Context, name string) (*model.Role, err
 }
 
 // CreateRole 新建角色。
+//
+// 注意（GORM 零值陷阱，比想象的更狠）：Role.ScopeAllBrands/ScopeAllChannels 带
+// gorm:"default:true" 标签——这是为了让 AutoMigrate/迁移生成的列带 DEFAULT 1（"已有角色默认
+// 全部范围"）。但这个标签也让 GORM 在结构体 Create 时，对「Go 零值」（bool 的零值正好是
+// false）的字段整套改写：不但跳过写入 INSERT 语句、让数据库 DEFAULT 生效，**还会在 Create
+// 成功后把数据库实际写入的值（true）回填进传入的 role 指针**——也就是说，调用方传
+// ScopeAllBrands: false 进来，Create 返回后 role.ScopeAllBrands 会被 GORM 悄悄改写成 true，
+// 连"读原始入参再纠正"都不成立，必须在调用 Create 之前就把调用方的真实意图存进局部变量。
 func (r *Repo) CreateRole(ctx context.Context, role *model.Role) error {
+	wantAllBrands, wantAllChannels := role.ScopeAllBrands, role.ScopeAllChannels
 	if err := r.db.WithContext(ctx).Create(role).Error; err != nil {
 		return fmt.Errorf("创建角色失败: %w", err)
 	}
+	if err := r.db.WithContext(ctx).Model(&model.Role{}).Where("id = ?", role.ID).Updates(map[string]any{
+		"scope_all_brands":   wantAllBrands,
+		"scope_all_channels": wantAllChannels,
+	}).Error; err != nil {
+		return fmt.Errorf("修正角色数据范围标志位失败: %w", err)
+	}
+	role.ScopeAllBrands, role.ScopeAllChannels = wantAllBrands, wantAllChannels
 	return nil
 }
 

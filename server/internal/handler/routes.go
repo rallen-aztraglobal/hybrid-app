@@ -34,6 +34,12 @@ func (h *Handler) Register(e *echo.Echo) {
 	e.GET("/api/app/config", h.AppConfig)
 	// APK 推送 token 注册（公开，校验 appId 对应渠道存在，ADR-0012）。
 	e.POST("/api/app/push/register-token", h.RegisterPushToken)
+	// APK 设备信息上报（公开，校验 appId 对应渠道存在）。
+	e.POST("/api/app/device/register", h.RegisterDevice)
+	// 设备 CSV 导出下载（公开路由，但用 export-token 换来的 scoped token 鉴权，不接受 access
+	// token；不进 JWT 组是因为下载链接要能直接被浏览器/新标签页打开，不便带 Authorization 头）。
+	e.GET("/api/devices/export.csv", h.ExportDevicesCSV)
+	e.GET("/api/devices/export.xlsx", h.ExportDevicesXLSX)
 	// google-services.json 按品牌下发（公开，非机密；CLI/构建机消费，ADR-0012 §3/§5）。
 	e.GET("/api/app/google-services", h.GetGoogleServices)
 	// 上架包 AB 面判定（公开，客户端 App 启动调用，服务端按请求真实 IP 判国家，不缓存）。
@@ -70,7 +76,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.PUT("/stores/:id", h.UpdateStore, need(perm.StoreManage))
 	api.DELETE("/stores/:id", h.DeleteStore, need(perm.StoreManage))
 
-	// 角色 / 用户管理（系统设置模块）。
+	// 角色管理 / 用户管理：各自独立的侧边栏菜单（已从「系统设置」拆出，role:manage/user:manage
+	// 的 kind 也已改成 route，见 perm 包），路由映射本身不变。
 	// 角色列表放宽为 any-of：用户管理的「角色下拉框」也要读它，仅有 user:manage 的账号不能没有选项。
 	api.GET("/roles", h.ListRoles, need(perm.RoleManage, perm.UserManage))
 	api.POST("/roles", h.CreateRole, need(perm.RoleManage))
@@ -149,4 +156,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.GET("/push/audience", h.GetPushAudience, need(perm.PagePush))
 	// google-services.json 上传（push:config；GET 公开已在上方注册）。
 	api.POST("/push/google-services", h.UploadGoogleServices, need(perm.PushConfig))
+
+	// 设备管理（渠道设备上报列表 + CSV 导出；导出下载端点 export.csv 走 scoped token，
+	// 不进 JWT 组，已在上方公开区注册）。
+	api.GET("/devices", h.ListDevices, need(perm.PageDevices))
+	api.GET("/devices/export-token", h.GetDeviceExportToken, need(perm.DeviceExport))
+	api.POST("/devices/export", h.ExportDevicesByIDs, need(perm.DeviceExport))
 }

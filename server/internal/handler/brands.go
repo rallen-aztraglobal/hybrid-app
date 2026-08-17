@@ -10,14 +10,18 @@ import (
 )
 
 // ListBrands godoc
-// @Summary  大渠道列表（含渠道计数、accent 色、默认域名）
+// @Summary  大渠道列表（含渠道计数、accent 色、默认域名；按调用者数据范围过滤）
 // @Tags     brands
 // @Produce  json
 // @Success  200  {object}  httpx.Envelope
 // @Security BearerAuth
 // @Router   /api/brands [get]
 func (h *Handler) ListBrands(c echo.Context) error {
-	views, err := h.svc.ListBrands(c.Request().Context())
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	views, err := h.svc.ListBrands(c.Request().Context(), scope)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -33,7 +37,11 @@ func (h *Handler) ListBrands(c echo.Context) error {
 // @Security BearerAuth
 // @Router   /api/brands/{code}/domains [get]
 func (h *Handler) GetBrandDomains(c echo.Context) error {
-	domains, err := h.svc.GetBrandDomains(c.Request().Context(), c.Param("code"))
+	code := c.Param("code")
+	if err := h.assertBrandCodeInScope(c, code); err != nil {
+		return err
+	}
+	domains, err := h.svc.GetBrandDomains(c.Request().Context(), code)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -55,11 +63,15 @@ type setDomainsReq struct {
 // @Security BearerAuth
 // @Router   /api/brands/{code}/domains [put]
 func (h *Handler) SetBrandDomains(c echo.Context) error {
+	code := c.Param("code")
+	if err := h.assertBrandCodeInScope(c, code); err != nil {
+		return err
+	}
 	var req setDomainsReq
 	if err := c.Bind(&req); err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
 	}
-	res, err := h.svc.SetBrandDomains(c.Request().Context(), c.Param("code"), req.Domains)
+	res, err := h.svc.SetBrandDomains(c.Request().Context(), code, req.Domains)
 	if err != nil {
 		return fail(c, err)
 	}

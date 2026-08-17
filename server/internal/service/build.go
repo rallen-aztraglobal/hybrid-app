@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
 	"github.com/hybrid-app/server/internal/repo"
 )
@@ -34,7 +35,10 @@ func defaultJobName(brand, versionName string, t time.Time) string {
 
 // CreateBuildJob 校验并入队一条构建任务（状态 queued），等待构建机领取。
 // 校验：versionName X.Y.Z、品牌存在、flavors 非空且均属于该品牌的 enabled 渠道。
-func (s *Service) CreateBuildJob(ctx context.Context, in CreateBuildJobInput) (*model.BuildRecord, error) {
+//
+// scope 是调用者的数据范围（数据权限强制点：brand 必须在范围内，且 flavors 全部在范围内，
+// 有一个越界就整单拒绝，见 docs/admin/10-rbac.md）。runner 恒 auth.FullScope()。
+func (s *Service) CreateBuildJob(ctx context.Context, scope auth.Scope, in CreateBuildJobInput) (*model.BuildRecord, error) {
 	in.Brand = strings.TrimSpace(in.Brand)
 	in.VersionName = strings.TrimSpace(in.VersionName)
 	in.Name = strings.TrimSpace(in.Name)
@@ -49,6 +53,9 @@ func (s *Service) CreateBuildJob(ctx context.Context, in CreateBuildJobInput) (*
 	if err != nil {
 		return nil, errBadRequest(fmt.Sprintf("品牌 %q 不存在", in.Brand))
 	}
+	if !scope.BrandAllowed(brand.Code) {
+		return nil, errForbidden(fmt.Sprintf("品牌 %q 不在你的数据范围内", brand.Code))
+	}
 
 	// 去重 + 归一 flavors，并校验都属于该品牌的 enabled 渠道（避免给构建机不存在/未启用的 flavor）。
 	known, _, err := s.repo.ListChannels(ctx, repo.ChannelFilter{
@@ -57,9 +64,9 @@ func (s *Service) CreateBuildJob(ctx context.Context, in CreateBuildJobInput) (*
 	if err != nil {
 		return nil, err
 	}
-	enabled := make(map[string]bool, len(known))
+	channelByFlavor := make(map[string]model.Channel, len(known))
 	for i := range known {
-		enabled[known[i].FlavorName] = true
+		channelByFlavor[known[i].FlavorName] = known[i]
 	}
 	seen := map[string]bool{}
 	flavors := make([]string, 0, len(in.Flavors))
@@ -68,8 +75,12 @@ func (s *Service) CreateBuildJob(ctx context.Context, in CreateBuildJobInput) (*
 		if f == "" || seen[f] {
 			continue
 		}
-		if !enabled[f] {
+		ch, ok := channelByFlavor[f]
+		if !ok {
 			return nil, errBadRequest(fmt.Sprintf("flavor %q 不是品牌 %s 下的 enabled 渠道", f, brand.Code))
+		}
+		if !scope.ChannelAllowed(brand.Code, ch.ID) {
+			return nil, errForbidden(fmt.Sprintf("flavor %q 不在你的数据范围内", f))
 		}
 		seen[f] = true
 		flavors = append(flavors, f)
@@ -195,9 +206,11 @@ func (s *Service) AddBuildArtifact(ctx context.Context, recordID uint64, in AddB
 	return a, nil
 }
 
-// ListBuildRecords 构建历史（按品牌/状态筛选）。
-func (s *Service) ListBuildRecords(ctx context.Context, brandCode, status string, limit int) ([]model.BuildRecord, error) {
-	return s.repo.ListBuildRecords(ctx, repo.BuildRecordFilter{BrandCode: brandCode, Status: status, Limit: limit})
+// ListBuildRecords 构建历史（按品牌/状态筛选，按调用者数据范围过滤，见 docs/admin/10-rbac.md）。
+func (s *Service) ListBuildRecords(ctx context.Context, scope auth.Scope, brandCode, status string, limit int) ([]model.BuildRecord, error) {
+	f := repo.BuildRecordFilter{BrandCode: brandCode, Status: status, Limit: limit}
+	applyBuildRecordScope(&f, scope)
+	return s.repo.ListBuildRecords(ctx, f)
 }
 
 // GetBuildRecord 单条构建记录（含产物）。

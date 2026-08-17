@@ -12,10 +12,18 @@ import (
 )
 
 // ListingFilter 是上架包列表的筛选条件。
+//
+// Scope* 是数据权限过滤（docs/admin/10-rbac.md）：opt-in，零值不生效（兼容既有调用点）。
+// 上架包只按品牌维度过滤——它不是「渠道」，角色的渠道范围（scope_all_channels）对它不生效，
+// 只有品牌范围（scope_all_brands）管它是否可见。
 type ListingFilter struct {
 	Platform string // android / ios，空 = 不筛
 	Status   string // enabled/disabled/archived，空 = 不筛（但默认排除 archived，见下）
 	Q        string // 关键词：名称/包名
+
+	ScopeRestricted bool
+	ScopeAllBrands  bool
+	ScopeBrandCodes []string
 }
 
 // ListListings 返回上架包列表，预加载品牌、域名与网关，便于前端一次渲染卡片。
@@ -38,6 +46,13 @@ func (r *Repo) ListListings(ctx context.Context, f ListingFilter) ([]model.Listi
 	if f.Q != "" {
 		like := "%" + f.Q + "%"
 		q = q.Where("name LIKE ? OR display_name LIKE ? OR bundle_id LIKE ?", like, like, like)
+	}
+	if f.ScopeRestricted && !f.ScopeAllBrands {
+		if len(f.ScopeBrandCodes) == 0 {
+			q = q.Where("1 = 0")
+		} else {
+			q = q.Where("brand_id IN (SELECT id FROM brand WHERE code IN ?)", f.ScopeBrandCodes)
+		}
 	}
 
 	var list []model.ListingApp

@@ -33,6 +33,9 @@ export const PERM = {
   STORE_MANAGE: 'store:manage',
   USER_MANAGE: 'user:manage',
   ROLE_MANAGE: 'role:manage',
+
+  PAGE_DEVICES: 'page:devices',
+  DEVICE_EXPORT: 'device:export',
 } as const;
 
 export type PermCode = (typeof PERM)[keyof typeof PERM];
@@ -95,8 +98,27 @@ export const PERM_CATALOG: PermCatalogModule[] = [
     perms: [
       { code: PERM.PAGE_SETTINGS, label: '设置页（商店/运行时预览等查看）', kind: 'route' },
       { code: PERM.STORE_MANAGE, label: '商店管理写操作', kind: 'button' },
-      { code: PERM.USER_MANAGE, label: '用户管理（增删改/重置密码）', kind: 'button' },
-      { code: PERM.ROLE_MANAGE, label: '角色管理（增删改）', kind: 'button' },
+    ],
+  },
+  {
+    // role:manage / user:manage 原属「系统设置」模块下的 button 权限；现拆成独立菜单页
+    // （/roles、/users），kind 相应改为 route（控制整页可见 + 读接口）——code 字符串不变，
+    // 只是模块归属与 kind 变化，与后端 seed.EnsureRBAC / catalog 保持一致。
+    module: 'roles',
+    label: '角色管理',
+    perms: [{ code: PERM.ROLE_MANAGE, label: '角色管理页（查看/新增/编辑/删除角色）', kind: 'route' }],
+  },
+  {
+    module: 'users',
+    label: '用户管理',
+    perms: [{ code: PERM.USER_MANAGE, label: '用户管理页（查看/新增/改角色/重置密码/删除）', kind: 'route' }],
+  },
+  {
+    module: 'devices',
+    label: '设备管理',
+    perms: [
+      { code: PERM.PAGE_DEVICES, label: '设备列表查看', kind: 'route' },
+      { code: PERM.DEVICE_EXPORT, label: '导出设备 CSV', kind: 'button' },
     ],
   },
 ];
@@ -110,7 +132,10 @@ export const ROUTE_PERM_ORDER: { path: string; perm: string }[] = [
   { path: '/listings', perm: PERM.PAGE_LISTINGS },
   { path: '/domains', perm: PERM.PAGE_DOMAINS },
   { path: '/push', perm: PERM.PAGE_PUSH },
+  { path: '/devices', perm: PERM.PAGE_DEVICES },
   { path: '/pack', perm: PERM.PAGE_PACK },
   { path: '/builds', perm: PERM.PAGE_BUILDS },
   { path: '/settings', perm: PERM.PAGE_SETTINGS },
+  { path: '/roles', perm: PERM.ROLE_MANAGE },
+  { path: '/users', perm: PERM.USER_MANAGE },
 ];

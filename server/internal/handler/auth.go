@@ -23,27 +23,47 @@ type roleSummary struct {
 	Builtin bool   `json:"builtin"`
 }
 
-type tokenResp struct {
-	AccessToken  string      `json:"accessToken"`
-	RefreshToken string      `json:"refreshToken"`
-	ExpiresIn    int         `json:"expiresIn"`
-	Username     string      `json:"username"`
-	Role         roleSummary `json:"role"`
-	Perms        []string    `json:"perms"` // 超级管理员返回完整 catalog code 列表
+// scopeSummary 是登录/刷新/me 响应里的数据范围摘要（docs/admin/10-rbac.md「数据权限」节，
+// 字段名与前端约定的形状逐字一致：{allBrands, brands, allChannels, channelIds}）。
+type scopeSummary struct {
+	AllBrands   bool     `json:"allBrands"`
+	Brands      []string `json:"brands"`
+	AllChannels bool     `json:"allChannels"`
+	ChannelIDs  []uint64 `json:"channelIds"`
 }
 
-// authInfo 把当前用户的角色摘要 + 权限集组装成响应片段，Login/Refresh/Me 共用。
-func (h *Handler) authInfo(c echo.Context, u *model.AdminUser) (roleSummary, []string, error) {
-	info, permSet, err := h.rbac.Resolve(c.Request().Context(), u.ID)
+type tokenResp struct {
+	AccessToken  string       `json:"accessToken"`
+	RefreshToken string       `json:"refreshToken"`
+	ExpiresIn    int          `json:"expiresIn"`
+	Username     string       `json:"username"`
+	Role         roleSummary  `json:"role"`
+	Perms        []string     `json:"perms"` // 超级管理员返回完整 catalog code 列表
+	Scope        scopeSummary `json:"scope"`
+}
+
+// authInfo 把当前用户的角色摘要 + 权限集 + 数据范围组装成响应片段，Login/Refresh/Me 共用。
+func (h *Handler) authInfo(c echo.Context, u *model.AdminUser) (roleSummary, []string, scopeSummary, error) {
+	ctx := c.Request().Context()
+	info, permSet, err := h.rbac.Resolve(ctx, u.ID)
 	if err != nil {
-		return roleSummary{}, nil, err
+		return roleSummary{}, nil, scopeSummary{}, err
 	}
 	perms := make([]string, 0, len(permSet))
 	for code := range permSet {
 		perms = append(perms, code)
 	}
 	sort.Strings(perms)
-	return roleSummary{ID: info.ID, Name: info.Name, Builtin: info.Builtin}, perms, nil
+
+	scope, err := h.rbac.EffectiveScope(ctx, u.ID)
+	if err != nil {
+		return roleSummary{}, nil, scopeSummary{}, err
+	}
+	ss := scopeSummary{
+		AllBrands: scope.AllBrands, Brands: scope.BrandCodeList(),
+		AllChannels: scope.AllChannels, ChannelIDs: scope.ChannelIDList(),
+	}
+	return roleSummary{ID: info.ID, Name: info.Name, Builtin: info.Builtin}, perms, ss, nil
 }
 
 // Login godoc
@@ -67,13 +87,13 @@ func (h *Handler) Login(c echo.Context) error {
 	if err != nil {
 		return fail(c, err)
 	}
-	role, perms, err := h.authInfo(c, u)
+	role, perms, scope, err := h.authInfo(c, u)
 	if err != nil {
 		return fail(c, err)
 	}
 	return httpx.OK(c, tokenResp{
 		AccessToken: access, RefreshToken: refresh, ExpiresIn: h.authMgr.AccessTTLSeconds(),
-		Username: u.Username, Role: role, Perms: perms,
+		Username: u.Username, Role: role, Perms: perms, Scope: scope,
 	})
 }
 
@@ -106,20 +126,21 @@ func (h *Handler) Refresh(c echo.Context) error {
 	if err != nil {
 		return fail(c, err)
 	}
-	role, perms, err := h.authInfo(c, u)
+	role, perms, scope, err := h.authInfo(c, u)
 	if err != nil {
 		return fail(c, err)
 	}
 	return httpx.OK(c, tokenResp{
 		AccessToken: access, RefreshToken: refresh, ExpiresIn: h.authMgr.AccessTTLSeconds(),
-		Username: u.Username, Role: role, Perms: perms,
+		Username: u.Username, Role: role, Perms: perms, Scope: scope,
 	})
 }
 
 type meResp struct {
-	Username string      `json:"username"`
-	Role     roleSummary `json:"role"`
-	Perms    []string    `json:"perms"`
+	Username string       `json:"username"`
+	Role     roleSummary  `json:"role"`
+	Perms    []string     `json:"perms"`
+	Scope    scopeSummary `json:"scope"`
 }
 
 // Me godoc
@@ -138,9 +159,9 @@ func (h *Handler) Me(c echo.Context) error {
 	if err != nil {
 		return httpx.Fail(c, http.StatusUnauthorized, "账号不存在或已被删除")
 	}
-	role, perms, err := h.authInfo(c, u)
+	role, perms, scope, err := h.authInfo(c, u)
 	if err != nil {
 		return fail(c, err)
 	}
-	return httpx.OK(c, meResp{Username: u.Username, Role: role, Perms: perms})
+	return httpx.OK(c, meResp{Username: u.Username, Role: role, Perms: perms, Scope: scope})
 }

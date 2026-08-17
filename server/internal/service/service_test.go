@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/config"
 	"github.com/hybrid-app/server/internal/domainutil"
 	"github.com/hybrid-app/server/internal/model"
@@ -293,7 +294,7 @@ func TestBuildManifestRendersCSVLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
 	}
-	m, err := svc.BuildManifestForBrand(ctx, "ap")
+	m, err := svc.BuildManifestForBrand(ctx, auth.FullScope(), "ap")
 	if err != nil {
 		t.Fatalf("manifest 失败: %v", err)
 	}
@@ -339,7 +340,7 @@ func TestBuildJobLifecycle(t *testing.T) {
 	}
 
 	// 入队（未给 name → 用默认名）。
-	rec, err := svc.CreateBuildJob(ctx, CreateBuildJobInput{
+	rec, err := svc.CreateBuildJob(ctx, auth.FullScope(), CreateBuildJobInput{
 		Brand: "ap", Flavors: []string{"ap01018"}, VersionName: "1.2.3",
 	})
 	if err != nil {
@@ -353,13 +354,13 @@ func TestBuildJobLifecycle(t *testing.T) {
 	}
 
 	// 非法 versionName 应被拒。
-	if _, err := svc.CreateBuildJob(ctx, CreateBuildJobInput{
+	if _, err := svc.CreateBuildJob(ctx, auth.FullScope(), CreateBuildJobInput{
 		Brand: "ap", Flavors: []string{"ap01018"}, VersionName: "1.2",
 	}); err == nil {
 		t.Error("versionName=1.2 应被拒")
 	}
 	// 不属于品牌的 flavor 应被拒。
-	if _, err := svc.CreateBuildJob(ctx, CreateBuildJobInput{
+	if _, err := svc.CreateBuildJob(ctx, auth.FullScope(), CreateBuildJobInput{
 		Brand: "ap", Flavors: []string{"nonexist"}, VersionName: "1.0.0",
 	}); err == nil {
 		t.Error("未知 flavor 应被拒")
@@ -458,7 +459,7 @@ func TestLatestApkOnlyFromSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建渠道失败: %v", err)
 	}
-	rec, err := svc.CreateBuildJob(ctx, CreateBuildJobInput{
+	rec, err := svc.CreateBuildJob(ctx, auth.FullScope(), CreateBuildJobInput{
 		Brand: "ap", Flavors: []string{"ap01018"}, VersionName: "1.0.0",
 	})
 	if err != nil {
@@ -656,7 +657,7 @@ func TestCreateChannelWithAdjustBinding(t *testing.T) {
 	}
 
 	// CLI 配置下发接口（manifest）应原样带出。
-	m, err := svc.BuildManifestForBrand(ctx, "gp")
+	m, err := svc.BuildManifestForBrand(ctx, auth.FullScope(), "gp")
 	if err != nil {
 		t.Fatalf("manifest 失败: %v", err)
 	}
@@ -690,7 +691,7 @@ func TestCreateChannelWithoutAdjustBinding(t *testing.T) {
 		t.Errorf("未绑定时 adjustEvents 应为空，实际 %+v", ch.AdjustEvents)
 	}
 
-	m, err := svc.BuildManifestForBrand(ctx, "ap")
+	m, err := svc.BuildManifestForBrand(ctx, auth.FullScope(), "ap")
 	if err != nil {
 		t.Fatalf("manifest 失败: %v", err)
 	}

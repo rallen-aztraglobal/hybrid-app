@@ -1,9 +1,12 @@
 /**
- * 用户管理（10-rbac.md，需 user:manage 可见）—— 用户列表（用户名/角色/创建时间）
- * + 新增（用户名/密码/确认密码/角色下拉）、改角色、重置密码、删除（带确认）。
+ * 用户管理（10-rbac.md，需 user:manage 可见，现为独立菜单页 /users）——
+ * 表格化用户列表（用户名/角色/创建时间/操作）+ 新增（用户名/密码/确认密码/角色下拉）、
+ * 改角色、重置密码、删除（带确认）。宽屏一行放下全部列；窄屏收起创建时间列，
+ * 折进用户名单元格下面，不产生横向滚动。
  * 「最后一个超管」「不能删自己」等后端 400/409 错误如实展示（不在前端翻译措辞）。
+ * 页头/说明文案在 pages/UsersPage.tsx（页面级），本组件只负责列表主体 + 工具条。
  */
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import {
   useCreateUser,
@@ -116,18 +119,17 @@ export function UserManager() {
     }
   }
 
+  const list = users ?? [];
+
   return (
-    <div className="section-card">
+    <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[13px] font-bold">用户管理</h3>
+        <span className="text-[12.5px] text-muted">共 {list.length} 个用户</span>
         <Button onClick={() => setAdding((v) => !v)}>
           <PlusIcon className="w-4 h-4" />
           新增用户
         </Button>
       </div>
-      <p className="text-[12px] text-muted mb-3">
-        每个用户挂一个角色，权限完全由角色决定。系统会拒绝删除/改角色「最后一个超级管理员」、拒绝删除自己。
-      </p>
 
       {adding && (
         <div className="flex flex-wrap items-end gap-2 p-3 mb-3 rounded-[10px] border border-line bg-panel-2">
@@ -172,78 +174,121 @@ export function UserManager() {
         </div>
       )}
 
-      {isLoading && <div className="text-[12.5px] text-muted py-2">加载中…</div>}
-      {!isLoading && (users ?? []).length === 0 && <div className="text-[12.5px] text-muted py-2">暂无用户</div>}
-
-      <div className="flex flex-col gap-2">
-        {(users ?? []).map((u) => (
-          <div key={u.id} className="rounded-[10px] border border-line p-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-semibold truncate">{u.username}</span>
-                  {u.username === currentUsername && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f1f5f9] text-[#64748b] flex-none">
-                      当前登录
-                    </span>
+      {isLoading ? (
+        <div className="h-40 rounded-card bg-panel border border-line animate-pulse" />
+      ) : list.length === 0 ? (
+        <div className="section-card text-center text-muted py-[40px]">暂无用户</div>
+      ) : (
+        <div className="section-card !p-0 overflow-hidden">
+          {/*
+           * table-fixed + 显式列宽：原生 table-layout:auto 下单元格宽度由内容撑开，
+           * `truncate` 在没有约束宽度时不会真正生效（超长用户名会把整张表撑宽，导致横向滚动）。
+           * 固定布局后每列宽度恒定，超出内容严格按 truncate 省略，不会撑破容器。
+           */}
+          <table className="w-full text-[13px] table-fixed">
+            {/* 第一列给百分比而不是留空：留空时它会吃掉全部剩余宽度，一个几字符的用户名
+                后面拖着一大片空白，正是「表格很空」的观感来源。 */}
+            <colgroup>
+              <col style={{ width: '38%' }} />
+              <col style={{ width: 210 }} />
+              <col className="hidden lg:table-column" style={{ width: 170 }} />
+              <col style={{ width: 160 }} />
+            </colgroup>
+            <thead>
+              <tr className="bg-panel-2 text-ink-2 text-[12px]">
+                <th className="text-left font-semibold px-4 py-2.5">用户名</th>
+                <th className="text-left font-semibold px-4 py-2.5">角色</th>
+                <th className="text-left font-semibold px-4 py-2.5 hidden lg:table-cell">创建时间</th>
+                <th className="text-right font-semibold px-4 py-2.5">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((u) => (
+                <Fragment key={u.id}>
+                  <tr key={u.id} className="border-t border-line-2 align-top">
+                    <td className="px-4 py-3 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="font-semibold truncate min-w-0">{u.username}</span>
+                        {u.username === currentUsername && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f1f5f9] text-[#64748b] flex-none">
+                            当前登录
+                          </span>
+                        )}
+                        {u.builtinRole && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1d4ed8] flex-none">
+                            超级管理员
+                          </span>
+                        )}
+                      </div>
+                      <div className="lg:hidden text-[11px] text-muted mt-0.5">
+                        创建于 {u.createdAt ? new Date(u.createdAt).toLocaleString('zh-CN', { hour12: false }) : '—'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="max-w-full">
+                        {roleOptions.length > 0 ? (
+                          <Select value={u.roleId} onChange={(v) => void changeRole(u.id, v)} options={roleOptions} />
+                        ) : (
+                          <span className="text-[12.5px] text-ink-2 truncate block">{u.roleName}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="hidden lg:table-cell px-4 py-3 text-ink-2 whitespace-nowrap">
+                      {u.createdAt ? new Date(u.createdAt).toLocaleString('zh-CN', { hour12: false }) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2 flex-wrap">
+                        <Button onClick={() => startReset(u.id)}>重置密码</Button>
+                        <button
+                          title="删除"
+                          onClick={() => void remove(u.id, u.username)}
+                          className="grid place-items-center w-[30px] h-[30px] rounded-lg border border-line bg-panel text-ink-2 hover:text-down hover:border-[#fecaca] hover:bg-[#fef2f2] transition flex-none"
+                        >
+                          <TrashIcon className="w-[15px] h-[15px]" />
+                        </button>
+                      </div>
+                      {rowError?.id === u.id && resettingId !== u.id && (
+                        <div className="mt-1.5 text-[11.5px] text-down text-right">{rowError.message}</div>
+                      )}
+                    </td>
+                  </tr>
+                  {resettingId === u.id && (
+                    <tr key={`${u.id}-reset`} className="border-t border-line-2 bg-panel-2">
+                      <td colSpan={4} className="px-4 py-3">
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="flex-1 min-w-[120px]">
+                            <label className="block text-[11.5px] text-muted mb-1">新密码</label>
+                            <input
+                              type="password"
+                              className="field-input"
+                              value={resetPwd}
+                              onChange={(e) => setResetPwd(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-[120px]">
+                            <label className="block text-[11.5px] text-muted mb-1">确认新密码</label>
+                            <input
+                              type="password"
+                              className="field-input"
+                              value={resetPwdConfirm}
+                              onChange={(e) => setResetPwdConfirm(e.target.value)}
+                            />
+                          </div>
+                          <Button variant="primary" onClick={() => void submitReset(u.id)} disabled={resetPassword.isPending}>
+                            {resetPassword.isPending ? '保存中…' : '确定'}
+                          </Button>
+                          <Button onClick={() => setResettingId(null)}>取消</Button>
+                        </div>
+                        {rowError?.id === u.id && <div className={cn('mt-2 text-[12px] text-down')}>{rowError.message}</div>}
+                      </td>
+                    </tr>
                   )}
-                  {u.builtinRole && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1d4ed8] flex-none">
-                      超级管理员
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-muted mt-0.5">
-                  创建于 {u.createdAt ? new Date(u.createdAt).toLocaleString('zh-CN', { hour12: false }) : '—'}
-                </div>
-              </div>
-              <div className="w-[160px] flex-none">
-                {roleOptions.length > 0 ? (
-                  <Select value={u.roleId} onChange={(v) => void changeRole(u.id, v)} options={roleOptions} />
-                ) : (
-                  <span className="text-[12.5px] text-ink-2">{u.roleName}</span>
-                )}
-              </div>
-              <Button onClick={() => startReset(u.id)}>重置密码</Button>
-              <button
-                title="删除"
-                onClick={() => void remove(u.id, u.username)}
-                className="grid place-items-center w-[30px] h-[30px] rounded-lg border border-line bg-panel text-ink-2 hover:text-down hover:border-[#fecaca] hover:bg-[#fef2f2] transition flex-none"
-              >
-                <TrashIcon className="w-[15px] h-[15px]" />
-              </button>
-            </div>
-
-            {resettingId === u.id && (
-              <div className="mt-3 flex flex-wrap items-end gap-2 p-3 rounded-[10px] border border-line bg-panel-2">
-                <div className="flex-1 min-w-[120px]">
-                  <label className="block text-[11.5px] text-muted mb-1">新密码</label>
-                  <input
-                    type="password"
-                    className="field-input"
-                    value={resetPwd}
-                    onChange={(e) => setResetPwd(e.target.value)}
-                  />
-                </div>
-                <div className="flex-1 min-w-[120px]">
-                  <label className="block text-[11.5px] text-muted mb-1">确认新密码</label>
-                  <input
-                    type="password"
-                    className="field-input"
-                    value={resetPwdConfirm}
-                    onChange={(e) => setResetPwdConfirm(e.target.value)}
-                  />
-                </div>
-                <Button variant="primary" onClick={() => void submitReset(u.id)} disabled={resetPassword.isPending}>
-                  {resetPassword.isPending ? '保存中…' : '确定'}
-                </Button>
-                <Button onClick={() => setResettingId(null)}>取消</Button>
-              </div>
-            )}
-            {rowError?.id === u.id && <div className={cn('mt-2 text-[12px] text-down')}>{rowError.message}</div>}
-          </div>
-        ))}
-      </div>
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

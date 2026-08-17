@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- FCM 推送：Android 13+（API 33+）需运行时动态申请；minSdk 29 需声明后才可在 33+ 动态申请 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 设备信息采集（GAID）：Android 13+（API 33+）起需显式声明该权限，否则 GAID 恒为全零 -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
     <!-- 华为 AppGallery 安装来源：Adjust 的 huawei-referrer 插件读
          content://com.huawei.appmarket.commondata/item/5 拿 referrer。targetSdk 30+ 的包可见性
          限制下必须显式声明该 provider，否则 resolveContentProvider 返回 null，华为包的安装

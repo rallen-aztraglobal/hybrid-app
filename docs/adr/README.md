@@ -17,3 +17,5 @@
 | [0011](./0011-first-deploy-seed.md) | 首次部署初始化：烧录 res + 首启自动注册（否决 init.sql） | 已采纳 |
 | [0012](./0012-push-fcm.md) | Firebase 推送（FCM）集成与按品牌项目拆分 | 已采纳 |
 | [0013](./0013-adjust-attribution.md) | Adjust 归因：按 flavor 绑定即启用、未绑定则休眠 | 提议 |
+| [0014](./0014-listing-ab-gate.md) | 上架包 AB 面网关：服务端按 IP 国家+时区判定、fail-closed | 已采纳 |
+| [0015](./0015-device-registry.md) | 设备登记：安装 UUID 唯一键、受众哈希导出时算不落库 | 已采纳 |

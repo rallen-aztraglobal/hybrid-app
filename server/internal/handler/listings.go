@@ -27,7 +27,11 @@ import (
 // @Security BearerAuth
 // @Router   /api/listings [get]
 func (h *Handler) ListListings(c echo.Context) error {
-	list, err := h.svc.ListListings(c.Request().Context(),
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	list, err := h.svc.ListListings(c.Request().Context(), scope,
 		c.QueryParam("platform"), c.QueryParam("status"), c.QueryParam("q"))
 	if err != nil {
 		return fail(c, err)

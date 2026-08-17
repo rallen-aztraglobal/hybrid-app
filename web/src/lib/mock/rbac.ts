@@ -1,4 +1,5 @@
-import type { AdminUser, AdminUserInput, AuthUser, PermCatalogModule, Role, RoleInput } from '../types';
+import type { AdminUser, AdminUserInput, AuthUser, BrandCode, PermCatalogModule, Role, RoleInput, RoleScope } from '../types';
+import { FULL_ROLE_SCOPE } from '../types';
 import { ALL_PERM_CODES, PERM, PERM_CATALOG } from '../permissions';
 
 /**
@@ -9,11 +10,15 @@ import { ALL_PERM_CODES, PERM, PERM_CATALOG } from '../permissions';
 /**
  * 进程内 mock RBAC 数据库（后端未就绪时的事实来源），遵循 10-rbac.md 契约：
  *  - 种子：超级管理员（builtin）+ 一个示例普通角色「运营」+ 两个示例用户（admin / operator）；
- *  - 校验规则与文档一致：builtin 不可改/删、删除挂人角色 409、最后一个超管保护、不能删自己等。
+ *  - 校验规则与文档一致：builtin 不可改/删、删除挂人角色 409、最后一个超管保护、不能删自己等；
+ *  - 数据范围（scope）：两个种子角色均为默认「全部品牌 + 全部渠道」（与后端 role 表
+ *    scope_all_brands/scope_all_channels 默认 true 对齐），新建角色可在抽屉里收窄。
  *
  * mock 登录用 token 形如 `mock-token-<username>-<timestamp>`，authApi.me() 的 mock 分支据此
  * 反解出 username 再查回用户（仅 mock 场景；真实后端用 JWT 内的 sub）。
  */
+
+const VALID_BRAND_CODES: BrandCode[] = ['ap', 'bp', 'gp'];
 
 interface MockRole {
   id: string;
@@ -21,6 +26,7 @@ interface MockRole {
   description: string;
   builtin: boolean;
   permCodes: string[];
+  scope: RoleScope;
 }
 
 interface MockUser {
@@ -36,8 +42,23 @@ const OPERATOR_PERM_CODES = ALL_PERM_CODES.filter(
 );
 
 let roles: MockRole[] = [
-  { id: '1', name: '超级管理员', description: '内置角色，拥有全部权限，不可编辑或删除', builtin: true, permCodes: ALL_PERM_CODES },
-  { id: '2', name: '运营', description: '日常运营：渠道 / 域名 / 打包 / 推送 / 上架包全部操作，不含系统设置管理', builtin: false, permCodes: OPERATOR_PERM_CODES },
+  {
+    id: '1',
+    name: '超级管理员',
+    description: '内置角色，拥有全部权限，不可编辑或删除',
+    builtin: true,
+    permCodes: ALL_PERM_CODES,
+    scope: FULL_ROLE_SCOPE,
+  },
+  {
+    id: '2',
+    name: '运营',
+    description: '日常运营：渠道 / 域名 / 打包 / 推送 / 上架包全部操作，不含系统设置管理',
+    builtin: false,
+    permCodes: OPERATOR_PERM_CODES,
+    // 与后端 role 表 scope_all_brands/scope_all_channels 默认 true 对齐：种子角色不做数据收窄。
+    scope: FULL_ROLE_SCOPE,
+  },
 ];
 let roleSeq = 3;
 
@@ -51,8 +72,40 @@ function userCountOf(roleId: string): number {
   return users.filter((u) => u.roleId === roleId).length;
 }
 
+/**
+ * 校验 + 规范化 scope（10-rbac.md「数据权限」）：allBrands/allChannels=true 时清空对应清单
+ * （与后端「标志位而非快照」的语义对齐——不保留「勾了但当前不生效」的脏值）；brands 必须是
+ * 已知品牌码。channelIds 不在 mock 层深校验存在性（前端选择器本身只出已知渠道，不会带入野值）。
+ */
+function normalizeScope(scope: RoleScope | undefined): RoleScope {
+  const s = scope ?? FULL_ROLE_SCOPE;
+  if (!s.allBrands) {
+    const invalid = s.brands.filter((b) => !VALID_BRAND_CODES.includes(b));
+    if (invalid.length) throw new Error(`品牌代码不存在：${invalid.join(', ')}`);
+  }
+  return {
+    allBrands: s.allBrands,
+    brands: s.allBrands ? [] : [...new Set(s.brands)],
+    allChannels: s.allChannels,
+    channelIds: s.allChannels ? [] : [...new Set(s.channelIds)],
+  };
+}
+
+function cloneScope(scope: RoleScope): RoleScope {
+  return { allBrands: scope.allBrands, brands: [...scope.brands], allChannels: scope.allChannels, channelIds: [...scope.channelIds] };
+}
+
 function toRole(r: MockRole): Role {
-  return { id: r.id, name: r.name, description: r.description, builtin: r.builtin, permCodes: [...r.permCodes], userCount: userCountOf(r.id) };
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    builtin: r.builtin,
+    permCodes: [...r.permCodes],
+    userCount: userCountOf(r.id),
+    // builtin 恒「全部品牌+全部渠道」，忽略实际存的 scope 字段（与后端 EffectiveScope 计算规则一致）。
+    scope: r.builtin ? FULL_ROLE_SCOPE : cloneScope(r.scope),
+  };
 }
 
 function toAdminUser(u: MockUser): AdminUser {
@@ -97,7 +150,15 @@ export const mockRbacDb = {
     if (roles.some((r) => r.name === name)) throw new Error(`角色名称「${name}」已存在`);
     const invalid = input.permCodes.filter((c) => !ALL_PERM_CODES.includes(c));
     if (invalid.length) throw new Error(`权限点不存在：${invalid.join(', ')}`);
-    const role: MockRole = { id: String(roleSeq++), name, description: input.description?.trim() ?? '', builtin: false, permCodes: [...new Set(input.permCodes)] };
+    const scope = normalizeScope(input.scope);
+    const role: MockRole = {
+      id: String(roleSeq++),
+      name,
+      description: input.description?.trim() ?? '',
+      builtin: false,
+      permCodes: [...new Set(input.permCodes)],
+      scope,
+    };
     roles = [...roles, role];
     return toRole(role);
   },
@@ -111,9 +172,11 @@ export const mockRbacDb = {
     if (roles.some((r) => r.id !== id && r.name === name)) throw new Error(`角色名称「${name}」已存在`);
     const invalid = input.permCodes.filter((c) => !ALL_PERM_CODES.includes(c));
     if (invalid.length) throw new Error(`权限点不存在：${invalid.join(', ')}`);
+    const scope = normalizeScope(input.scope);
     role.name = name;
     role.description = input.description?.trim() ?? '';
     role.permCodes = [...new Set(input.permCodes)];
+    role.scope = scope;
     return toRole(role);
   },
 
@@ -177,21 +240,28 @@ export const mockRbacDb = {
     if (!user || user.password !== password) throw new Error('账号或密码错误');
     const role = roles.find((r) => r.id === user.roleId);
     const perms = role ? (role.builtin ? ALL_PERM_CODES : role.permCodes) : [];
+    const scope = role ? (role.builtin ? FULL_ROLE_SCOPE : cloneScope(role.scope)) : { allBrands: false, brands: [], allChannels: false, channelIds: [] };
     return {
       username: user.username,
       role: role ? { id: role.id, name: role.name, builtin: role.builtin } : { id: '', name: '未分配角色', builtin: false },
       perms,
+      scope,
       token: `mock-token-${user.username}-${Date.now()}`,
     };
   },
 
   /** GET /api/auth/me 的 mock：从 mock token 反解 username 重新查权限（角色被改后刷新生效）。 */
-  me(token: string | null): { role: AuthUser['role']; perms: string[] } {
+  me(token: string | null): { role: AuthUser['role']; perms: string[]; scope: RoleScope } {
     const uname = usernameFromMockToken(token);
     const user = uname ? users.find((u) => u.username === uname) : undefined;
     if (!user) throw new Error('未登录或登录态已失效');
     const role = roles.find((r) => r.id === user.roleId);
     const perms = role ? (role.builtin ? ALL_PERM_CODES : role.permCodes) : [];
-    return { role: role ? { id: role.id, name: role.name, builtin: role.builtin } : { id: '', name: '未分配角色', builtin: false }, perms };
+    const scope = role ? (role.builtin ? FULL_ROLE_SCOPE : cloneScope(role.scope)) : { allBrands: false, brands: [], allChannels: false, channelIds: [] };
+    return {
+      role: role ? { id: role.id, name: role.name, builtin: role.builtin } : { id: '', name: '未分配角色', builtin: false },
+      perms,
+      scope,
+    };
   },
 };

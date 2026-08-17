@@ -29,14 +29,19 @@ const (
 	TokenAccess  = "access"
 	TokenRefresh = "refresh"
 	TokenRunner  = "runner"
+	// TokenScoped 是一次性/短时效用途令牌（如设备 CSV 导出下载链接）：只携带 Scope 声明的单一
+	// 用途，不是 access token，不能用于任何 RequirePerm 保护的接口（Middleware 只放行 TokenAccess）。
+	TokenScoped = "scoped"
 )
 
-// Claims 是 JWT 载荷。
+// Claims 是 JWT 载荷。Scope 仅 TokenScoped 类型使用，标识该令牌唯一被允许的用途
+// （如 "device_export"），校验时必须与期望值逐字匹配。
 type Claims struct {
 	UserID   uint64 `json:"uid"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
 	Type     string `json:"typ"`
+	Scope    string `json:"scope,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -103,6 +108,44 @@ func (m *Manager) sign(u *model.AdminUser, typ string, ttl time.Duration) (strin
 		return "", fmt.Errorf("签发 token 失败: %w", err)
 	}
 	return s, nil
+}
+
+// IssueScopedToken 签发一个短时效、单一用途的令牌（不挂用户身份，不是 access token）。
+// 例如设备 CSV 导出下载链接：前端先用 access token 换一个 5 分钟有效的 scoped token 拼进
+// 下载 URL，避免 access token（长效、权限更广）出现在可能被日志/浏览器历史记录的 URL 里。
+func (m *Manager) IssueScopedToken(scope string, ttl time.Duration) (string, error) {
+	now := time.Now()
+	claims := Claims{
+		Type:  TokenScoped,
+		Scope: scope,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    m.issuer,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	s, err := tok.SignedString(m.secret)
+	if err != nil {
+		return "", fmt.Errorf("签发 scoped token 失败: %w", err)
+	}
+	return s, nil
+}
+
+// VerifyScopedToken 解析并校验一个 scoped token：类型必须是 TokenScoped 且 Scope 与期望值
+// 逐字匹配，否则返回错误——普通 access token 不能冒充 scoped token 使用。
+func (m *Manager) VerifyScopedToken(tokenStr, wantScope string) (*Claims, error) {
+	claims, err := m.Parse(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Type != TokenScoped {
+		return nil, errors.New("需要 scoped token")
+	}
+	if claims.Scope != wantScope {
+		return nil, fmt.Errorf("token scope 不匹配：期望 %s", wantScope)
+	}
+	return claims, nil
 }
 
 // Parse 解析并校验 token。

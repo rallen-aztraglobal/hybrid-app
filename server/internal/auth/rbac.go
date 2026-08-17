@@ -40,18 +40,20 @@ type permCacheEntry struct {
 	at    time.Time
 }
 
-// RBAC 按用户 ID 解析「角色 + 权限集」，带 30s TTL 进程内缓存（角色/用户写操作后调用 Invalidate 使其失效）。
-// 用户不存在（已被删除）时 Resolve 返回 repo.ErrNotFound，天然实现「删号即失效」。
+// RBAC 按用户 ID 解析「角色 + 权限集 + 数据范围」，带 30s TTL 进程内缓存（角色/用户写操作后
+// 调用 Invalidate 使其失效）。用户不存在（已被删除）时 Resolve 返回 repo.ErrNotFound，
+// 天然实现「删号即失效」。
 type RBAC struct {
 	repo *repo.Repo
 
-	mu    sync.RWMutex
-	cache map[uint64]permCacheEntry
+	mu         sync.RWMutex
+	cache      map[uint64]permCacheEntry
+	scopeCache map[uint64]scopeCacheEntry // 数据范围缓存（见 scope.go），与 cache 各自独立但同一 TTL 节奏
 }
 
 // NewRBAC 创建 RBAC 解析器。
 func NewRBAC(r *repo.Repo) *RBAC {
-	return &RBAC{repo: r, cache: map[uint64]permCacheEntry{}}
+	return &RBAC{repo: r, cache: map[uint64]permCacheEntry{}, scopeCache: map[uint64]scopeCacheEntry{}}
 }
 
 // RolePermCodes 返回某角色的权限 code 切片：builtin 角色恒为 perm.AllCodes()（不依赖
@@ -113,11 +115,12 @@ func (rb *RBAC) Resolve(ctx context.Context, userID uint64) (RoleInfo, map[strin
 	return info, permSet, nil
 }
 
-// Invalidate 清空全部缓存。角色权限、用户角色发生写操作后调用；账号量级小，全量失效即可保证正确性，
-// 无需按用户精确失效。
+// Invalidate 清空全部缓存（权限集 + 数据范围）。角色权限/数据范围、用户角色发生写操作后调用；
+// 账号量级小，全量失效即可保证正确性，无需按用户精确失效。
 func (rb *RBAC) Invalidate() {
 	rb.mu.Lock()
 	rb.cache = map[uint64]permCacheEntry{}
+	rb.scopeCache = map[uint64]scopeCacheEntry{}
 	rb.mu.Unlock()
 }
 

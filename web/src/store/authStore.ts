@@ -50,8 +50,8 @@ export const useAuthStore = create<AuthState>()(
         if (!current) return;
         try {
           const me = await authApi.me();
-          // token/refreshToken/username 不变，只合并最新 role+perms。
-          set({ user: { ...current, role: me.role, perms: me.perms }, meError: null });
+          // token/refreshToken/username 不变，只合并最新 role+perms+scope。
+          set({ user: { ...current, role: me.role, perms: me.perms, scope: me.scope }, meError: null });
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
             // 账号/token 已失效（如账号被后台删除）：登出而非静默保留旧 perms，

@@ -176,7 +176,7 @@ type BuildRecord struct {
 	Status      string     `gorm:"column:status;type:varchar(16);not null" json:"status"` // queued/running/success/failed
 	Operator    string     `gorm:"column:operator;type:varchar(64)" json:"operator"`
 	VersionName string     `gorm:"column:version_name;type:varchar(32)" json:"versionName"`
-	ApkURLs     string     `gorm:"column:apk_urls;type:text" json:"apkUrls"` // JSON 数组字符串（汇总，兼容旧字段）
+	ApkURLs     string     `gorm:"column:apk_urls;type:text" json:"apkUrls"`       // JSON 数组字符串（汇总，兼容旧字段）
 	Log         string     `gorm:"column:log;type:longtext" json:"log,omitempty"`  // 完整构建日志（runner 增量上报追加）
 	LogExcerpt  string     `gorm:"column:log_excerpt;type:text" json:"logExcerpt"` // 日志摘要（末段，列表展示用）
 	StartedAt   time.Time  `gorm:"column:started_at;autoCreateTime" json:"startedAt"`
@@ -213,15 +213,24 @@ type AdminUser struct {
 
 func (AdminUser) TableName() string { return "admin_user" }
 
-// Role RBAC 角色：一组权限点。超级管理员角色内置（Builtin=true），拥有全部权限、不可编辑/删除
-// （鉴权解析时对 builtin 角色恒等取 perm.AllCodes()，不依赖 role_permission 落库，见 internal/auth.RBAC）。
+// Role RBAC 角色：一组权限点 + 一个数据范围（可见哪些品牌/渠道）。超级管理员角色内置
+// （Builtin=true），拥有全部权限与全部数据范围、不可编辑/删除（鉴权解析时对 builtin 角色恒等取
+// perm.AllCodes() + 全量 scope，不依赖 role_permission/role_brand/role_channel 落库，
+// 见 internal/auth.RBAC）。
+//
+// ScopeAllBrands/ScopeAllChannels 是数据权限（docs/admin/10-rbac.md「数据权限」节）：默认 true
+// （全部，含以后新建的品牌/渠道，是「标志位」而不是当前存量的快照）；false 时分别按 role_brand/
+// role_channel 关联表生效，且渠道范围与品牌范围求交（见 auth.RBAC.RoleEffectiveScope）。
+// 默认 true 保证「已有角色默认全部范围，不改变现状行为」——迁移只加列、AutoMigrate 同理。
 type Role struct {
-	ID          uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name        string    `gorm:"column:name;type:varchar(64);not null;uniqueIndex" json:"name"`
-	Description string    `gorm:"column:description;type:varchar(255)" json:"description"`
-	Builtin     bool      `gorm:"column:builtin;not null;default:false" json:"builtin"`
-	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
-	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+	ID               uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name             string    `gorm:"column:name;type:varchar(64);not null;uniqueIndex" json:"name"`
+	Description      string    `gorm:"column:description;type:varchar(255)" json:"description"`
+	Builtin          bool      `gorm:"column:builtin;not null;default:false" json:"builtin"`
+	ScopeAllBrands   bool      `gorm:"column:scope_all_brands;not null;default:true" json:"scopeAllBrands"`
+	ScopeAllChannels bool      `gorm:"column:scope_all_channels;not null;default:true" json:"scopeAllChannels"`
+	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
 
 func (Role) TableName() string { return "role" }
@@ -234,6 +243,27 @@ type RolePermission struct {
 }
 
 func (RolePermission) TableName() string { return "role_permission" }
+
+// RoleBrand 角色-品牌数据范围关联。仅当 role.scope_all_brands=false 时生效
+// （见 Role 与 auth.RBAC.RoleEffectiveScope 注释）。(role_id, brand_code) 联合唯一。
+type RoleBrand struct {
+	ID        uint64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	RoleID    uint64 `gorm:"column:role_id;not null;uniqueIndex:uk_role_brand" json:"roleId"`
+	BrandCode string `gorm:"column:brand_code;type:varchar(16);not null;uniqueIndex:uk_role_brand" json:"brandCode"`
+}
+
+func (RoleBrand) TableName() string { return "role_brand" }
+
+// RoleChannel 角色-渠道数据范围关联。仅当 role.scope_all_channels=false 时生效；
+// 有效范围计算时还会与品牌范围求交（品牌范围收窄后，这里勾选的渠道若不在允许品牌内会自动失效，
+// 不需要额外清理这张表，见 auth.RBAC.RoleEffectiveScope）。(role_id, channel_id) 联合唯一。
+type RoleChannel struct {
+	ID        uint64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	RoleID    uint64 `gorm:"column:role_id;not null;uniqueIndex:uk_role_channel" json:"roleId"`
+	ChannelID uint64 `gorm:"column:channel_id;not null;uniqueIndex:uk_role_channel" json:"channelId"`
+}
+
+func (RoleChannel) TableName() string { return "role_channel" }
 
 // AuditLog 审计日志。Detail 用 JSON 字符串。
 type AuditLog struct {
@@ -260,6 +290,8 @@ func AllModels() []any {
 		&BuildArtifact{},
 		&Role{},
 		&RolePermission{},
+		&RoleBrand{},
+		&RoleChannel{},
 		&AdminUser{},
 		&AuditLog{},
 		// 推送功能（ADR-0012）
@@ -272,5 +304,7 @@ func AllModels() []any {
 		&ListingDomain{},
 		&ListingGate{},
 		&ListingGateLog{},
+		// 渠道设备上报
+		&ChannelDevice{},
 	}
 }

@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import {
   BellIcon,
   ClockIcon,
+  DeviceIcon,
   GlobeIcon,
   GridIcon,
   LayersIcon,
@@ -19,6 +20,8 @@ import {
   PackageIcon,
   SearchIcon,
   SettingsIcon,
+  ShieldIcon,
+  UsersIcon,
 } from './icons';
 
 interface NavItem {
@@ -35,9 +38,12 @@ const META: Record<string, { title: string; crumb: string }> = {
   '/listings': { title: '上架包管理', crumb: '运营 / ColorStack / DeckTallyPro 等已上架应用 + AB 面网关' },
   '/domains': { title: '域名配置', crumb: '运营 / 主域名 + 备用域名 + 健康巡检' },
   '/push': { title: '推送管理', crumb: '运营 / FCM 推送活动编辑、渠道批量发送、历史查看' },
+  '/devices': { title: '设备管理', crumb: '运营 / 渠道包设备注册流水查看与导出' },
   '/pack': { title: '打包中心', crumb: '交付 / 拉取后台配置并跨平台打包' },
   '/builds': { title: '构建记录', crumb: '交付 / CLI 回传的打包历史' },
   '/settings': { title: '系统设置', crumb: '系统 / 账号权限与探针配置' },
+  '/roles': { title: '角色管理', crumb: '系统 / 权限点分组、角色增删改' },
+  '/users': { title: '用户管理', crumb: '系统 / 账号增删改、重置密码' },
   '/no-access': { title: '渠道中台', crumb: '当前账号未分配任何页面权限' },
 };
 
@@ -57,9 +63,12 @@ export function AppShell() {
     { to: '/listings', label: '上架包', icon: LayersIcon, group: '运营', perm: PERM.PAGE_LISTINGS },
     { to: '/domains', label: '域名配置', icon: GlobeIcon, group: '运营', perm: PERM.PAGE_DOMAINS },
     { to: '/push', label: '推送管理', icon: MegaphoneIcon, group: '运营', perm: PERM.PAGE_PUSH },
+    { to: '/devices', label: '设备管理', icon: DeviceIcon, group: '运营', perm: PERM.PAGE_DEVICES },
     { to: '/pack', label: '打包中心', icon: PackageIcon, group: '交付', perm: PERM.PAGE_PACK },
     { to: '/builds', label: '构建记录', icon: ClockIcon, group: '交付', perm: PERM.PAGE_BUILDS },
     { to: '/settings', label: '系统设置', icon: SettingsIcon, group: '系统', perm: PERM.PAGE_SETTINGS },
+    { to: '/roles', label: '角色管理', icon: ShieldIcon, group: '系统', perm: PERM.ROLE_MANAGE },
+    { to: '/users', label: '用户管理', icon: UsersIcon, group: '系统', perm: PERM.USER_MANAGE },
   ];
   // 侧边栏按 page:* 权限过滤（10-rbac.md：无权限的路由菜单不展示）。
   const items = allItems.filter((it) => hasPerm(it.perm));

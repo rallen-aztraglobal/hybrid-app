@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   brandApi,
   buildApi,
   channelApi,
+  deviceApi,
   listingApi,
   listingCampaignApi,
   permsApi,
@@ -17,6 +18,7 @@ import type {
   BrandCode,
   BuildJobRequest,
   ChannelInput,
+  DeviceFilter,
   DomainEntry,
   ListingCampaignInput,
   ListingCampaignSendResult,
@@ -51,6 +53,8 @@ export const qk = {
   permsCatalog: ['perms', 'catalog'] as const,
   roles: ['roles'] as const,
   users: ['users'] as const,
+  devices: (filter: DeviceFilter) =>
+    ['devices', filter.applicationId ?? '', filter.from ?? '', filter.to ?? '', filter.page, filter.pageSize] as const,
 };
 
 export function useBrands() {
@@ -395,5 +399,18 @@ export function useDeleteUser() {
       void qc.invalidateQueries({ queryKey: qk.users });
       void qc.invalidateQueries({ queryKey: qk.roles });
     },
+  });
+}
+
+// =========================================================================
+// 设备管理（GET /api/devices）
+// =========================================================================
+
+/** 设备列表（分页 + 筛选）；keepPreviousData 让翻页时旧数据先留在屏幕上，不闪白。 */
+export function useDevices(filter: DeviceFilter) {
+  return useQuery({
+    queryKey: qk.devices(filter),
+    queryFn: () => deviceApi.listDevices(filter),
+    placeholderData: keepPreviousData,
   });
 }

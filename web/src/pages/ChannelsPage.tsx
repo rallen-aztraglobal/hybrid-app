@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
 import { BRAND_META } from '@/lib/brands';
 import type { Channel, ChannelStatus } from '@/lib/types';
+import { friendlyNotFoundMessage } from '@/lib/api';
 import { BrandTabs } from '@/components/BrandTabs';
 import { ChannelCard } from '@/components/ChannelCard';
 import { ChannelDrawer } from '@/components/ChannelDrawer';
@@ -85,6 +86,16 @@ export function ChannelsPage() {
     [visible],
   );
 
+  function handleArchive(c: Channel) {
+    archive.mutate(c.id, {
+      onError: (err) => {
+        // 越界渠道后端故意返回 404（10-rbac.md「数据权限」）：不能照搬「不存在」类文案，
+        // 更常见的原因是角色数据范围被收紧了，而不是数据真的被删。
+        alert(friendlyNotFoundMessage(err, '归档失败'));
+      },
+    });
+  }
+
   return (
     <section>
       {brands && (
@@ -150,7 +161,7 @@ export function ChannelsPage() {
                 channel={c}
                 brand={brand}
                 onEdit={() => openEdit(c.id)}
-                onArchive={() => archive.mutate(c.id)}
+                onArchive={() => handleArchive(c)}
               />
             ))}
         </div>

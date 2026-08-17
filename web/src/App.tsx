@@ -11,6 +11,9 @@ import { PackPage } from '@/pages/PackPage';
 import { BuildsPage } from '@/pages/BuildsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { PushPage } from '@/pages/PushPage';
+import { DevicesPage } from '@/pages/DevicesPage';
+import { RolesPage } from '@/pages/RolesPage';
+import { UsersPage } from '@/pages/UsersPage';
 import { Button } from '@/components/ui';
 
 /** 路由路径 → 页面组件（与 ROUTE_PERM_ORDER 的 path 一一对应）。 */
@@ -19,9 +22,12 @@ const PAGES: Record<string, JSX.Element> = {
   '/listings': <ListingsPage />,
   '/domains': <DomainsPage />,
   '/push': <PushPage />,
+  '/devices': <DevicesPage />,
   '/pack': <PackPage />,
   '/builds': <BuildsPage />,
   '/settings': <SettingsPage />,
+  '/roles': <RolesPage />,
+  '/users': <UsersPage />,
 };
 
 /**
@@ -51,7 +57,7 @@ function NoAccessPage() {
     <div className="grid place-items-center h-[60vh] text-center px-6">
       <div className="max-w-[420px]">
         <div className="text-[15px] font-bold text-ink mb-2">当前账号暂无可用页面</div>
-        <div className="text-[13px] text-muted">未分配任何页面权限，请联系管理员在「系统设置 · 角色管理」中调整。</div>
+        <div className="text-[13px] text-muted">未分配任何页面权限，请联系管理员在「系统 · 角色管理」中调整。</div>
         {meError && (
           <div className="mt-3 text-[12.5px] text-down">
             权限信息刷新失败：{meError}（已保留上次已知权限，可能并非真的无权限）

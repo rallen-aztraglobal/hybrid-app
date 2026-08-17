@@ -8,6 +8,7 @@ import type { Brand, DomainEntry } from '@/lib/types';
 import { useSaveBrandDomains } from '@/hooks/queries';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
+import { friendlyNotFoundMessage } from '@/lib/api';
 import { validateDomains } from '@/lib/validation';
 import { DomainEditor } from './DomainEditor';
 import { Button } from './ui';
@@ -17,6 +18,7 @@ export function BrandDomainsCard({ brand }: { brand: Brand }) {
   const canEdit = useAuthStore((s) => s.hasPerm(PERM.DOMAIN_EDIT));
   const [domains, setDomains] = useState<DomainEntry[]>(brand.domains);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // 服务端数据变化时同步本地编辑态
   useEffect(() => {
@@ -26,9 +28,15 @@ export function BrandDomainsCard({ brand }: { brand: Brand }) {
   const errors = validateDomains(domains);
 
   async function onSave() {
-    await save.mutateAsync(domains.filter((d) => d.url.trim()));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2200);
+    setSaveError(null);
+    try {
+      await save.mutateAsync(domains.filter((d) => d.url.trim()));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2200);
+    } catch (err) {
+      // 品牌越界后端故意返回 404（10-rbac.md「数据权限」）：不能照搬「不存在」类文案。
+      setSaveError(friendlyNotFoundMessage(err, '保存失败'));
+    }
   }
 
   return (
@@ -74,6 +82,8 @@ export function BrandDomainsCard({ brand }: { brand: Brand }) {
           ))}
         </div>
       )}
+
+      {saveError && <div className="mt-2 text-[12px] text-down">{saveError}</div>}
 
       {saved && (
         <div className="mt-2 text-[12px] text-muted">已生成 CDN 配置快照，APK 下次启动生效</div>

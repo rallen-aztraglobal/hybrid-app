@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
 )
 
@@ -84,7 +85,7 @@ func TestListingAndChannelCampaignListsSeparate(t *testing.T) {
 	if len(lc.ListingIDs) != 1 || lc.ListingIDs[0] != l.ID {
 		t.Errorf("上架包活动应回带 listingIds=[%d]，实际 %v", l.ID, lc.ListingIDs)
 	}
-	if _, err := svc.CreateCampaign(ctx, PushCampaignInput{
+	if _, err := svc.CreateCampaign(ctx, auth.FullScope(), PushCampaignInput{
 		Name: "渠道", Title: "t", Body: "b", TargetAppIDs: []string{"com.x.y"},
 	}, "tester"); err != nil {
 		t.Fatal(err)
@@ -100,7 +101,7 @@ func TestListingAndChannelCampaignListsSeparate(t *testing.T) {
 	}
 
 	// 渠道列表只含渠道活动（不含上架包）。
-	channel, err := svc.ListCampaigns(ctx, "")
+	channel, err := svc.ListCampaigns(ctx, "", auth.FullScope())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +131,7 @@ func TestListingCampaignValidation(t *testing.T) {
 	}
 
 	// 渠道活动不能走上架包发送端点。
-	ch, err := svc.CreateCampaign(ctx, PushCampaignInput{
+	ch, err := svc.CreateCampaign(ctx, auth.FullScope(), PushCampaignInput{
 		Name: "渠道活动", Title: "t", Body: "b", TargetAppIDs: []string{"com.x.y"},
 	}, "tester")
 	if err != nil {

@@ -47,10 +47,10 @@ func New(cfg *config.Config, r *repo.Repo, st storage.Storage) *Service {
 			fcmRouteKeyListings: cfg.FirebaseSAListings,
 		},
 		map[string]string{
-			"ap":  cfg.FirebaseProjectAP,
-			"bp":  cfg.FirebaseProjectBP,
-			"gp":  cfg.FirebaseProjectGP,
-			"gp2": cfg.FirebaseProjectGP2,
+			"ap":                cfg.FirebaseProjectAP,
+			"bp":                cfg.FirebaseProjectBP,
+			"gp":                cfg.FirebaseProjectGP,
+			"gp2":               cfg.FirebaseProjectGP2,
 			fcmRouteKeyListings: cfg.FirebaseProjectListings,
 		},
 	)

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/domainutil"
 	"github.com/hybrid-app/server/internal/model"
 )
@@ -153,9 +154,12 @@ func (s *Service) effectiveListingDomains(ctx context.Context, l *model.ListingA
 // 管理面：CRUD
 // ————————————————————————————————————————————————————————————
 
-// ListListings 列表（含品牌/域名/网关关联）。
-func (s *Service) ListListings(ctx context.Context, platform, status, q string) ([]model.ListingApp, error) {
-	return s.repo.ListListings(ctx, repoListingFilter(platform, status, q))
+// ListListings 列表（含品牌/域名/网关关联），按调用者数据范围过滤（数据权限强制点，见
+// docs/admin/10-rbac.md）。上架包只有品牌维度，角色的渠道范围（scope_all_channels）对它不生效。
+func (s *Service) ListListings(ctx context.Context, scope auth.Scope, platform, status, q string) ([]model.ListingApp, error) {
+	f := repoListingFilter(platform, status, q)
+	applyListingScope(&f, scope)
+	return s.repo.ListListings(ctx, f)
 }
 
 // GetListing 详情。

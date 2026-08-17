@@ -234,6 +234,14 @@ definitions:
     type: object
   github_com_hybrid-app_server_internal_service.RoleInput:
     properties:
+      brandCodes:
+        items:
+          type: string
+        type: array
+      channelIds:
+        items:
+          type: integer
+        type: array
       description:
         type: string
       name:
@@ -242,6 +250,10 @@ definitions:
         items:
           type: string
         type: array
+      scopeAllBrands:
+        type: boolean
+      scopeAllChannels:
+        type: boolean
     type: object
   github_com_hybrid-app_server_internal_service.UpdateChannelInput:
     properties:
@@ -335,6 +347,15 @@ definitions:
       username:
         type: string
     type: object
+  internal_handler.exportDevicesByIDsReq:
+    properties:
+      format:
+        type: string
+      ids:
+        items:
+          type: integer
+        type: array
+    type: object
   internal_handler.gateReq:
     properties:
       bundleId:
@@ -368,12 +389,31 @@ definitions:
         type: array
       role:
         $ref: '#/definitions/internal_handler.roleSummary'
+      scope:
+        $ref: '#/definitions/internal_handler.scopeSummary'
       username:
         type: string
     type: object
   internal_handler.refreshReq:
     properties:
       refreshToken:
+        type: string
+    type: object
+  internal_handler.registerDeviceReq:
+    properties:
+      adid:
+        type: string
+      appId:
+        type: string
+      deviceKey:
+        type: string
+      deviceName:
+        type: string
+      gaid:
+        type: string
+      oaid:
+        type: string
+      palcode:
         type: string
     type: object
   internal_handler.registerListingTokenReq:
@@ -422,6 +462,21 @@ definitions:
       scheduledAt:
         description: ISO8601
         type: string
+    type: object
+  internal_handler.scopeSummary:
+    properties:
+      allBrands:
+        type: boolean
+      allChannels:
+        type: boolean
+      brands:
+        items:
+          type: string
+        type: array
+      channelIds:
+        items:
+          type: integer
+        type: array
     type: object
   internal_handler.sendCampaignReq:
     properties:
@@ -494,6 +549,8 @@ definitions:
         type: string
       role:
         $ref: '#/definitions/internal_handler.roleSummary'
+      scope:
+        $ref: '#/definitions/internal_handler.scopeSummary'
       username:
         type: string
     type: object
@@ -557,6 +614,27 @@ paths:
       summary: 运行时配置（APK 公开消费，强缓存）— 返回该渠道最新域名清单 + 探测端点
       tags:
       - app
+  /api/app/device/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备上报请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.registerDeviceReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      summary: APK 上报设备信息（公开端点）
+      tags:
+      - device
   /api/app/google-services:
     get:
       description: 返回该品牌合并的 google-services.json 原始 JSON 字节（非 Envelope）。未上传则 404；CLI
@@ -735,7 +813,7 @@ paths:
             $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
       security:
       - BearerAuth: []
-      summary: 大渠道列表（含渠道计数、accent 色、默认域名）
+      summary: 大渠道列表（含渠道计数、accent 色、默认域名；按调用者数据范围过滤）
       tags:
       - brands
   /api/brands/{code}/domains:
@@ -1046,7 +1124,7 @@ paths:
             $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
       security:
       - BearerAuth: []
-      summary: 渠道列表（分页/搜索/筛选）
+      summary: 渠道列表（分页/搜索/筛选；按调用者数据范围过滤）
       tags:
       - channels
     post:
@@ -1088,7 +1166,7 @@ paths:
             $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
       security:
       - BearerAuth: []
-      summary: 软删除渠道（置 archived）
+      summary: 软删除渠道（置 archived；越界返回 404）
       tags:
       - channels
     get:
@@ -1107,7 +1185,7 @@ paths:
             $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
       security:
       - BearerAuth: []
-      summary: 渠道详情
+      summary: 渠道详情（越界返回 404，不泄露存在性）
       tags:
       - channels
     put:
@@ -1134,7 +1212,7 @@ paths:
             $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
       security:
       - BearerAuth: []
-      summary: 修改渠道
+      summary: 修改渠道（越界返回 404）
       tags:
       - channels
   /api/channels/{id}/domains:
@@ -1213,7 +1291,7 @@ paths:
             $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
       security:
       - BearerAuth: []
-      summary: 渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」）
+      summary: 渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」；越界返回 404）
       tags:
       - channels
   /api/channels/{id}/res.zip:
@@ -1233,7 +1311,7 @@ paths:
             type: file
       security:
       - BearerAuth: []
-      summary: 下载整套 res 资源 zip（CLI 用）
+      summary: 下载整套 res 资源 zip（CLI/构建机用；越界返回 404，runner 不受数据权限约束）
       tags:
       - icon
   /api/channels/{id}/splash:
@@ -1263,6 +1341,138 @@ paths:
       summary: 上传 splash 源图
       tags:
       - icon
+  /api/devices:
+    get:
+      parameters:
+      - description: 按 applicationId 精确筛选
+        in: query
+        name: applicationId
+        type: string
+      - description: 起始日期 YYYY-MM-DD（含）
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD（含）
+        in: query
+        name: to
+        type: string
+      - description: 页码，默认 1
+        in: query
+        name: page
+        type: integer
+      - description: 每页条数，默认 50，最大 200
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 设备列表（分页/筛选，page:devices）
+      tags:
+      - device
+  /api/devices/export:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: id 列表（最多 1000 个）
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.exportDevicesByIDsReq'
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: 按勾选 id 导出设备 CSV（device:export，同构流式响应）
+      tags:
+      - device
+  /api/devices/export-token:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 签发设备 CSV 导出下载令牌（device:export，5 分钟有效）
+      tags:
+      - device
+  /api/devices/export.csv:
+    get:
+      parameters:
+      - description: GET /api/devices/export-token 换来的令牌
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: 按 applicationId 精确筛选
+        in: query
+        name: applicationId
+        type: string
+      - description: 起始日期 YYYY-MM-DD（含）
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD（含）
+        in: query
+        name: to
+        type: string
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      summary: 设备 CSV 导出（按筛选条件流式下载；用 export-token 换来的一次性令牌鉴权，不接受 access token）
+      tags:
+      - device
+  /api/devices/export.xlsx:
+    get:
+      parameters:
+      - description: GET /api/devices/export-token 换来的令牌
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: 按 applicationId 精确筛选
+        in: query
+        name: applicationId
+        type: string
+      - description: 起始日期 YYYY-MM-DD（含）
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD（含）
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      summary: 设备 XLSX 导出（美化表头/列宽/冻结首行；按筛选条件下载，鉴权同 export.csv）
+      tags:
+      - device
   /api/listings:
     get:
       parameters:

@@ -50,7 +50,12 @@ func roleIDsByName(t *testing.T, svc *Service, ctx context.Context) (superID, op
 }
 
 // TestSeededRolePermCodes 验证 EnsureRBAC 建的三个初始角色权限集符合契约：
-// 超级管理员=全量 catalog；运营=全部 route+除系统设置三个 button 外的全部 button；只读=仅全部 route。
+// 超级管理员=全量 catalog；运营=全部 route+全部 button 减去 perm.SystemManageCodes()；
+// 只读=全部 route 减去 perm.SystemManageCodes()。
+//
+// 陷阱回归：role:manage/user:manage 的 kind 是 route，会被 perm.RouteCodes() 收进去——
+// 只读角色若直接等于 perm.RouteCodes() 会自动白捡这两个敏感管理权限，必须显式排除
+// （见 perm.SystemManageCodes 与 seed.viewerDefaultPerms 的注释）。
 func TestSeededRolePermCodes(t *testing.T) {
 	svc, _ := newTestService(t)
 	ctx := context.Background()
@@ -72,6 +77,14 @@ func TestSeededRolePermCodes(t *testing.T) {
 		t.Error("超级管理员应 builtin=true")
 	}
 	assertSameCodes(t, "超级管理员", super.PermCodes, perm.AllCodes())
+	// 超管不受陷阱影响：应仍能看到 role:manage / user:manage（否则超管自己都进不去角色/用户管理）。
+	for _, c := range []string{perm.RoleManage, perm.UserManage, perm.StoreManage} {
+		if !contains(super.PermCodes, c) {
+			t.Errorf("超级管理员应包含 %q", c)
+		}
+	}
+
+	systemManage := perm.SystemManageCodes()
 
 	op, ok := byName["运营"]
 	if !ok {
@@ -80,25 +93,102 @@ func TestSeededRolePermCodes(t *testing.T) {
 	if op.Builtin {
 		t.Error("运营不应 builtin")
 	}
-	wantOp := append([]string{}, perm.RouteCodes()...)
-	excluded := map[string]bool{perm.StoreManage: true, perm.UserManage: true, perm.RoleManage: true}
+	excluded := map[string]bool{}
+	for _, c := range systemManage {
+		excluded[c] = true
+	}
+	var wantOp []string
+	for _, c := range perm.RouteCodes() {
+		if !excluded[c] {
+			wantOp = append(wantOp, c)
+		}
+	}
 	for _, c := range perm.ButtonCodes() {
 		if !excluded[c] {
 			wantOp = append(wantOp, c)
 		}
 	}
 	assertSameCodes(t, "运营", op.PermCodes, wantOp)
-	for _, c := range []string{perm.StoreManage, perm.UserManage, perm.RoleManage} {
-		if contains(op.PermCodes, c) {
-			t.Errorf("运营不应含系统设置权限 %q", c)
-		}
-	}
 
 	viewer, ok := byName["只读"]
 	if !ok {
 		t.Fatal("应存在「只读」角色")
 	}
-	assertSameCodes(t, "只读", viewer.PermCodes, perm.RouteCodes())
+	var wantViewer []string
+	for _, c := range perm.RouteCodes() {
+		if !excluded[c] {
+			wantViewer = append(wantViewer, c)
+		}
+	}
+	assertSameCodes(t, "只读", viewer.PermCodes, wantViewer)
+
+	// 核心断言（陷阱回归）：运营、只读的默认权限集都不含 role:manage / user:manage / store:manage。
+	for _, roleView := range []RoleView{op, viewer} {
+		for _, c := range []string{perm.RoleManage, perm.UserManage, perm.StoreManage} {
+			if contains(roleView.PermCodes, c) {
+				t.Errorf("%s 不应包含敏感管理权限 %q", roleView.Name, c)
+			}
+		}
+	}
+}
+
+// TestSystemManageCodesCatalogShape 验证 role:manage / user:manage 在 catalog 里的形状：
+// kind=route（各自一个独立菜单的进入权，不再是「系统设置」页面内的按钮），且分别落在
+// 「角色管理」「用户管理」独立模块下，而不是 settings 模块（前端把这两个从系统设置拆成
+// 独立侧边栏菜单）；store:manage 仍留在 settings 模块、kind=button。
+func TestSystemManageCodesCatalogShape(t *testing.T) {
+	byCode := map[string]perm.Perm{}
+	moduleByCode := map[string]string{}
+	for _, m := range perm.Catalog() {
+		for _, p := range m.Perms {
+			byCode[p.Code] = p
+			moduleByCode[p.Code] = m.Module
+		}
+	}
+
+	roleManage, ok := byCode[perm.RoleManage]
+	if !ok {
+		t.Fatal("catalog 应含 role:manage")
+	}
+	if roleManage.Kind != perm.KindRoute {
+		t.Errorf("role:manage 的 kind 应为 route，实际 %q", roleManage.Kind)
+	}
+	if moduleByCode[perm.RoleManage] == "settings" {
+		t.Error("role:manage 不应再归在 settings 模块下（已拆成独立菜单）")
+	}
+
+	userManage, ok := byCode[perm.UserManage]
+	if !ok {
+		t.Fatal("catalog 应含 user:manage")
+	}
+	if userManage.Kind != perm.KindRoute {
+		t.Errorf("user:manage 的 kind 应为 route，实际 %q", userManage.Kind)
+	}
+	if moduleByCode[perm.UserManage] == "settings" {
+		t.Error("user:manage 不应再归在 settings 模块下（已拆成独立菜单）")
+	}
+	if moduleByCode[perm.RoleManage] == moduleByCode[perm.UserManage] {
+		t.Error("role:manage 与 user:manage 应分属两个不同的独立模块")
+	}
+
+	storeManage, ok := byCode[perm.StoreManage]
+	if !ok {
+		t.Fatal("catalog 应含 store:manage")
+	}
+	if storeManage.Kind != perm.KindButton {
+		t.Errorf("store:manage 的 kind 应仍为 button，实际 %q", storeManage.Kind)
+	}
+	if moduleByCode[perm.StoreManage] != "settings" {
+		t.Errorf("store:manage 应仍归在 settings 模块下，实际 %q", moduleByCode[perm.StoreManage])
+	}
+
+	// code 字符串本身不应因这次拆分而改变（存量 role_permission 数据不能失效）。
+	if perm.RoleManage != "role:manage" {
+		t.Errorf("role:manage 的 code 字符串不应变化，实际 %q", perm.RoleManage)
+	}
+	if perm.UserManage != "user:manage" {
+		t.Errorf("user:manage 的 code 字符串不应变化，实际 %q", perm.UserManage)
+	}
 }
 
 // TestRoleCRUDValidation 覆盖角色 CRUD 的校验规则（唯一契约 docs/admin/10-rbac.md）。
@@ -470,6 +560,222 @@ func TestDeleteRoleLeastPrivilege(t *testing.T) {
 
 	if err := svc.DeleteRole(ctx, root, biggerRole.ID); err != nil {
 		t.Errorf("超管删除角色不应受权限子集约束: %v", err)
+	}
+}
+
+// TestRoleScopeCRUD 覆盖角色数据范围的创建/更新/持久化正确性（含 GORM 零值陷阱回归：
+// Role.ScopeAllBrands/ScopeAllChannels 带 gorm:"default:true"，结构体 Create 对 false 零值会
+// 静默回填成 true，repo.CreateRole 必须堵住这个陷阱，见该函数注释）。
+func TestRoleScopeCRUD(t *testing.T) {
+	svc, r := newTestService(t)
+	ctx := context.Background()
+	superID, _, _ := roleIDsByName(t, svc, ctx)
+	root := mustDirectUser(t, r, "root", superID)
+
+	ap001, err := svc.CreateChannel(ctx, CreateChannelInput{BrandCode: "ap", FlavorName: "ap001", PalCode: "P1", AppName: "A"})
+	if err != nil {
+		t.Fatalf("建渠道失败: %v", err)
+	}
+
+	// 创建：指定品牌范围(仅 ap) + 指定渠道范围(仅 ap001)。
+	role, err := svc.CreateRole(ctx, root, RoleInput{
+		Name: "范围角色", PermCodes: []string{perm.PageChannels},
+		ScopeAllBrands: false, BrandCodes: []string{"ap"},
+		ScopeAllChannels: false, ChannelIDs: []uint64{ap001.ID},
+	})
+	if err != nil {
+		t.Fatalf("创建限定范围角色失败: %v", err)
+	}
+	if role.ScopeAllBrands {
+		t.Error("scopeAllBrands 应为 false（GORM 零值陷阱回归：不应被悄悄存成 true）")
+	}
+	if role.ScopeAllChannels {
+		t.Error("scopeAllChannels 应为 false（同上）")
+	}
+	if len(role.BrandCodes) != 1 || role.BrandCodes[0] != "ap" {
+		t.Errorf("brandCodes 应为 [ap]，实际 %v", role.BrandCodes)
+	}
+	if len(role.ChannelIDs) != 1 || role.ChannelIDs[0] != ap001.ID {
+		t.Errorf("channelIds 应为 [%d]，实际 %v", ap001.ID, role.ChannelIDs)
+	}
+
+	// ListRoles 返回的视图也应带上同样的范围（不是只有单条 CreateRole 的返回值对，列表也要对）。
+	list, err := svc.ListRoles(ctx)
+	if err != nil {
+		t.Fatalf("列角色失败: %v", err)
+	}
+	found := false
+	for _, v := range list {
+		if v.ID == role.ID {
+			found = true
+			if v.ScopeAllBrands || len(v.BrandCodes) != 1 || v.BrandCodes[0] != "ap" {
+				t.Errorf("列表里的角色范围不符: %+v", v)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("列表里应能找到刚创建的角色")
+	}
+
+	// 更新：改成全量品牌范围 + 指定渠道范围清空（切回「全部」）。
+	updated, err := svc.UpdateRole(ctx, root, role.ID, RoleInput{
+		Name: "范围角色", PermCodes: []string{perm.PageChannels},
+		ScopeAllBrands: true, ScopeAllChannels: true,
+	})
+	if err != nil {
+		t.Fatalf("更新角色范围失败: %v", err)
+	}
+	if !updated.ScopeAllBrands || !updated.ScopeAllChannels {
+		t.Errorf("更新后应为全量范围，实际 %+v", updated)
+	}
+	if len(updated.BrandCodes) != 0 || len(updated.ChannelIDs) != 0 {
+		t.Errorf("全量范围下 brandCodes/channelIds 应为空，实际 %v / %v", updated.BrandCodes, updated.ChannelIDs)
+	}
+}
+
+// TestRoleScopeInputValidation 验证角色数据范围入参校验：不存在的品牌 code / 渠道 id 应被拒绝；
+// 渠道范围与品牌范围的求交语义（品牌未勾选时，该品牌下的渠道 id 静默从有效范围里剔除，不报错）。
+func TestRoleScopeInputValidation(t *testing.T) {
+	svc, r := newTestService(t)
+	ctx := context.Background()
+	superID, _, _ := roleIDsByName(t, svc, ctx)
+	root := mustDirectUser(t, r, "root", superID)
+
+	if _, err := svc.CreateRole(ctx, root, RoleInput{
+		Name: "坏品牌角色", ScopeAllBrands: false, BrandCodes: []string{"zz-not-exist"},
+	}); err == nil {
+		t.Error("不存在的品牌 code 应被拒绝")
+	}
+	if _, err := svc.CreateRole(ctx, root, RoleInput{
+		Name: "坏渠道角色", ScopeAllChannels: false, ChannelIDs: []uint64{999999},
+	}); err == nil {
+		t.Error("不存在的渠道 id 应被拒绝")
+	}
+
+	// 求交：渠道属于 bp，但品牌范围只给了 ap —— 不报错，渠道范围里这条静默失效。
+	bpCh, err := svc.CreateChannel(ctx, CreateChannelInput{BrandCode: "bp", FlavorName: "bp001", PalCode: "P1", AppName: "B"})
+	if err != nil {
+		t.Fatalf("建渠道失败: %v", err)
+	}
+	role, err := svc.CreateRole(ctx, root, RoleInput{
+		Name: "求交角色", ScopeAllBrands: false, BrandCodes: []string{"ap"},
+		ScopeAllChannels: false, ChannelIDs: []uint64{bpCh.ID},
+	})
+	if err != nil {
+		t.Fatalf("求交场景不应报错: %v", err)
+	}
+	if len(role.ChannelIDs) != 0 {
+		t.Errorf("bp 渠道不在允许品牌(ap)内，求交后应被剔除，实际 channelIds=%v", role.ChannelIDs)
+	}
+}
+
+// TestRoleScopeLeastPrivilege 覆盖数据权限的最小权限约束（docs/admin/10-rbac.md）：
+// 非超管建/改角色时数据范围必须 ⊆ 自身范围；两个「全部」标志位非超管不能授出。
+func TestRoleScopeLeastPrivilege(t *testing.T) {
+	svc, r := newTestService(t)
+	ctx := context.Background()
+	superID, _, _ := roleIDsByName(t, svc, ctx)
+	root := mustDirectUser(t, r, "root", superID)
+
+	apCh, err := svc.CreateChannel(ctx, CreateChannelInput{BrandCode: "ap", FlavorName: "ap777", PalCode: "P1", AppName: "A"})
+	if err != nil {
+		t.Fatalf("建渠道失败: %v", err)
+	}
+
+	// 调用者角色：仅 ap 品牌范围（全部渠道）。
+	apOnlyRole, err := svc.CreateRole(ctx, root, RoleInput{
+		Name: "ap专员", PermCodes: []string{perm.PageChannels, perm.RoleManage},
+		ScopeAllBrands: false, BrandCodes: []string{"ap"}, ScopeAllChannels: true,
+	})
+	if err != nil {
+		t.Fatalf("创建 ap 专员角色失败: %v", err)
+	}
+	apCaller := mustDirectUser(t, r, "ap-caller", apOnlyRole.ID)
+
+	// 不能建一个 ap+bp 的角色（超出自身品牌范围）。
+	if _, err := svc.CreateRole(ctx, apCaller, RoleInput{
+		Name: "越权ap+bp", PermCodes: []string{perm.PageChannels},
+		ScopeAllBrands: false, BrandCodes: []string{"ap", "bp"}, ScopeAllChannels: true,
+	}); err == nil {
+		t.Error("非超管不能建一个数据范围超出自身的角色（多了 bp）")
+	}
+	// 不能建一个 scopeAllBrands=true 的角色（自己不是「全部」，不能把「全部」标志位授出去）。
+	if _, err := svc.CreateRole(ctx, apCaller, RoleInput{
+		Name: "越权全量品牌", PermCodes: []string{perm.PageChannels},
+		ScopeAllBrands: true, ScopeAllChannels: true,
+	}); err == nil {
+		t.Error("非超管(非全量品牌范围)不能建一个 scopeAllBrands=true 的角色")
+	}
+	// 不能建一个 scopeAllChannels=true 但品牌超出自身的角色。
+	if _, err := svc.CreateRole(ctx, apCaller, RoleInput{
+		Name: "越权渠道全量但品牌超出", PermCodes: []string{perm.PageChannels},
+		ScopeAllBrands: false, BrandCodes: []string{"bp"}, ScopeAllChannels: true,
+	}); err == nil {
+		t.Error("非超管不能建一个品牌超出自身范围的角色（即便渠道范围是全量）")
+	}
+	// 可以建一个 ap 子集（甚至更窄：仅 ap777 一个渠道）的角色。
+	subRole, err := svc.CreateRole(ctx, apCaller, RoleInput{
+		Name: "ap子集角色", PermCodes: []string{perm.PageChannels},
+		ScopeAllBrands: false, BrandCodes: []string{"ap"}, ScopeAllChannels: false, ChannelIDs: []uint64{apCh.ID},
+	})
+	if err != nil {
+		t.Fatalf("非超管创建数据范围是自身子集的角色应成功: %v", err)
+	}
+	if subRole.ScopeAllBrands || len(subRole.BrandCodes) != 1 || subRole.BrandCodes[0] != "ap" {
+		t.Errorf("子集角色范围不符: %+v", subRole)
+	}
+
+	// 反向：把 apOnlyRole 改成全量品牌范围，应被拒绝（改角色同样受约束，不止创建）。
+	if _, err := svc.UpdateRole(ctx, apCaller, apOnlyRole.ID, RoleInput{
+		Name: "ap专员", PermCodes: []string{perm.PageChannels, perm.RoleManage},
+		ScopeAllBrands: true, ScopeAllChannels: true,
+	}); err == nil {
+		t.Error("非超管不能把角色范围改成超出自身的全量范围")
+	}
+
+	// 超管不受限：可以建 scopeAllBrands=true 的角色。
+	if _, err := svc.CreateRole(ctx, root, RoleInput{Name: "超管建的全量角色", ScopeAllBrands: true, ScopeAllChannels: true}); err != nil {
+		t.Errorf("超管创建全量范围角色不应受限: %v", err)
+	}
+}
+
+// TestUserScopeLeastPrivilege 验证最小权限约束同样通过 assertCanManageRole 落到用户管理上：
+// 非超管不能把账号挂到一个数据范围超出自身的角色。
+func TestUserScopeLeastPrivilege(t *testing.T) {
+	svc, r := newTestService(t)
+	ctx := context.Background()
+	superID, _, _ := roleIDsByName(t, svc, ctx)
+	root := mustDirectUser(t, r, "root", superID)
+
+	apOnlyRole, err := svc.CreateRole(ctx, root, RoleInput{
+		Name: "ap专员2", PermCodes: []string{perm.PageChannels, perm.UserManage},
+		ScopeAllBrands: false, BrandCodes: []string{"ap"}, ScopeAllChannels: true,
+	})
+	if err != nil {
+		t.Fatalf("创建 ap 专员角色失败: %v", err)
+	}
+	apCaller := mustDirectUser(t, r, "ap-caller2", apOnlyRole.ID)
+
+	widerRole, err := svc.CreateRole(ctx, root, RoleInput{
+		Name: "ap+bp角色", PermCodes: []string{perm.PageChannels},
+		ScopeAllBrands: false, BrandCodes: []string{"ap", "bp"}, ScopeAllChannels: true,
+	})
+	if err != nil {
+		t.Fatalf("创建 ap+bp 角色失败: %v", err)
+	}
+
+	// 非超管不能把新账号挂到一个数据范围比自己大的角色上。
+	if _, err := svc.CreateUser(ctx, apCaller, CreateUserInput{
+		Username: "wannabe-wide", Password: "pw123456", RoleID: widerRole.ID,
+	}); err == nil {
+		t.Error("非超管不能把账号挂到数据范围超出自身的角色（ap+bp 超出 ap-only）")
+	}
+
+	// 挂到自身范围的子集角色应成功。
+	if _, err := svc.CreateUser(ctx, apCaller, CreateUserInput{
+		Username: "compliant-scope", Password: "pw123456", RoleID: apOnlyRole.ID,
+	}); err != nil {
+		t.Errorf("非超管创建数据范围是自身子集的账号应成功: %v", err)
 	}
 }
 

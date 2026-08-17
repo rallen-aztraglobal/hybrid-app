@@ -44,6 +44,10 @@ const (
 	StoreManage  = "store:manage"
 	UserManage   = "user:manage"
 	RoleManage   = "role:manage"
+
+	// 设备管理
+	PageDevices  = "page:devices"
+	DeviceExport = "device:export"
 )
 
 // RunnerPerm 是构建机静态 token 隐式持有的机器权限：不进 catalog、不可分配给任何角色
@@ -98,8 +102,19 @@ var catalog = []Module{
 	{Module: "settings", Label: "系统设置", Perms: []Perm{
 		{Code: PageSettings, Label: "设置页(商店/运行时预览等查看)", Kind: KindRoute},
 		{Code: StoreManage, Label: "商店管理写操作", Kind: KindButton},
-		{Code: UserManage, Label: "用户管理(增删改/重置密码)", Kind: KindButton},
-		{Code: RoleManage, Label: "角色管理(增删改)", Kind: KindButton},
+	}},
+	// 角色管理 / 用户管理已从「系统设置」拆成侧边栏独立菜单：role:manage / user:manage
+	// 现在是各自页面的路由权限（kind=route，控制菜单可见与进入权），而不是某个页面内的按钮权限。
+	// code 字符串保持不变——它们已写进存量 role_permission 数据，改字符串会让已有授权失效。
+	{Module: "roles", Label: "角色管理", Perms: []Perm{
+		{Code: RoleManage, Label: "角色管理(查看/增删改)", Kind: KindRoute},
+	}},
+	{Module: "users", Label: "用户管理", Perms: []Perm{
+		{Code: UserManage, Label: "用户管理(查看/增删改/重置密码)", Kind: KindRoute},
+	}},
+	{Module: "devices", Label: "设备管理", Perms: []Perm{
+		{Code: PageDevices, Label: "设备列表查看", Kind: KindRoute},
+		{Code: DeviceExport, Label: "导出设备 CSV", Kind: KindButton},
 	}},
 }
 
@@ -131,7 +146,10 @@ func Catalog() []Module { return catalog }
 // AllCodes 返回全部可分配权限点 code（route+button，不含机器权限 RunnerPerm）。
 func AllCodes() []string { return append([]string(nil), allCodes...) }
 
-// RouteCodes 返回全部 route(page:*) code。
+// RouteCodes 返回全部 kind=route 的 code。多数形如 page:*，但不是所有 route code 都是
+// page:*——role:manage/user:manage 也是 route（各自一个独立菜单的进入权，不是 page:* 命名），
+// 调用方（尤其是给默认角色算权限集时）注意：这里面混了 SystemManageCodes() 里的敏感权限，
+// 通常要再减去 SystemManageCodes() 才能当作「普通业务页面」的权限集使用，见该函数注释。
 func RouteCodes() []string { return append([]string(nil), routeCodes...) }
 
 // ButtonCodes 返回全部 button code。
@@ -139,3 +157,15 @@ func ButtonCodes() []string { return append([]string(nil), buttonCodes...) }
 
 // IsValid 判断 code 是否在 catalog 内（可分配）。机器权限 RunnerPerm 不算合法可分配 code。
 func IsValid(code string) bool { return codeSet[code] }
+
+// SystemManageCodes 返回「敏感管理权限」的具名集合：商店管理、角色管理、用户管理。
+//
+// 陷阱说明：RoleManage/UserManage 的 kind 是 route（各自一个独立菜单的进入权），会被
+// RouteCodes() 收进去；而 seed 里「只读」角色的默认权限集恰好就是 RouteCodes()——如果不
+// 特殊处理，只读角色会自动白捡角色管理/用户管理这两个本该只有超管才能授予的敏感权限。
+// 因此默认角色（只读、运营）的权限集一律要在 RouteCodes()/ButtonCodes() 基础上减去这个
+// 集合，只有超级管理员能显式把它们挂给某个角色。catalog 演进时新增的同类敏感权限点也应
+// 收进这里，而不是在各处散落地手写排除名单（避免以后再加漏一处）。
+func SystemManageCodes() []string {
+	return []string{StoreManage, RoleManage, UserManage}
+}

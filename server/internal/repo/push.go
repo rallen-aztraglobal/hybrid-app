@@ -132,10 +132,21 @@ func (r *Repo) CreateCampaign(ctx context.Context, c *model.PushCampaign) error 
 }
 
 // CampaignFilter 推送活动列表筛选。
+//
+// Scope* 是数据权限过滤（docs/admin/10-rbac.md）：opt-in，零值不生效（兼容既有调用点）。
+// 与 Brand（显式的、用户主动选择的「只看某品牌」ANY-match 筛选）语义不同——Scope 是安全边界，
+// 用 ALL-match：活动只要有任一 target 的品牌不在允许范围内，整条活动都不出现在列表里
+// （不能让「有一个 target 在范围内」就露出这条活动，那样等于泄露了其它 target 的存在）。
+// 只看 kind=channel 的活动（PushCampaignTarget.ApplicationID 非空的那些）；kind=listing 的
+// 活动走独立的 ListListingCampaigns，不受渠道数据权限约束（listing 走品牌范围，这里不重复处理）。
 type CampaignFilter struct {
 	Brand string // 按 brand code 筛选（内联查 push_campaign_target → channel.brand_id）
 	Kind  string // 按种类筛选（channel/listing）；空 = 不限
 	Limit int
+
+	ScopeRestricted bool
+	ScopeAllBrands  bool
+	ScopeBrandCodes []string
 }
 
 // ListCampaigns 按条件查推送活动（倒序），预加载 Targets。
@@ -158,6 +169,21 @@ func (r *Repo) ListCampaigns(ctx context.Context, f CampaignFilter) ([]model.Pus
 			JOIN brand b ON b.id = ch.brand_id
 			WHERE b.code = ?
 		)`, f.Brand)
+	}
+	if f.ScopeRestricted && !f.ScopeAllBrands {
+		if len(f.ScopeBrandCodes) == 0 {
+			q = q.Where("1 = 0")
+		} else {
+			// 排除：有任一 target 的品牌不在允许集合内（含 appId 解析不出渠道的脏数据，fail-closed）
+			// 的活动；只看 channel 类 target（listing_id IS NULL），kind=listing 活动不受此约束。
+			q = q.Where(`id NOT IN (
+				SELECT DISTINCT pct.campaign_id
+				FROM push_campaign_target pct
+				LEFT JOIN channel ch ON ch.application_id = pct.application_id
+				LEFT JOIN brand b ON b.id = ch.brand_id
+				WHERE pct.listing_id IS NULL AND (b.code IS NULL OR b.code NOT IN ?)
+			)`, f.ScopeBrandCodes)
+		}
 	}
 	var list []model.PushCampaign
 	if err := q.Find(&list).Error; err != nil {

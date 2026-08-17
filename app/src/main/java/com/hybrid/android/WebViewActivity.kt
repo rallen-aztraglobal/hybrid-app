@@ -57,6 +57,8 @@ import com.hybrid.android.push.HybridMessagingService
 import com.hybrid.android.push.PushBootstrap
 import com.hybrid.android.push.TokenRegistrar
 import com.hybrid.android.track.AdjustBootstrap
+import com.hybrid.android.track.DeviceInfoRegistrar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -291,6 +293,9 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         requestNotificationPermissionIfNeeded()
         triggerFcmTokenRegistrationIfAvailable()
 
+        // 设备信息（GAID / Adjust ADID / 华为 OAID）采集上报：IO 线程静默执行，不阻塞首屏。
+        triggerDeviceInfoRegistration()
+
         // 返回键
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -478,6 +483,16 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             }
         }.addOnFailureListener {
             Log.w("HybridPush", "获取 FCM token 失败（已忽略）: ${it.message}")
+        }
+    }
+
+    /**
+     * 主动触发一次设备信息（GAID / Adjust ADID / 华为 OAID）采集上报。
+     * 全程 IO 线程 + 内部静默失败，不阻塞主线程/首屏（见 track.DeviceInfoRegistrar）。
+     */
+    private fun triggerDeviceInfoRegistration() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            DeviceInfoRegistrar.registerIfNeeded(applicationContext)
         }
     }
 

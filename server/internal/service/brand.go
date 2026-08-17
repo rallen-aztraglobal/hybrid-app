@@ -23,7 +23,9 @@ type BrandView struct {
 }
 
 // ListBrands 返回三个大渠道（含渠道计数与默认域名），供前端顶部 Tab。
-func (s *Service) ListBrands(ctx context.Context) ([]BrandView, error) {
+// scope 是调用者的数据范围（数据权限强制点：GET /brands 列表类查询层过滤，见
+// docs/admin/10-rbac.md）：非全量范围时只返回 scope 内的品牌。
+func (s *Service) ListBrands(ctx context.Context, scope auth.Scope) ([]BrandView, error) {
 	brands, err := s.repo.ListBrands(ctx)
 	if err != nil {
 		return nil, err
@@ -35,6 +37,9 @@ func (s *Service) ListBrands(ctx context.Context) ([]BrandView, error) {
 	out := make([]BrandView, 0, len(brands))
 	for i := range brands {
 		b := &brands[i]
+		if !scope.BrandAllowed(b.Code) {
+			continue
+		}
 		domains := make([]string, 0, len(b.Domains))
 		for _, d := range b.Domains {
 			if d.Enabled {

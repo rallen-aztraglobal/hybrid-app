@@ -24,7 +24,11 @@ func (h *Handler) BuildManifest(c echo.Context) error {
 	if brand == "" {
 		return httpx.Fail(c, http.StatusBadRequest, "缺少 brand 参数")
 	}
-	m, err := h.svc.BuildManifestForBrand(c.Request().Context(), brand)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	m, err := h.svc.BuildManifestForBrand(c.Request().Context(), scope, brand)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -45,7 +49,11 @@ func (h *Handler) CreateBuildJob(c echo.Context) error {
 	if err := c.Bind(&in); err != nil {
 		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
 	}
-	rec, err := h.svc.CreateBuildJob(c.Request().Context(), in)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	rec, err := h.svc.CreateBuildJob(c.Request().Context(), scope, in)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -64,7 +72,11 @@ func (h *Handler) CreateBuildJob(c echo.Context) error {
 // @Router   /api/build/records [get]
 func (h *Handler) ListBuildRecords(c echo.Context) error {
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	list, err := h.svc.ListBuildRecords(c.Request().Context(), c.QueryParam("brand"), c.QueryParam("status"), limit)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	list, err := h.svc.ListBuildRecords(c.Request().Context(), scope, c.QueryParam("brand"), c.QueryParam("status"), limit)
 	if err != nil {
 		return fail(c, err)
 	}

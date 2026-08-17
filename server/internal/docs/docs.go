@@ -44,6 +44,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/app/device/register": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "device"
+                ],
+                "summary": "APK 上报设备信息（公开端点）",
+                "parameters": [
+                    {
+                        "description": "设备上报请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.registerDeviceReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/app/google-services": {
             "get": {
                 "description": "返回该品牌合并的 google-services.json 原始 JSON 字节（非 Envelope）。未上传则 404；CLI 据此判断「未配置 FCM 跳过」。",
@@ -325,7 +358,7 @@ const docTemplate = `{
                 "tags": [
                     "brands"
                 ],
-                "summary": "大渠道列表（含渠道计数、accent 色、默认域名）",
+                "summary": "大渠道列表（含渠道计数、accent 色、默认域名；按调用者数据范围过滤）",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -806,7 +839,7 @@ const docTemplate = `{
                 "tags": [
                     "channels"
                 ],
-                "summary": "渠道列表（分页/搜索/筛选）",
+                "summary": "渠道列表（分页/搜索/筛选；按调用者数据范围过滤）",
                 "parameters": [
                     {
                         "type": "string",
@@ -898,7 +931,7 @@ const docTemplate = `{
                 "tags": [
                     "channels"
                 ],
-                "summary": "渠道详情",
+                "summary": "渠道详情（越界返回 404，不泄露存在性）",
                 "parameters": [
                     {
                         "type": "integer",
@@ -932,7 +965,7 @@ const docTemplate = `{
                 "tags": [
                     "channels"
                 ],
-                "summary": "修改渠道",
+                "summary": "修改渠道（越界返回 404）",
                 "parameters": [
                     {
                         "type": "integer",
@@ -972,7 +1005,7 @@ const docTemplate = `{
                 "tags": [
                     "channels"
                 ],
-                "summary": "软删除渠道（置 archived）",
+                "summary": "软删除渠道（置 archived；越界返回 404）",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1099,7 +1132,7 @@ const docTemplate = `{
                 "tags": [
                     "channels"
                 ],
-                "summary": "渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」）",
+                "summary": "渠道最新包：按该 flavor 取最近一次成功构建的 APK（ADR-0008 卡片「下载最新包」；越界返回 404）",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1132,7 +1165,7 @@ const docTemplate = `{
                 "tags": [
                     "icon"
                 ],
-                "summary": "下载整套 res 资源 zip（CLI 用）",
+                "summary": "下载整套 res 资源 zip（CLI/构建机用；越界返回 404，runner 不受数据权限约束）",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1190,6 +1223,216 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/devices": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "device"
+                ],
+                "summary": "设备列表（分页/筛选，page:devices）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "按 applicationId 精确筛选",
+                        "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD（含）",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD（含）",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，默认 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页条数，默认 50，最大 200",
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/devices/export": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "device"
+                ],
+                "summary": "按勾选 id 导出设备 CSV（device:export，同构流式响应）",
+                "parameters": [
+                    {
+                        "description": "id 列表（最多 1000 个）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.exportDevicesByIDsReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/devices/export-token": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "device"
+                ],
+                "summary": "签发设备 CSV 导出下载令牌（device:export，5 分钟有效）",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/devices/export.csv": {
+            "get": {
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "device"
+                ],
+                "summary": "设备 CSV 导出（按筛选条件流式下载；用 export-token 换来的一次性令牌鉴权，不接受 access token）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "GET /api/devices/export-token 换来的令牌",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "按 applicationId 精确筛选",
+                        "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD（含）",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD（含）",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/devices/export.xlsx": {
+            "get": {
+                "produces": [
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ],
+                "tags": [
+                    "device"
+                ],
+                "summary": "设备 XLSX 导出（美化表头/列宽/冻结首行；按筛选条件下载，鉴权同 export.csv）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "GET /api/devices/export-token 换来的令牌",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "按 applicationId 精确筛选",
+                        "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD（含）",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD（含）",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
                         }
                     }
                 }
@@ -2880,6 +3123,18 @@ const docTemplate = `{
         "github_com_hybrid-app_server_internal_service.RoleInput": {
             "type": "object",
             "properties": {
+                "brandCodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "channelIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "description": {
                     "type": "string"
                 },
@@ -2891,6 +3146,12 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "scopeAllBrands": {
+                    "type": "boolean"
+                },
+                "scopeAllChannels": {
+                    "type": "boolean"
                 }
             }
         },
@@ -3035,6 +3296,20 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.exportDevicesByIDsReq": {
+            "type": "object",
+            "properties": {
+                "format": {
+                    "type": "string"
+                },
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "internal_handler.gateReq": {
             "type": "object",
             "properties": {
@@ -3086,6 +3361,9 @@ const docTemplate = `{
                 "role": {
                     "$ref": "#/definitions/internal_handler.roleSummary"
                 },
+                "scope": {
+                    "$ref": "#/definitions/internal_handler.scopeSummary"
+                },
                 "username": {
                     "type": "string"
                 }
@@ -3095,6 +3373,32 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "refreshToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.registerDeviceReq": {
+            "type": "object",
+            "properties": {
+                "adid": {
+                    "type": "string"
+                },
+                "appId": {
+                    "type": "string"
+                },
+                "deviceKey": {
+                    "type": "string"
+                },
+                "deviceName": {
+                    "type": "string"
+                },
+                "gaid": {
+                    "type": "string"
+                },
+                "oaid": {
+                    "type": "string"
+                },
+                "palcode": {
                     "type": "string"
                 }
             }
@@ -3168,6 +3472,29 @@ const docTemplate = `{
                 "scheduledAt": {
                     "description": "ISO8601",
                     "type": "string"
+                }
+            }
+        },
+        "internal_handler.scopeSummary": {
+            "type": "object",
+            "properties": {
+                "allBrands": {
+                    "type": "boolean"
+                },
+                "allChannels": {
+                    "type": "boolean"
+                },
+                "brands": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "channelIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },
@@ -3279,6 +3606,9 @@ const docTemplate = `{
                 },
                 "role": {
                     "$ref": "#/definitions/internal_handler.roleSummary"
+                },
+                "scope": {
+                    "$ref": "#/definitions/internal_handler.scopeSummary"
                 },
                 "username": {
                     "type": "string"
