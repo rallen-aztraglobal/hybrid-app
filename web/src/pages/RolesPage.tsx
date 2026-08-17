@@ -10,8 +10,8 @@ export function RolesPage() {
   return (
     // 不再用窄 max-w 卡片布局（宽屏会留大片空白）：RoleManager 内部改为表格，
     // 天然随容器宽度自适应，这里只加一个宽屏下的合理上限，避免超宽显示器上表格行过长。
-    <section className="flex flex-col gap-3 max-w-[1180px]">
-      {/* 同 UsersPage：顶栏已有标题 + 面包屑，页面内不再重复 h2。 */}
+    <section className="flex flex-col gap-3">
+      {/* 同 UsersPage：顶栏已有标题 + 面包屑，页面内不再重复 h2；不设 max-w，铺满容器宽度。 */}
       <p className="text-[12.5px] text-muted">
         角色是一组权限点的集合，新增/编辑角色时按模块勾选路由权限与按钮权限，并可限定该角色能操作的
         品牌/渠道数据范围；<b>超级管理员</b>为内置角色，拥有全部权限与数据范围，不可编辑或删除；

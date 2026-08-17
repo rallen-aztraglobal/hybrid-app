@@ -69,13 +69,16 @@ export function RoleManager() {
           <table className="w-full text-[13px] table-fixed">
             {/* 第一列给百分比而不是留空：留空时它会吃掉全部剩余宽度，一个几字符的角色名
                 后面拖着一大片空白，正是「表格很空」的观感来源（与 UserManager 同一个坑）。 */}
+            {/* 全部用百分比：页面已改成铺满容器宽度，若这里混用固定 px，拉宽后富余宽度会全部
+                灌进唯一的百分比列（名称），其余列挤在左侧。按比例分配才能整体均匀撑开，
+                描述列给得最多——它是这张表里唯一会被截断的长文本。 */}
             <colgroup>
-              <col style={{ width: '28%' }} />
-              <col className="hidden xl:table-column" style={{ width: 220 }} />
-              <col style={{ width: 80 }} />
-              <col className="hidden lg:table-column" style={{ width: 80 }} />
-              <col className="hidden xl:table-column" style={{ width: 180 }} />
-              <col style={{ width: 108 }} />
+              <col style={{ width: '22%' }} />
+              <col className="hidden xl:table-column" style={{ width: '30%' }} />
+              <col style={{ width: '9%' }} />
+              <col className="hidden lg:table-column" style={{ width: '9%' }} />
+              <col className="hidden xl:table-column" style={{ width: '18%' }} />
+              <col style={{ width: '12%' }} />
             </colgroup>
             <thead>
               <tr className="bg-panel-2 text-ink-2 text-[12px]">

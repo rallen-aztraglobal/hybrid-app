@@ -186,13 +186,13 @@ export function UserManager() {
            * 固定布局后每列宽度恒定，超出内容严格按 truncate 省略，不会撑破容器。
            */}
           <table className="w-full text-[13px] table-fixed">
-            {/* 第一列给百分比而不是留空：留空时它会吃掉全部剩余宽度，一个几字符的用户名
-                后面拖着一大片空白，正是「表格很空」的观感来源。 */}
+            {/* 全部用百分比（同 RoleManager）：页面铺满容器后，混用固定 px 会让富余宽度
+                全灌进唯一的百分比列，其余列挤在左侧；按比例分配才能整体均匀撑开。 */}
             <colgroup>
-              <col style={{ width: '38%' }} />
-              <col style={{ width: 210 }} />
-              <col className="hidden lg:table-column" style={{ width: 170 }} />
-              <col style={{ width: 160 }} />
+              <col style={{ width: '40%' }} />
+              <col style={{ width: '20%' }} />
+              <col className="hidden lg:table-column" style={{ width: '22%' }} />
+              <col style={{ width: '18%' }} />
             </colgroup>
             <thead>
               <tr className="bg-panel-2 text-ink-2 text-[12px]">
