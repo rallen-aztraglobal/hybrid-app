@@ -31,6 +31,10 @@
 | 上架包 | `page:listings` | route | 上架包列表/详情/判定流水查看 |
 | 上架包 | `listing:edit` | button | 新建/编辑/删除上架包、改域名 |
 | 上架包 | `listing:gate` | button | AB 面网关配置与试算 |
+| 设备管理 | `page:devices` | route | 设备列表查看 |
+| 设备管理 | `device:export` | button | 导出设备 CSV |
+| 设备管理 | `page:devices` | route | 设备列表查看 |
+| 设备管理 | `device:export` | button | 导出设备 CSV |
 | 系统设置 | `page:settings` | route | 设置页(商店/运行时预览等查看) |
 | 系统设置 | `store:manage` | button | 商店管理写操作 |
 | 系统设置 | `user:manage` | button | 用户管理(增删改/重置密码) |
@@ -128,6 +132,10 @@ SQL migration 只建表加列,不做数据搬运(与生产 AutoMigrate 行为对
   `GET /channels/:id/res.zip` 用 any-of(`page:channels`,`build:runner`)(同理,渠道的其它接口不放 runner);
   写接口 → 对应 button code;`GET /api/brands`、`GET /api/stores` 登录即可
   (商店列表是渠道抽屉的基础数据,读不设权限、写才要 `store:manage`)。
+- 设备管理:`GET /devices` → `page:devices`;`GET /devices/export-token`、`POST /devices/export`
+  → `device:export`;`GET /api/devices/export.csv` 不进 JWT 组,凭 export-token 签发的 5 分钟
+  scope 短 token(query 传递)验签放行,不认普通 access token(细节见 [11-devices.md](11-devices.md));
+  `POST /api/app/device/register` 是 APK 端公开上报口,与其它 `/api/app/*` 一样零鉴权。
 - 跨模块基础数据读接口用 any-of 放宽,不能只按「自己所在页面」收权:
   `GET /api/channels` → any-of(`page:channels`,`page:pack`,`page:push`,`page:settings`)
   (打包中心选渠道、推送受众、设置页运行时预览都依赖渠道清单);
