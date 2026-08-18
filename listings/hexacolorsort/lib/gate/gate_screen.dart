@@ -40,8 +40,7 @@ class _GateScreenState extends State<GateScreen> {
     unawaitedInit();
 
     final tz = await _localTimezone();
-    var result = await const GateService().evaluate(timezone: tz);
-    result = const GateResult.bSide('https://example.com'); // TEMP-B-VERIFY
+    final result = await const GateService().evaluate(timezone: tz);
 
     // 带本次判定结果注册推送 token（后端据 gateMode 只推 B 面设备）。不阻塞 UI。
     // ignore: discarded_futures
