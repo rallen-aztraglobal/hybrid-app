@@ -1,6 +1,3 @@
-| DeckTallyPro | 原生 iOS Swift | **仅 iOS**（App Store，id `6780248860`）| `com.deck.tallypro` |
-| Hexa Color Sort | Flutter | **仅 Android**（Google Play）| `com.hexacolorsort.hexa_color_sort` |
-| Hexa Color Sort | Flutter | **仅 Android**（Google Play）| `com.hexacolorsort.hexa_color_sort` |
 # 上架包模块（Listing）与 AB 面网关
 
 > 决策见 [ADR-0014](../adr/0014-listing-ab-gate.md)。本文是实现契约：数据模型、API、客户端接入。
@@ -13,7 +10,7 @@
 | --- | --- | --- | --- |
 | ColorStack | Flutter | **仅 Android**（Google Play）| `com.vividnest.colorstack5821` |
 | DeckTallyPro | 原生 iOS Swift | **仅 iOS**（App Store，id `6780248860`）| `com.deck.tallypro` |
-| Hexa Color Sort | Flutter | **仅 Android**（Google Play）| `com.hexacolorsort.hexa_color_sort` |
+| Hexa Color Sort | Flutter | **仅 Android**（Google Play）| `com.slatecove.hexasort4173` |
 
 > 共 **3 个上架包**（Console 里建 3 条 listing）。ColorStack / Hexa Color Sort 只发 Android、
 > DeckTallyPro 只发 iOS，故不存在 ColorStack 的 iOS 上架。推送 Firebase 项目 **`hybrid-listings-51660`**（旧 `hybrid-listings` 已删）。

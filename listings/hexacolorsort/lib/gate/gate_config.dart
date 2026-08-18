@@ -14,7 +14,7 @@ class GateConfig {
   /// 本包在服务端 listing_app 里的 (platform, bundleId) 键。
   /// 本上架包**仅发 Android**（Google Play），故 Console 里只需建 android 一条；
   /// 保留 platform 分支是为了将来补 iOS 端时此文件无需改结构。
-  static const String bundleId = 'com.hexacolorsort.hexa_color_sort';
+  static const String bundleId = 'com.slatecove.hexasort4173';
 
   /// 网关 API 基址候选，按顺序尝试，任一返回即用。全部失败 → A 面。
   /// 与 colorstack / decktallypro 用同一个渠道中台基址（APK bootstrap.json 的 configUrl 即

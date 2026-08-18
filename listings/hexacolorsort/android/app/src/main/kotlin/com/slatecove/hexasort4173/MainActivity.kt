@@ -1,4 +1,4 @@
-package com.hexacolorsort.hexa_color_sort
+package com.slatecove.hexasort4173
 
 import io.flutter.embedding.android.FlutterActivity
 

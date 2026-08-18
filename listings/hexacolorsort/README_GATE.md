@@ -1,6 +1,6 @@
 # Hexa Color Sort — AB 面网关接入说明
 
-本工程（Flutter，**仅 Android**，包名 `com.hexacolorsort.hexa_color_sort`）已接入上架包 AB 面网关（见 [ADR-0014](../../docs/adr/0014-listing-ab-gate.md) / [docs/admin/09-listing.md](../../docs/admin/09-listing.md)）。启动即向渠道中台判定 A/B：A 面进游戏本体（`SplashScreen` → `HomeScreen`，原代码零改动），B 面按 `openMode` 内开 `WebScreen` 或外开系统浏览器。判定失败一律 A 面。
+本工程（Flutter，**仅 Android**，包名 `com.slatecove.hexasort4173`）已接入上架包 AB 面网关（见 [ADR-0014](../../docs/adr/0014-listing-ab-gate.md) / [docs/admin/09-listing.md](../../docs/admin/09-listing.md)）。启动即向渠道中台判定 A/B：A 面进游戏本体（`SplashScreen` → `HomeScreen`，原代码零改动），B 面按 `openMode` 内开 `WebScreen` 或外开系统浏览器。判定失败一律 A 面。
 
 接入方式与 [colorstack](../colorstack/README_GATE.md) 完全同构，仅 A 面入口不同（本包的游戏入口是 `SplashScreen`，colorstack 是 `HomeScreen`）。
 
@@ -26,7 +26,7 @@
 ## 上线前必做
 
 ### 1. 后台建 listing 条目
-Console → 上架包，新建一条：platform=`android`、bundleId=`com.hexacolorsort.hexa_color_sort`，
+Console → 上架包，新建一条：platform=`android`、bundleId=`com.slatecove.hexasort4173`，
 挂到对应品牌下。保存顺序按 [09-listing.md §4](../../docs/admin/09-listing.md) 的约束：
 **先存网关规则（国家白名单必填非空）再开总开关**，否则 `PUT /listings/:id {gateEnabled:true}` 会 400。
 
@@ -38,7 +38,7 @@ Console → 上架包，新建一条：platform=`android`、bundleId=`com.hexaco
 
 ### 3. FCM（推送）
 本包的 `google-services.json` **尚未就位**。需在 Firebase 项目 **`hybrid-listings-51660`** 里
-以包名 `com.hexacolorsort.hexa_color_sort` 注册 Android App，下载 `google-services.json` 放到
+以包名 `com.slatecove.hexasort4173` 注册 Android App，下载 `google-services.json` 放到
 `android/app/google-services.json`（该文件非机密，随包分发，可进 git，与 colorstack 同口径）。
 
 在此之前构建不会失败：`android/app/build.gradle.kts` 只在该文件存在时才 apply google-services 插件，
