@@ -52,27 +52,47 @@ Console → 上架包，新建一条：platform=`android`、bundleId=`com.hexaco
 `android/key.properties`（照 `key.properties.example` 填）+ keystore 放到 `android/` 下。
 两者都在 `.gitignore` 里，**不进 git**。没有 key.properties 时 release 退回 debug 签名，仅供本地跑通。
 
+### 5. 应用图标（尚未换）
+`android/app/src/main/res/mipmap-*/ic_launcher.png` 目前与 Flutter 模板默认图标 **md5 完全一致**
+（即蓝色 Flutter logo），本包也没有配 `flutter_launcher_icons`。上架包用默认图标既不像成品、
+也是审核风险。照 colorstack 的做法办：根目录放一张方形图（它叫 `icones.png`），
+pubspec 加 `flutter_launcher_icons` 配置后跑 `dart run flutter_launcher_icons`。
+
 ## 本地验证
 ```bash
 flutter pub get
 flutter analyze          # 应 No issues found
 flutter test             # 31 passed（28 原有 + 3 网关）
 flutter build bundle     # 全量 Dart 编译（不经 Gradle）
-flutter build apk --debug
 flutter build apk --release   # 走 R8 混淆，上架用这条
 ```
 
-已在 Flutter 3.44.4 / Dart 3.12.2 + AGP 9.0.1 下全部跑通，并在 Android 35 模拟器
-（Pixel 6 / x86_64）上真机验过两条路径：
+已在 Flutter 3.44.4 / Dart 3.12.2 + AGP 9.0.1 下跑通，并在 Android 35 模拟器
+（Pixel 6 / x86_64，**必须 `-gpu host`**）上实跑验过四条路径：
 
-| 路径 | 验证方式 | 结果 |
+| 路径 | 包类型 | 结果 |
 | --- | --- | --- |
-| A 面 | 装 debug APK 冷启动 | 判定完成后进 Splash → 首页；点 Play 进游戏、移动方块生效、无异常日志 |
-| B 面（内开） | 临时把判定结果写死成 B（验完已还原） | 全屏 WebView 加载成功、白底状态栏 + 深色图标、无 App 外壳 |
+| A 面 | debug | 判定 → 加载页 → Splash → 首页；点 Play 进游戏、移动方块生效 |
+| A 面 | **release（R8）** | 同上，且无 ClassNotFound / NoSuchMethod / NoClassDefFound —— 归因与 Firebase 的反射未被 R8 剪坏 |
+| B 面内开 | debug | 全屏 WebView 加载成功、白底状态栏 + 深色图标、无 App 外壳 |
+| B 面外开 | debug | 系统 Chrome 被唤起（证明 manifest 的 https VIEW query 生效），**App 本体退回 A 面显示游戏** |
 
-B 面之所以要用临时改动验：服务端还没建本包的 listing 条目，正常判定恒为 A，
-拿不到真实的 B 面响应。条目建好后可用 Console 的 `POST /api/listings/:id/gate/test`
-先试算，再用真机走一遍。
+B 面两条都要临时把判定结果写死才能验（服务端尚未建本包 listing 条目，正常判定恒为 A）；
+验完均已还原，`lib/` 已扫过无 TEMP / example.com 残留，工作区与 HEAD 一致。
+
+**Firebase 降级已在 release 实测确认**：日志出现
+`Default FirebaseApp failed to initialize because no default options were found` 后
+App 照常进 A 面、不崩 —— 即缺 google-services.json 时推送 no-op、不影响网关与游戏。
+
+> 模拟器注意：用 `-gpu swiftshader_indirect`（软件 GL）跑 release 会出现单帧 500 秒以上、
+> 画面看起来是白屏。那是模拟器 GPU 问题，不是 App 卡死（`app_time_stats` 能看到帧在出）。
+> 一定要用 `-gpu host`。
+
+## 仍未验证
+- 服务端真实判 B（需先在 Console 建 listing 条目）。
+- 推送端到端（缺 google-services.json，目前 no-op）。
+- Adjust 上报（token 是占位，目前 no-op）；AppsFlyer 已初始化但未确认事件落库。
+- 真机（只在模拟器上跑过）。
 
 ## 接入红线（已落实）
 - 客户端不存任何 B 面 URL 常量（只存网关 API 基址）。
