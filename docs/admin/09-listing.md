@@ -1,18 +1,22 @@
+| DeckTallyPro | 原生 iOS Swift | **仅 iOS**（App Store，id `6780248860`）| `com.deck.tallypro` |
+| Hexa Color Sort | Flutter | **仅 Android**（Google Play）| `com.hexacolorsort.hexa_color_sort` |
+| Hexa Color Sort | Flutter | **仅 Android**（Google Play）| `com.hexacolorsort.hexa_color_sort` |
 # 上架包模块（Listing）与 AB 面网关
 
 > 决策见 [ADR-0014](../adr/0014-listing-ab-gate.md)。本文是实现契约：数据模型、API、客户端接入。
 
 ## 1. 是什么
 
-「上架包」= 正式上架 Google Play / App Store 的独立合规应用，与 3 个品牌的渠道 APK（`channels/*.csv` + flavor）是**两条独立产线**。当前两个：
+「上架包」= 正式上架 Google Play / App Store 的独立合规应用，与 3 个品牌的渠道 APK（`channels/*.csv` + flavor）是**两条独立产线**。当前三个：
 
 | 名称 | 技术栈 | 上架平台 | Bundle ID |
 | --- | --- | --- | --- |
 | ColorStack | Flutter | **仅 Android**（Google Play）| `com.vividnest.colorstack5821` |
 | DeckTallyPro | 原生 iOS Swift | **仅 iOS**（App Store，id `6780248860`）| `com.deck.tallypro` |
+| Hexa Color Sort | Flutter | **仅 Android**（Google Play）| `com.hexacolorsort.hexa_color_sort` |
 
-> 共 **2 个上架包**（Console 里建 2 条 listing）。ColorStack 只发 Android、DeckTallyPro 只发 iOS，
-> 故不存在 ColorStack 的 iOS 上架。推送 Firebase 项目 **`hybrid-listings-51660`**（旧 `hybrid-listings` 已删）。
+> 共 **3 个上架包**（Console 里建 3 条 listing）。ColorStack / Hexa Color Sort 只发 Android、
+> DeckTallyPro 只发 iOS，故不存在 ColorStack 的 iOS 上架。推送 Firebase 项目 **`hybrid-listings-51660`**（旧 `hybrid-listings` 已删）。
 
 每个上架包本体是干净小游戏（**A 面**）。开启「AB 面」后，命中放行规则的设备才访问配置的 web 链接（**B 面**，与品牌 ap/bp/gp 同一套域名）。
 
@@ -81,7 +85,7 @@ Console 前端已按此顺序提交（域名 → 网关规则 → 开关）。
 
 ## 5. 客户端接入（已落地在本仓库）
 
-两个 App 源码已收进仓库并完成接入，逻辑同构：启动请求 gate → A 面走应用原有首页（一行不改）→ B 面按 `openMode` 打开：`internal` 推全屏原生 WebView（默认，与渠道壳 App 一致）；`external` 唤起系统浏览器打开、App 本体退回展示 A 面（既送用户去 B 面，又让 App 看起来仍是干净游戏；外开失败静默降级停在 A 面）。AF/Adjust **A/B 均初始化**；进 B 面发 AF 标准事件 `af_content_view`（内开/外开都发）。
+三个 App 源码已收进仓库并完成接入，逻辑同构：启动请求 gate → A 面走应用原有首页（一行不改）→ B 面按 `openMode` 打开：`internal` 推全屏原生 WebView（默认，与渠道壳 App 一致）；`external` 唤起系统浏览器打开、App 本体退回展示 A 面（既送用户去 B 面，又让 App 看起来仍是干净游戏；外开失败静默降级停在 A 面）。AF/Adjust **A/B 均初始化**；进 B 面发 AF 标准事件 `af_content_view`（内开/外开都发）。
 
 - Flutter：外开用 `url_launcher`（`LaunchMode.externalApplication`），内开仍用 `webview_flutter`；分流在 `lib/gate/gate_screen.dart`，`GateResult.openMode` 由 `gate_service.dart` 解析。
 - iOS：外开用 `UIApplication.open`，内开仍用 `WKWebView`（`WebContainerViewController`）；分流在 `DeckTallyPro/Gate/GateCoordinator.swift`，`GateOpenMode` 由 `GateService.swift` 解析。
@@ -90,11 +94,12 @@ Console 前端已按此顺序提交（域名 → 网关规则 → 开关）。
 | --- | --- | --- | --- |
 | ColorStack（Flutter） | [listings/colorstack/](../../listings/colorstack/) | `lib/app.dart` → `GateScreen` | `flutter analyze` 通过 + Dart 全量编译通过 |
 | DeckTallyPro（iOS） | [listings/decktallypro/](../../listings/decktallypro/) | `AppDelegate` → `GateCoordinator` | `xcodebuild ... BUILD SUCCEEDED` |
+| Hexa Color Sort（Flutter） | [listings/hexacolorsort/](../../listings/hexacolorsort/) | `lib/app.dart` → `GateScreen`（A 面回落到原有 `SplashScreen`）| `flutter analyze` 通过 + `flutter test` 31 passed + Dart 全量编译通过 |
 
 - Flutter：`lib/gate/`（config/service/screen/web）+ `lib/tracking/`，判定用 `dart:io` HttpClient（无第三方依赖），B 面用 `webview_flutter`，时区用 `flutter_timezone` 取 IANA 名。
 - iOS：`DeckTallyPro/Gate/`（工程用 Xcode 16 file-system-synchronized group，新文件自动纳入编译）+ `Core/Services/TrackingService.swift`，判定用 `URLSession`、B 面用 `WKWebView`（均系统框架）。AF/Adjust 用 `#if canImport(...)` 包裹，未加 SPM 包也能编译（no-op），加了自动启用。
 
-各自的运维接入步骤（填 API 基址、AF/Adjust key、iOS 加 SPM 包）见 [colorstack/README_GATE.md](../../listings/colorstack/README_GATE.md)、[decktallypro/README_GATE.md](../../listings/decktallypro/README_GATE.md)。
+各自的运维接入步骤（填 API 基址、AF/Adjust key、iOS 加 SPM 包）见 [colorstack/README_GATE.md](../../listings/colorstack/README_GATE.md)、[decktallypro/README_GATE.md](../../listings/decktallypro/README_GATE.md)、[hexacolorsort/README_GATE.md](../../listings/hexacolorsort/README_GATE.md)。
 
 **接入红线（已落实）**：客户端不存任何 B 面 URL 常量（只存网关 API 基址）；不解析/不判 IP（服务端做）；判定失败/超时/非 B 一律 A 面。
 
