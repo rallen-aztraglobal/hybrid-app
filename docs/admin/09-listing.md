@@ -94,7 +94,7 @@ Console 前端已按此顺序提交（域名 → 网关规则 → 开关）。
 | --- | --- | --- | --- |
 | ColorStack（Flutter） | [listings/colorstack/](../../listings/colorstack/) | `lib/app.dart` → `GateScreen` | `flutter analyze` 通过 + Dart 全量编译通过 |
 | DeckTallyPro（iOS） | [listings/decktallypro/](../../listings/decktallypro/) | `AppDelegate` → `GateCoordinator` | `xcodebuild ... BUILD SUCCEEDED` |
-| Hexa Color Sort（Flutter） | [listings/hexacolorsort/](../../listings/hexacolorsort/) | `lib/app.dart` → `GateScreen`（A 面回落到原有 `SplashScreen`）| `flutter analyze` 通过 + `flutter test` 31 passed + Dart 全量编译通过 |
+| Hexa Color Sort（Flutter） | [listings/hexacolorsort/](../../listings/hexacolorsort/) | `lib/app.dart` → `GateScreen`（A 面回落到原有 `SplashScreen`）| `flutter analyze` 通过 + `flutter test` 31 passed + release APK（含 R8）构建通过 + Android 35 模拟器实跑 A/B 两面 |
 
 - Flutter：`lib/gate/`（config/service/screen/web）+ `lib/tracking/`，判定用 `dart:io` HttpClient（无第三方依赖），B 面用 `webview_flutter`，时区用 `flutter_timezone` 取 IANA 名。
 - iOS：`DeckTallyPro/Gate/`（工程用 Xcode 16 file-system-synchronized group，新文件自动纳入编译）+ `Core/Services/TrackingService.swift`，判定用 `URLSession`、B 面用 `WKWebView`（均系统框架）。AF/Adjust 用 `#if canImport(...)` 包裹，未加 SPM 包也能编译（no-op），加了自动启用。

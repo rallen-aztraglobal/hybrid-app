@@ -58,9 +58,21 @@ flutter pub get
 flutter analyze          # 应 No issues found
 flutter test             # 31 passed（28 原有 + 3 网关）
 flutter build bundle     # 全量 Dart 编译（不经 Gradle）
+flutter build apk --debug
+flutter build apk --release   # 走 R8 混淆，上架用这条
 ```
 
-上述四步已在 Flutter 3.44.4 / Dart 3.12.2 下全部跑通。
+已在 Flutter 3.44.4 / Dart 3.12.2 + AGP 9.0.1 下全部跑通，并在 Android 35 模拟器
+（Pixel 6 / x86_64）上真机验过两条路径：
+
+| 路径 | 验证方式 | 结果 |
+| --- | --- | --- |
+| A 面 | 装 debug APK 冷启动 | 判定完成后进 Splash → 首页；点 Play 进游戏、移动方块生效、无异常日志 |
+| B 面（内开） | 临时把判定结果写死成 B（验完已还原） | 全屏 WebView 加载成功、白底状态栏 + 深色图标、无 App 外壳 |
+
+B 面之所以要用临时改动验：服务端还没建本包的 listing 条目，正常判定恒为 A，
+拿不到真实的 B 面响应。条目建好后可用 Console 的 `POST /api/listings/:id/gate/test`
+先试算，再用真机走一遍。
 
 ## 接入红线（已落实）
 - 客户端不存任何 B 面 URL 常量（只存网关 API 基址）。
