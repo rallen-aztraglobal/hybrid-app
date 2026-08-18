@@ -4,6 +4,18 @@ import 'dart:io';
 
 import 'gate_config.dart';
 
+/// B 面 url 是否可用：能解析、且是 http/https、且有主机名。
+///
+/// 对齐 decktallypro `GateService.parse` 里的 `URL(string:)` 校验 —— 那边解析失败即判 A。
+/// Flutter 的 `Uri.tryParse` 比 iOS 宽松（'not a url' 也能解析成一个只有 path 的 Uri），
+/// 故这里额外要求 scheme 与 host，免得把一个 WebView 加载不了的地址当成有效 B 面。
+bool _isUsableUrl(String raw) {
+  if (raw.isEmpty) return false;
+  final uri = Uri.tryParse(raw);
+  if (uri == null) return false;
+  return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
+}
+
 /// 网关判定结果。默认构造即「A 面」——任何不确定都应落到这个安全默认值上。
 class GateResult {
   const GateResult.aSide() : mode = 'A', url = null, openMode = 'internal';
@@ -16,7 +28,7 @@ class GateResult {
   /// 仅 mode=B 时有意义，服务端只在判 B 时下发；缺省/非法一律 internal（默认内开）。
   final String openMode;
 
-  bool get isBSide => mode == 'B' && url != null && url!.isNotEmpty;
+  bool get isBSide => mode == 'B' && url != null && _isUsableUrl(url!);
 
   /// 是否外开（外部浏览器）。仅在 isBSide 时才应参考此值。
   bool get isExternal => openMode == 'external';
@@ -83,7 +95,11 @@ class GateService {
       final data = jsonDecode(text);
       if (data is Map && data['mode'] == 'B') {
         final url = data['url'];
-        if (url is String && url.isNotEmpty) {
+        // 非空之外还必须真的能解析成 http(s) 地址，对齐 decktallypro 的
+        // `URL(string:)` 校验（解析不出就判 A）。colorstack 只校验非空，一个畸形
+        // url 会让内开路径的 Uri.parse 抛 FormatException、B 面白屏；这里前置挡掉，
+        // 挡不住的畸形值宁可判 A 也不带着崩。
+        if (url is String && _isUsableUrl(url)) {
           // openMode 只认 'external'，其余（含缺省）一律 internal（默认内开）。
           final openMode = data['openMode'] == 'external'
               ? 'external'

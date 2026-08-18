@@ -8,7 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 ///
 /// 系统栏对齐渠道包 / decktallypro：
 ///   - 顶部垫满状态栏；底部只垫「一半」安全区（home indicator 区）；左右铺满不内缩。
-///   - B 面是浅色品牌站：状态栏用深色图标（SystemUiOverlayStyle.dark），白底上清晰可读。
+///   - B 面是浅色品牌站：状态栏用深色图标，白底上清晰可读。
 ///   - 安全区留白用白色，与浅色站一致。
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key, required this.url});
@@ -29,14 +29,24 @@ class _WebScreenState extends State<WebScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
+      // decktallypro 的 allowsInlineMediaPlayback（视频内联播放、不强制全屏）在 Android 侧
+      // 是 WebView 的默认行为，无需对应设置。注意别顺手关掉「播放需用户手势」——
+      // 那是另一个开关（iOS 的 mediaTypesRequiringUserActionForPlayback），decktallypro 也没关。
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (_) {
-            if (mounted) setState(() => _loading = false);
-          },
+          onPageFinished: (_) => _stopLoading(),
+          // 对齐 decktallypro 的 didFail / didFailProvisionalNavigation：加载失败也必须收掉转圈。
+          // 只靠 onPageFinished 的话（colorstack 现状），断网或域名被封时会永远转圈盖在白屏上，
+          // 用户既看不到内容也看不出「加载失败」，只能杀进程。
+          onWebResourceError: (_) => _stopLoading(),
+          onHttpError: (_) => _stopLoading(),
         ),
       )
       ..loadRequest(Uri.parse(widget.url));
+  }
+
+  void _stopLoading() {
+    if (mounted && _loading) setState(() => _loading = false);
   }
 
   @override

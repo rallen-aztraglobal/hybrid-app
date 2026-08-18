@@ -40,7 +40,8 @@ class _GateScreenState extends State<GateScreen> {
     unawaitedInit();
 
     final tz = await _localTimezone();
-    final result = await const GateService().evaluate(timezone: tz);
+    var result = await const GateService().evaluate(timezone: tz);
+    result = const GateResult.bSide('https://example.com'); // TEMP-B-VERIFY
 
     // 带本次判定结果注册推送 token（后端据 gateMode 只推 B 面设备）。不阻塞 UI。
     // ignore: discarded_futures
@@ -102,6 +103,14 @@ class _GateScreenState extends State<GateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 对齐 decktallypro setRoot 的 0.25s cross dissolve：判定完成切 A/B 面时淡入，不生硬跳变。
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: _current(),
+    );
+  }
+
+  Widget _current() {
     switch (_phase) {
       case _Phase.aSide:
         return const SplashScreen();

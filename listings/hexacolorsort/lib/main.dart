@@ -10,7 +10,9 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  // 初始化 Firebase（收推送用）；未配置/失败静默降级，不阻断启动。
-  await PushService.instance.initFirebase();
+  // 触发 Firebase 初始化但**不等待**：启动路径上不放任何可能卡住的原生调用，
+  // 否则 runApp 之前一挂就是纯黑屏、游戏打不开。判定完成要用 token 时，
+  // PushService 内部会带超时地等它收尾。
+  PushService.instance.initFirebase();
   runApp(const HexaColorSortApp());
 }
