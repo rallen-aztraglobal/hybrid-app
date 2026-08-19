@@ -36,17 +36,29 @@ Console → 上架包，新建一条：platform=`android`、bundleId=`com.slatec
 - `adjustAppToken`：**当前是占位 `TODO_ADJUST_APP_TOKEN`，Adjust 全链路 no-op**。需运营在 Adjust 后台为本 App 建条目后填入 —— 不可复用 colorstack(`bytg13h7yubk`) / decktallypro(`sn947o53ym80`) 的 token，复用会把本包的安装与会话归到别的 App 上。
 - `adjustOpenBLandingToken`：Adjust 后台建 event `OpenBLanding` 后填入（留空则外开只发 AF 事件）。
 
-### 3. FCM（推送）
-本包的 `google-services.json` **尚未就位**。需在 Firebase 项目 **`hybrid-listings-51660`** 里
-以包名 `com.slatecove.hexasort4173` 注册 Android App，下载 `google-services.json` 放到
-`android/app/google-services.json`（该文件非机密，随包分发，可进 git，与 colorstack 同口径）。
+### 3. FCM（推送）—— 已就位 ✅
+`android/app/google-services.json` 已放入：Firebase 项目 **`hybrid-listings-51660`**
+（project_number `609439342540`）下以包名 `com.slatecove.hexasort4173` 注册的 Android App，
+`mobilesdk_app_id` = `1:609439342540:android:c211607d0498572ea98769`。
+该文件非机密（随 APK 分发），进 git，与 colorstack 同口径。
 
-在此之前构建不会失败：`android/app/build.gradle.kts` 只在该文件存在时才 apply google-services 插件，
-缺文件时 `Firebase.initializeApp()` 失败被 try/catch 吞掉 → 推送 no-op，**不影响网关与 App 本体**。
+**注意：仓库里这份是手工裁剪过的 —— 只保留本包一个 client 条目。**
+Firebase 控制台下载的原始文件会把该项目下**所有** Android App 都列进来，包括
+`com.vividnest.colorstack5821`。带着它出包，等于在 Hexa 的 APK 里明写 ColorStack 的包名，
+任何人解压 APK 就能看出两个上架包同属一家 —— 这正是三个包各用不相关厂商命名空间
+（`vividnest` / `deck` / `slatecove`）想避免的事。google-services 插件只按 applicationId
+取匹配的那条 client，多余条目会被忽略，故裁掉不影响功能（已实测：构建通过、Firebase 初始化成功）。
 
-> 首次带 google-services.json 出包时留意 AGP 9.0.1 与 google-services 4.4.2 的兼容（本仓库其余
-> Flutter 上架包用的是 AGP 8.11.1）。若 Gradle 报插件不兼容，把 `settings.gradle.kts` 里的
-> google-services 版本抬到最新即可。
+> 以后重新下载这个文件，记得再裁一次，别把 colorstack 的条目带回来。
+
+> 关联性的实话：裁剪只去掉了「明写对方包名」。两个包用的是同一个 Firebase 项目，
+> 因此 `project_number` 与 `api_key` 仍然相同 —— 有人同时解压两个 APK 逐字段比对，
+> 依然能看出同属一个项目。要彻底切断就得每个上架包一个独立 Firebase 项目，
+> 但服务端目前是单一路由键（`fcmRouteKeyListings` 是常量、一个 service account 管整个项目），
+> 那是架构级改动，不在本包范围内。
+
+> AGP 兼容已实测：本包 AGP 9.0.1 + google-services 4.4.2 构建通过
+> （其余 Flutter 上架包用的是 AGP 8.11.1）。
 
 ### 4. 签名
 `android/key.properties`（照 `key.properties.example` 填）+ keystore 放到 `android/` 下。
@@ -68,7 +80,7 @@ flutter build apk --release   # 走 R8 混淆，上架用这条
 ```
 
 已在 Flutter 3.44.4 / Dart 3.12.2 + AGP 9.0.1 下跑通，并在 Android 35 模拟器
-（Pixel 6 / x86_64，**必须 `-gpu host`**）上实跑验过四条路径：
+（Pixel 6 / x86_64，**必须 `-gpu host`**）上实跑验过五条路径：
 
 | 路径 | 包类型 | 结果 |
 | --- | --- | --- |
@@ -76,13 +88,14 @@ flutter build apk --release   # 走 R8 混淆，上架用这条
 | A 面 | **release（R8）** | 同上，且无 ClassNotFound / NoSuchMethod / NoClassDefFound —— 归因与 Firebase 的反射未被 R8 剪坏 |
 | B 面内开 | debug | 全屏 WebView 加载成功、白底状态栏 + 深色图标、无 App 外壳 |
 | B 面外开 | debug | 系统 Chrome 被唤起（证明 manifest 的 https VIEW query 生效），**App 本体退回 A 面显示游戏** |
+| 推送客户端半程 | debug | Firebase 初始化成功、Installations 注册状态 REGISTERED、FCM token 已签发（sender 609439342540 与项目一致）→ 代码随即带 gateMode 发 register-token |
 
 B 面两条都要临时把判定结果写死才能验（服务端尚未建本包 listing 条目，正常判定恒为 A）；
 验完均已还原，`lib/` 已扫过无 TEMP / example.com 残留，工作区与 HEAD 一致。
 
-**Firebase 降级已在 release 实测确认**：日志出现
-`Default FirebaseApp failed to initialize because no default options were found` 后
-App 照常进 A 面、不崩 —— 即缺 google-services.json 时推送 no-op、不影响网关与游戏。
+**缺 google-services.json 时的降级路径也实测过**（在该文件放入之前的那一版 release 包）：
+日志出现 `Default FirebaseApp failed to initialize because no default options were found` 之后
+App 照常进 A 面、不崩 —— 即推送 no-op、不影响网关与游戏。文件现已就位，此路径仅作为兜底记录。
 
 > 模拟器注意：用 `-gpu swiftshader_indirect`（软件 GL）跑 release 会出现单帧 500 秒以上、
 > 画面看起来是白屏。那是模拟器 GPU 问题，不是 App 卡死（`app_time_stats` 能看到帧在出）。
@@ -90,9 +103,11 @@ App 照常进 A 面、不崩 —— 即缺 google-services.json 时推送 no-op�
 
 ## 仍未验证
 - 服务端真实判 B（需先在 Console 建 listing 条目）。
-- 推送端到端（缺 google-services.json，目前 no-op）。
-- Adjust 上报（token 是占位，目前 no-op）；AppsFlyer 已初始化但未确认事件落库。
-- 真机（只在模拟器上跑过）。
+- 推送**服务端侧**：客户端半程已验通（见上表），但服务端是否收下并记入
+  `push_device_token.last_gate_mode`、以及 Console 发推送能否到达设备，都需要 Console
+  建好 listing 条目后才能验。
+- Adjust 上报（token 仍是占位 `TODO_ADJUST_APP_TOKEN`，目前 no-op）。
+- 真机（只在 Android 35 模拟器上跑过）。
 
 ## 接入红线（已落实）
 - 客户端不存任何 B 面 URL 常量（只存网关 API 基址）。
