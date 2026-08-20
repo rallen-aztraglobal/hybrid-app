@@ -36,6 +36,4 @@ color sort, sorting puzzle, stack puzzle, casual puzzle, brain teaser, offline p
 - Support email: TODO_FILL_REAL_SUPPORT_MAILBOX
 - Privacy policy URL: TODO_HOST_PRIVACY_POLICY_AND_PUT_URL_HERE
 
-> 内部说明（不要粘进 Play）
-> 上面两个 TODO 是 Play 的必填项，且必须是真实可达的邮箱与公开可访问的 URL。
-> 隐私政策不能只放在仓库里 —— Play 要一个公网 URL（GitHub Pages / 站点子路径都行）。
+> 两个 TODO 是 Play 必填项：必须是真实可达的邮箱，以及公网可访问的隐私政策 URL。
