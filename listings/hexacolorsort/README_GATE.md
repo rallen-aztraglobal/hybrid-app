@@ -64,11 +64,20 @@ Firebase 控制台下载的原始文件会把该项目下**所有** Android App 
 `android/key.properties`（照 `key.properties.example` 填）+ keystore 放到 `android/` 下。
 两者都在 `.gitignore` 里，**不进 git**。没有 key.properties 时 release 退回 debug 签名，仅供本地跑通。
 
-### 5. 应用图标（尚未换）
-`android/app/src/main/res/mipmap-*/ic_launcher.png` 目前与 Flutter 模板默认图标 **md5 完全一致**
-（即蓝色 Flutter logo），本包也没有配 `flutter_launcher_icons`。上架包用默认图标既不像成品、
-也是审核风险。照 colorstack 的做法办：根目录放一张方形图（它叫 `icones.png`），
-pubspec 加 `flutter_launcher_icons` 配置后跑 `dart run flutter_launcher_icons`。
+### 5. 应用图标 —— 已就位 ✅
+原先是 Flutter 模板默认图标（蓝色 logo，与模板 md5 完全一致）。现已换成自绘的四色叠块，
+沿用游戏 `kColorPalette` 的原色与符号、`AppTheme` 的深紫渐变底：
+
+- `icon.png` — 1024×1024，legacy 图标源（`mipmap-*/ic_launcher.png`）
+- `icon_foreground.png` / `icon_background.png` — 自适应图标两层（Android 8+）
+- 由 `flutter_launcher_icons` 生成，配置在 pubspec.yaml
+
+**为什么做了自适应图标**（colorstack 只有 legacy）：只给 legacy 图标时，Pixel 启动器会把它
+缩小塞进一个自己生成的浅色圆底里，深色艺术外面套一圈不搭的亮环 —— 模拟器上实测确认过。
+给了前景/背景两层后，启动器用我们自己的深紫底铺满整个形状。前景的叠块缩进了 108dp 的
+安全区（角点距中心 340px < 341px），各家启动器的圆形/方圆形裁切都不会切到方块。
+
+图标源文件用 4 个方块而非 Splash 的 6 个：单块更大，48px（最小显示尺寸）下仍能分辨。
 
 ## 本地验证
 ```bash

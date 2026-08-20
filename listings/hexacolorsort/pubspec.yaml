@@ -58,6 +58,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -69,6 +70,16 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  image_path: "icon.png"
+  min_sdk_android: 21
+  # 自适应图标（Android 8+）：只给 legacy 图标时，启动器会把它缩小塞进一个自己生成的
+  # 浅色圆底里，深色艺术外面套一圈不搭的亮环。给了前景/背景两层后，启动器用我们自己的
+  # 底图铺满、前景按各家形状裁切。前景的叠块已缩进 108dp 的安全区内（角点 340px < 341px）。
+  adaptive_icon_background: "icon_background.png"
+  adaptive_icon_foreground: "icon_foreground.png"
 
   # To add assets to your application, add an assets section, like this:
   # assets:
