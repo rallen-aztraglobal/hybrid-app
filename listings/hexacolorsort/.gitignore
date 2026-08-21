@@ -49,3 +49,6 @@ android/local.properties
 android/key.properties
 *.jks
 *.keystore
+
+# 编辑器本地设置
+.vscode/
