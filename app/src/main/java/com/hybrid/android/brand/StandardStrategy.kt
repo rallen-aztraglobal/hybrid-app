@@ -15,7 +15,7 @@ import org.json.JSONObject
 import java.time.LocalDate
 
 /**
- * AP / GP 通用策略（两者逻辑完全一致，仅域名不同，域名来自 BuildConfig.DOMAIN）。
+ * GP（GameZone）策略（原 AP/GP 通用；AP 首存判定改走 getById 后拆为 [ApStrategy]）。
  *
  * 归因逻辑：
  *  - getById / getByLoginName → 缓存 registDate
