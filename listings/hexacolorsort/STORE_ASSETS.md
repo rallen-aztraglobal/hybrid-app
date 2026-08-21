@@ -40,6 +40,22 @@ adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 
 否则每次冷启动都会弹通知授权框挡住画面（这也顺带验证了 `requestPermission()` 确实
 会触发 Android 13+ 的运行时弹窗）。
 
+## 隐私政策托管
+
+`store/privacy-policy.html` 是可直接托管的独立页面（无外链、自带深浅色样式、手机可读），
+内容与 `PRIVACY_POLICY.md` 一致。丢到任意静态托管即可拿到 Play 需要的 URL。
+
+参照 colorstack 的做法（实测其 DNS）：注册 `.app` 域名 + ImprovMX 免费转发邮箱。
+- `colorstack.app` → 已注册，MX 指向 `mx1/mx2.improvmx.com`
+- `hexacolorsort.app` → **本文写作时尚未注册**（NXDOMAIN），需先注册
+
+> ⚠️ `.app` 是 HSTS 预加载 TLD，**必须 HTTPS**，http 访问会被浏览器直接拒绝。
+> GitHub Pages / Vercel / Cloudflare Pages 都自带证书。
+
+**提交 Play 前必须确认两件事真的可用**，否则 Google 的政策通知发不到你手上：
+1. `https://<域名>/privacy` 能公开访问（无登录、无跳转到登录页）
+2. `support@hexacolorsort.app` 能真的收到邮件（自己发一封测一下）
+
 ## 特色图
 
 `store/feature-graphic.png` 是自绘的：左侧四色叠块（与应用图标同一套画法、

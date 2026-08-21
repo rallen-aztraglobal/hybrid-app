@@ -1,6 +1,6 @@
 # Privacy Policy for Hexa Color Sort
 
-Effective date: TODO_SET_ON_PUBLISH
+Effective date: 2026-08-21
 
 Hexa Color Sort ("the app") is a puzzle game. This policy explains what the app
 collects and who receives it.
@@ -61,4 +61,4 @@ address below and include the approximate date of installation.
 Material changes will be published here with a new effective date.
 
 ## Contact
-TODO_FILL_REAL_SUPPORT_MAILBOX
+support@hexacolorsort.app
