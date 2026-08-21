@@ -10,9 +10,11 @@ import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
 import { deviceApi } from '@/lib/api';
 import type { ChannelDevice, DeviceFilter } from '@/lib/types';
-import { Button, Select } from '@/components/ui';
-import type { SelectOption } from '@/components/ui';
-import { CalendarIcon, DownloadIcon, SearchIcon } from '@/components/icons';
+import { Button } from '@/components/ui';
+import { SearchSelect } from '@/components/SearchSelect';
+import type { SearchSelectOption } from '@/components/SearchSelect';
+import { DatePicker } from '@/components/DatePicker';
+import { DownloadIcon, SearchIcon } from '@/components/icons';
 import { cn } from '@/lib/cn';
 
 const PAGE_SIZE = 50;
@@ -87,11 +89,11 @@ export function DevicesPage() {
     setPageJump(String(filter.page));
   }, [filter.page]);
 
-  const channelOptions: SelectOption[] = useMemo(() => {
-    const opts: SelectOption[] = [{ value: '', label: '全部渠道' }];
+  const channelOptions: SearchSelectOption[] = useMemo(() => {
+    const opts: SearchSelectOption[] = [{ value: '', label: '全部渠道' }];
     for (const c of channels ?? []) {
       if (c.status === 'archived') continue;
-      opts.push({ value: c.applicationId, label: `${c.appName} (${c.palCode})` });
+      opts.push({ value: c.applicationId, label: c.appName, sub: `${c.palCode} · ${c.applicationId}` });
     }
     return opts;
   }, [channels]);
@@ -177,35 +179,17 @@ export function DevicesPage() {
       {/* 筛选栏 */}
       <div className="section-card mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="w-[280px]">
+          <div className="w-[300px]">
             <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">渠道</label>
-            <Select value={pendingAppId} onChange={setPendingAppId} options={channelOptions} placeholder="全部渠道" />
+            <SearchSelect value={pendingAppId} onChange={setPendingAppId} options={channelOptions} placeholder="全部渠道" />
           </div>
-          <div className="w-[168px]">
+          <div className="w-[170px]">
             <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">注册开始日期</label>
-            <div className="relative">
-              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
-              <input
-                type="date"
-                className="field-input pl-9"
-                value={pendingFrom}
-                max={pendingTo || undefined}
-                onChange={(e) => setPendingFrom(e.target.value)}
-              />
-            </div>
+            <DatePicker value={pendingFrom} onChange={setPendingFrom} max={pendingTo || undefined} placeholder="不限" />
           </div>
-          <div className="w-[168px]">
+          <div className="w-[170px]">
             <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">注册结束日期</label>
-            <div className="relative">
-              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
-              <input
-                type="date"
-                className="field-input pl-9"
-                value={pendingTo}
-                min={pendingFrom || undefined}
-                onChange={(e) => setPendingTo(e.target.value)}
-              />
-            </div>
+            <DatePicker value={pendingTo} onChange={setPendingTo} min={pendingFrom || undefined} placeholder="不限" />
           </div>
           <Button variant="primary" onClick={handleQuery}>
             <SearchIcon className="w-4 h-4" />
