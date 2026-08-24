@@ -45,11 +45,12 @@ class GateConfig {
       Platform.isIOS ? 'idTODO_AF_IOS_APPID' : bundleId;
 
   // —— Adjust（留空/占位 = 不启用）——
-  /// 本包的 Adjust 应用识别码（App Token）。Adjust 后台按 App 建，故**不能**复用
+  /// 本包在 Adjust 后台的应用识别码（App Token）。Adjust 按 App 建，故**不能**复用
   /// colorstack(bytg13h7yubk) / decktallypro(sn947o53ym80) 的 token —— 复用会把本包的
-  /// 安装与会话归到别的 App 上。运营在 Adjust 后台为 Hexa Color Sort 建 App 后填入即可，
-  /// 在此之前 Adjust 全链路 no-op（不初始化、不上报），不影响网关与 App 本体。
-  static String get adjustAppToken => 'TODO_ADJUST_APP_TOKEN';
+  /// 安装与会话归到别的 App 上。
+  /// Adjust 后台条目：App name "Hexa Color Sort"、reporting currency PHP（与 ap01018 等
+  /// 现有 app 一致，建后不可改）。
+  static String get adjustAppToken => '2yhxl7paa3ls';
 
   /// 生产环境用 'production'，联调用 'sandbox'。
   static const String adjustEnvironment = 'production';
