@@ -34,7 +34,7 @@ Console → 上架包，新建一条：platform=`android`、bundleId=`com.slatec
 - `apiBases`：已预置为与其余上架包相同的基址 `https://api.fortunegems-jackpot.online`。**这是网关 API，不是 B 面地址**；基址迁移时改这里，可加多个候选抗封。
 - `appsFlyerDevKey`：已填（账号级 key，与 colorstack / decktallypro 同一 AF 账号）。`appsFlyerAppId` 在 Android 侧即包名，无需改。
 - `adjustAppToken`：**已填 `2yhxl7paa3ls`**（Adjust 后台 App name `Hexa Color Sort`、reporting currency PHP，与 ap01018 等现有 app 一致）。不可复用 colorstack(`bytg13h7yubk`) / decktallypro(`sn947o53ym80`) 的 token，复用会把本包的安装与会话归到别的 App 上。
-- `adjustOpenBLandingToken`：Adjust 后台建 event `OpenBLanding` 后填入（留空则外开只发 AF 事件）。
+- `adjustOpenBLandingToken`：**已填 `ch4iyt`**（Adjust 后台 event `OpenBLanding`，非 unique event，每次外开成功都计一次）。
 
 ### 3. FCM（推送）—— 已就位 ✅
 `android/app/google-services.json` 已放入：Firebase 项目 **`hybrid-listings-51660`**
@@ -115,7 +115,7 @@ App 照常进 A 面、不崩 —— 即推送 no-op、不影响网关与游戏�
 - 推送**服务端侧**：客户端半程已验通（见上表），但服务端是否收下并记入
   `push_device_token.last_gate_mode`、以及 Console 发推送能否到达设备，都需要 Console
   建好 listing 条目后才能验。
-- Adjust 上报：App Token 已填，但 `OpenBLanding` 的 event token 仍为空（外开事件不发 Adjust，只发 AF）；且尚未在真机确认 Adjust 后台收到安装/会话。
+- Adjust 上报：App Token 与 `OpenBLanding` event token 均已填、已确认编进 AAB，但尚未在真机确认 Adjust 后台真的收到安装/会话与外开事件。
 - 真机（只在 Android 35 模拟器上跑过）。
 
 ## 接入红线（已落实）
