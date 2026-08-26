@@ -61,4 +61,4 @@ address below and include the approximate date of installation.
 Material changes will be published here with a new effective date.
 
 ## Contact
-support@hexacolorsort.app
+hgwlryr@outlook.com

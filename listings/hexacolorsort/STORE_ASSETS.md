@@ -40,21 +40,27 @@ adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 
 否则每次冷启动都会弹通知授权框挡住画面（这也顺带验证了 `requestPermission()` 确实
 会触发 Android 13+ 的运行时弹窗）。
 
-## 隐私政策托管
+## 隐私政策托管与支持邮箱
 
 `store/privacy-policy.html` 是可直接托管的独立页面（无外链、自带深浅色样式、手机可读），
-内容与 `PRIVACY_POLICY.md` 一致。丢到任意静态托管即可拿到 Play 需要的 URL。
+内容与 `PRIVACY_POLICY.md` 一致。丢到任意免费静态托管（GitHub Pages / Vercel /
+Cloudflare Pages，都自带 HTTPS）即可拿到 Play 必填的 URL。
 
-参照 colorstack 的做法（实测其 DNS）：注册 `.app` 域名 + ImprovMX 免费转发邮箱。
-- `colorstack.app` → 已注册，MX 指向 `mx1/mx2.improvmx.com`
-- `hexacolorsort.app` → **本文写作时尚未注册**（NXDOMAIN），需先注册
+**决定：不注册专用域名。** 支持邮箱沿用 decktallypro 上架时用的 `hgwlryr@outlook.com`。
 
-> ⚠️ `.app` 是 HSTS 预加载 TLD，**必须 HTTPS**，http 访问会被浏览器直接拒绝。
-> GitHub Pages / Vercel / Cloudflare Pages 都自带证书。
+参考：另两个上架包的做法各不相同，都不涉及公司域名 ——
+- colorstack：注册 `colorstack.app` + ImprovMX 免费转发（实测其 MX 指向 `mx1/mx2.improvmx.com`）
+- decktallypro：`hgwlryr@outlook.com` + privacypolicies.com 托管的政策页
 
-**提交 Play 前必须确认两件事真的可用**，否则 Google 的政策通知发不到你手上：
-1. `https://<域名>/privacy` 能公开访问（无登录、无跳转到登录页）
-2. `support@hexacolorsort.app` 能真的收到邮件（自己发一封测一下）
+> 为什么不用公司域名的邮箱（如 `@aztraglobal.com`）：Play 会把支持邮箱**公开显示在商店页面**，
+> 用公司域名等于直接暴露归属，与本包刻意分开的包名（`com.slatecove.*`）、证书 `O=SlateCove`、
+> 裁剪过的 google-services.json、独立 keystore 是相互矛盾的。
+
+**提交 Play 前必须逐项确认，否则 Google 的政策通知发不到人手上（漏看整改期限可能直接下架）：**
+1. 政策页 URL 能公开访问（无登录、不跳登录页、HTTPS）
+2. `hgwlryr@outlook.com` **确实有人能登录并会看** —— 该地址取自 decktallypro 的既有政策页，
+   本仓库无法验证其归属与是否有人监控，接手时务必自己发一封测试邮件确认收得到
+3. 该邮箱同时出现在 DeckTallyPro 与本包的商店页面上，两者由此可被公开关联 —— 已知取舍
 
 ## 特色图
 

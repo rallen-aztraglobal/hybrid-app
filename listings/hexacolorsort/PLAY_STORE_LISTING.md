@@ -33,7 +33,7 @@ Games › Puzzle
 color sort, sorting puzzle, stack puzzle, casual puzzle, brain teaser, offline puzzle
 
 ## Contact
-- Support email: support@hexacolorsort.app
-- Privacy policy URL: https://hexacolorsort.app/privacy （托管 store/privacy-policy.html 后填最终地址）
+- Support email: hgwlryr@outlook.com
+- Privacy policy URL: TODO_填托管后的公网地址（把 store/privacy-policy.html 放到 GitHub Pages 等免费静态托管即可；不注册专用域名）
 
 > 两个 TODO 是 Play 必填项：必须是真实可达的邮箱，以及公网可访问的隐私政策 URL。
