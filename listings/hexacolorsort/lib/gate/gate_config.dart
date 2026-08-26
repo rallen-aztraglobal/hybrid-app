@@ -58,6 +58,12 @@ class GateConfig {
   /// 「进入 B 面」对应的 Adjust 事件 token（可留空，只发 AF 标准事件也可）。
   static String get adjustContentViewToken => '';
 
+  /// B 面系统栏/安全区的填充色。对齐渠道壳 WebViewActivity.applyBrandSystemBars：
+  /// 该处按 BuildConfig.BRAND 取色，`gp`(GameZone) 用 #1C1D27、`ap`/`bp` 等浅色站用白色。
+  /// 本包在 Console 里挂 `gp`、B 面是 gzone.ph（深色站），故取 #1C1D27 —— 用白色会在
+  /// 深色游戏切到深色站时露出上下两条白边。**若本包改挂 ap/bp，这里要同步改成白色。**
+  static const int bSideChromeColor = 0xFF1C1D27;
+
   /// 「外开进入 B 面」对应的 Adjust 事件 token（Adjust 后台 event `OpenBLanding`，非 unique
   /// event，故每次外开成功都计一次）。仅在 openMode=external 唤起外部浏览器成功后触发。
   static String get adjustOpenBLandingToken => 'ch4iyt';
