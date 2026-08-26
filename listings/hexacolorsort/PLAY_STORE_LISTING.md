@@ -34,6 +34,6 @@ color sort, sorting puzzle, stack puzzle, casual puzzle, brain teaser, offline p
 
 ## Contact
 - Support email: hgwlryr@outlook.com
-- Privacy policy URL: TODO_填托管后的公网地址（把 store/privacy-policy.html 放到 GitHub Pages 等免费静态托管即可；不注册专用域名）
+- Privacy policy URL: https://stalwart-khapse-3231a0.netlify.app
 
 > 两个 TODO 是 Play 必填项：必须是真实可达的邮箱，以及公网可访问的隐私政策 URL。

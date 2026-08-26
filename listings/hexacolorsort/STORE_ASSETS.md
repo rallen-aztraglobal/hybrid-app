@@ -46,7 +46,14 @@ adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 
 内容与 `PRIVACY_POLICY.md` 一致。丢到任意免费静态托管（GitHub Pages / Vercel /
 Cloudflare Pages，都自带 HTTPS）即可拿到 Play 必填的 URL。
 
-**决定：不注册专用域名。** 支持邮箱沿用 decktallypro 上架时用的 `hgwlryr@outlook.com`。
+**已就位。** 政策页托管在 Netlify（Netlify Drop 拖 store/privacy-policy.html 的副本，站点名随机、
+不暴露归属），地址 **https://stalwart-khapse-3231a0.netlify.app** ；支持邮箱沿用 decktallypro
+上架时用的 `hgwlryr@outlook.com`。未注册专用域名。
+
+> ⚠️ Netlify Drop 认领站点后会套用 team 的默认可见性，本次落成 **Private** —— 外部访问返回
+> 401 登录墙。必须在项目页点 `Make public`。已从外部拉取确认现在返回完整政策正文
+> （标题、生效日期、AppsFlyer/Adjust/FCM/AD_ID 四项披露、联系邮箱均在）。
+> 重新部署或换站点后要再验一次 —— 政策 URL 挂登录墙会被 Play 直接驳回。
 
 参考：另两个上架包的做法各不相同，都不涉及公司域名 ——
 - colorstack：注册 `colorstack.app` + ImprovMX 免费转发（实测其 MX 指向 `mx1/mx2.improvmx.com`）
