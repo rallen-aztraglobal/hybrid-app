@@ -176,9 +176,14 @@ role_channel   role_id, channel_id    -- 仅 scope_all_channels=false 时生效,
 
 ### 实现细节(后端)
 
-- **API 字段名**:`POST/PUT /api/roles` 的请求体、`GET /api/roles` 返回的每个角色对象都带
-  `{scopeAllBrands, brandCodes, scopeAllChannels, channelIds}`(与登录/刷新/me 响应体的
-  `scope` 字段同构,见上文「API」一节);`PUT` 与 `permCodes` 一样是整体替换语义,不是增量
+- **API 字段名(两处形状不同,别混)**:角色端点 `POST/PUT /api/roles` 的请求体、
+  `GET /api/roles` 返回的每个角色对象是**平铺**的
+  `{scopeAllBrands, brandCodes, scopeAllChannels, channelIds}`;
+  而登录/刷新/me 响应体里是**嵌套**的 `scope: {allBrands, brands, allChannels, channelIds}`
+  ——语义等价但键名不同。角色端点用 Echo `Bind`,多传的未知字段(如误按嵌套形状传的 `scope`)
+  会被**静默丢弃**,落库即「零品牌零渠道」,界面上还会因为读不到平铺字段而回显成「全部品牌」,
+  表现为「配了全部品牌的角色登录后什么包都看不到」。回归测试:`handler.TestRoleScopeWireContract`。
+  `PUT` 与 `permCodes` 一样是整体替换语义,不是增量
   patch——即便只想改权限、不想动数据范围,也要把当前的数据范围原样传回去。
 - **查询层过滤是 opt-in、默认不限**:`repo.ChannelFilter`/`BuildRecordFilter`/`ListingFilter`/
   `CampaignFilter`/`DeviceFilter` 都新增了一组 `Scope*` 字段,只有显式置

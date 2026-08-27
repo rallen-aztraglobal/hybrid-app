@@ -7,7 +7,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useBrands, useChannels, useSubmitBuildJob } from '@/hooks/queries';
+import { useChannels, useSubmitBuildJob } from '@/hooks/queries';
+import { useScopedBrands } from '@/hooks/useScopedBrands';
 import { useBuildLogStream } from '@/hooks/useBuildLogStream';
 import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
@@ -24,7 +25,7 @@ const DEFAULT_VERSION = '1.0.0';
 
 export function PackPage() {
   const navigate = useNavigate();
-  const { data: brands } = useBrands();
+  const { brands, brand } = useScopedBrands();
   const { data: channels } = useChannels();
   const submit = useSubmitBuildJob();
   const log = useBuildLogStream();
@@ -33,7 +34,6 @@ export function PackPage() {
   const currentBrand = useUiStore((s) => s.currentBrand);
   const setCurrentBrand = useUiStore((s) => s.setCurrentBrand);
 
-  const brand = (brands ?? []).find((b) => b.code === currentBrand);
   const list = useMemo<Channel[]>(
     () => (channels ?? []).filter((c) => c.brandCode === currentBrand && c.status !== 'archived'),
     [channels, currentBrand],

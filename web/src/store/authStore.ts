@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AuthUser } from '@/lib/types';
 import { ApiError, authApi, setToken } from '@/lib/api';
+import { queryClient } from '@/lib/queryClient';
 
 /**
  * 登录态（本地状态，Zustand + persist）。
@@ -38,10 +39,16 @@ export const useAuthStore = create<AuthState>()(
       meError: null,
       setUser: (user) => {
         setToken(user.token);
+        // 换账号必须清空 query 缓存：后台是带数据权限的（10-rbac.md），上一个账号缓存的
+        // 列表既会漏给下一个登录的人，也会让页面渲染错乱——曾出现过「admin 登录后渠道页
+        // 一片空白、但『下载全部最新包 (34)』还在」：brands 沿用了上一个受限账号的空结果，
+        // ChannelsPage 的 `brand && visible.map(...)` 匹配不到品牌就一张卡都不画。
+        queryClient.clear();
         set({ user, meError: null });
       },
       logout: () => {
         setToken(null);
+        queryClient.clear(); // 同上：登出即丢弃该账号范围内的全部缓存数据。
         set({ user: null, meError: null });
       },
       hasPerm: (code) => get().user?.perms.includes(code) ?? false,

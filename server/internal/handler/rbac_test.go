@@ -700,3 +700,70 @@ func TestDataScopePushCreateAndAudience(t *testing.T) {
 		t.Errorf("audience 结果不应包含范围外的 bp appId，实际: %s", rec.Body.String())
 	}
 }
+
+// TestRoleScopeWireContract 锁死 /api/roles 上数据范围字段的**线上形状**（10-rbac.md「API」一节）：
+// 平铺的 {scopeAllBrands, brandCodes, scopeAllChannels, channelIds}，请求与响应两侧都是。
+//
+// 背景：前端一度按登录/me 响应体里嵌套的 {scope:{allBrands,...}} 形状发角色请求，Echo Bind
+// 静默丢弃未知字段 → 角色落库成「零品牌零渠道」，界面上却因为读不到平铺字段而回显「全部品牌」，
+// 表现为「配了全部品牌的角色登录后什么包都看不到」。Go 侧的结构体测试抓不到这类纯 JSON 键名漂移，
+// 所以这里直接用裸 map 走 HTTP 断言键名。
+func TestRoleScopeWireContract(t *testing.T) {
+	app := newTestApp(t)
+	_, tok := app.createUser(t, "rootwire", "超级管理员")
+
+	// 解析 Envelope.data 里的角色对象为裸 map，逐字断言键名。
+	roleData := func(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
+		t.Helper()
+		var env struct {
+			Code int            `json:"code"`
+			Data map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+			t.Fatalf("解析响应失败: %v (%s)", err, rec.Body.String())
+		}
+		return env.Data
+	}
+
+	// 1) 请求侧：平铺字段必须被真正读进去（brandCodes 落到 role_brand）。
+	rec := app.do(http.MethodPost, "/api/roles", tok, map[string]any{
+		"name": "开发", "description": "wire", "permCodes": []string{"page:channels"},
+		"scopeAllBrands": false, "brandCodes": []string{"ap"},
+		"scopeAllChannels": true, "channelIds": []uint64{},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("建角色应 201，实际 %d: %s", rec.Code, rec.Body.String())
+	}
+	data := roleData(t, rec)
+
+	// 2) 响应侧：必须是平铺键名（前端据此回显；键名漂移过就是这个 bug 的另一半）。
+	for _, k := range []string{"scopeAllBrands", "brandCodes", "scopeAllChannels", "channelIds"} {
+		if _, ok := data[k]; !ok {
+			t.Errorf("角色响应缺少数据范围字段 %q: %s", k, rec.Body.String())
+		}
+	}
+	if _, nested := data["scope"]; nested {
+		t.Errorf("角色响应不应改用嵌套 scope 对象（契约是平铺字段）: %s", rec.Body.String())
+	}
+	if data["scopeAllBrands"] != false || data["scopeAllChannels"] != true {
+		t.Errorf("数据范围标志位未按入参落库: %s", rec.Body.String())
+	}
+	codes, _ := data["brandCodes"].([]any)
+	if len(codes) != 1 || codes[0] != "ap" {
+		t.Errorf("brandCodes 未落库，实际 %v: %s", data["brandCodes"], rec.Body.String())
+	}
+
+	// 3) PUT 整体替换：改回「全部品牌 + 全部渠道」同样按平铺字段生效。
+	roleID := uint64(data["id"].(float64))
+	rec = app.do(http.MethodPut, fmt.Sprintf("/api/roles/%d", roleID), tok, map[string]any{
+		"name": "开发", "description": "wire", "permCodes": []string{"page:channels"},
+		"scopeAllBrands": true, "brandCodes": []string{},
+		"scopeAllChannels": true, "channelIds": []uint64{},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("改角色应 200，实际 %d: %s", rec.Code, rec.Body.String())
+	}
+	if data = roleData(t, rec); data["scopeAllBrands"] != true || data["scopeAllChannels"] != true {
+		t.Errorf("PUT 未把数据范围改成全部: %s", rec.Body.String())
+	}
+}

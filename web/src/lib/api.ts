@@ -414,8 +414,9 @@ function adaptGateLog(g: ListingGateLogDTO): ListingGateLog {
 }
 
 /**
- * 数据范围（10-rbac.md「数据权限」）DTO ↔ UI 双向转换：ScopeDTO.channelIds 是数字数组，
- * RoleScope.channelIds 是字符串（与其它「id 全部字符串化」的 UI 类型一致）。
+ * 登录/刷新/me 响应体里嵌套的数据范围（10-rbac.md「数据权限」）→ UI：ScopeDTO.channelIds
+ * 是数字数组，RoleScope.channelIds 是字符串（与其它「id 全部字符串化」的 UI 类型一致）。
+ * 注意角色端点 /api/roles 用的是**平铺**字段，转换见 adaptRoleScope/roleScopeToPayload。
  */
 function adaptScope(s: ScopeDTO | null | undefined): RoleScope {
   if (!s) return FULL_ROLE_SCOPE;
@@ -424,14 +425,6 @@ function adaptScope(s: ScopeDTO | null | undefined): RoleScope {
     brands: (s.brands ?? []) as BrandCode[],
     allChannels: s.allChannels,
     channelIds: (s.channelIds ?? []).map(String),
-  };
-}
-function scopeToDTO(scope: RoleScope): ScopeDTO {
-  return {
-    allBrands: scope.allBrands,
-    brands: scope.allBrands ? [] : scope.brands,
-    allChannels: scope.allChannels,
-    channelIds: scope.allChannels ? [] : scope.channelIds.map((id) => Number(id)),
   };
 }
 
@@ -1030,8 +1023,34 @@ interface RoleDTO {
   builtin: boolean;
   permCodes: string[];
   userCount: number;
-  /** 数据权限（10-rbac.md「数据权限」节）；builtin 角色恒等价于 FULL_ROLE_SCOPE。 */
-  scope?: ScopeDTO;
+  /**
+   * 数据权限（10-rbac.md「数据权限」节）在 /api/roles 上是**平铺字段**，
+   * 与登录/刷新/me 响应体里嵌套的 `scope: {allBrands,...}` 形状不同——后端两处契约本就不一致，
+   * 这里按 10-rbac.md「API」一节的角色端点契约逐字对齐；builtin 角色恒等价于 FULL_ROLE_SCOPE。
+   */
+  scopeAllBrands?: boolean;
+  brandCodes?: string[];
+  scopeAllChannels?: boolean;
+  channelIds?: number[];
+}
+/** 角色端点的平铺数据范围字段 → UI 的 RoleScope（字段缺失时按「全部」兜底，同 adaptScope）。 */
+function adaptRoleScope(r: RoleDTO): RoleScope {
+  if (r.scopeAllBrands === undefined && r.scopeAllChannels === undefined) return FULL_ROLE_SCOPE;
+  return {
+    allBrands: !!r.scopeAllBrands,
+    brands: (r.brandCodes ?? []) as BrandCode[],
+    allChannels: !!r.scopeAllChannels,
+    channelIds: (r.channelIds ?? []).map(String),
+  };
+}
+/** UI 的 RoleScope → 角色端点的平铺入参（POST/PUT 整体替换语义）。 */
+function roleScopeToPayload(scope: RoleScope) {
+  return {
+    scopeAllBrands: scope.allBrands,
+    brandCodes: scope.allBrands ? [] : scope.brands,
+    scopeAllChannels: scope.allChannels,
+    channelIds: scope.allChannels ? [] : scope.channelIds.map((id) => Number(id)),
+  };
 }
 function adaptRole(r: RoleDTO): Role {
   return {
@@ -1041,7 +1060,7 @@ function adaptRole(r: RoleDTO): Role {
     builtin: r.builtin,
     permCodes: r.permCodes ?? [],
     userCount: r.userCount ?? 0,
-    scope: r.builtin ? FULL_ROLE_SCOPE : adaptScope(r.scope),
+    scope: r.builtin ? FULL_ROLE_SCOPE : adaptRoleScope(r),
   };
 }
 
@@ -1092,8 +1111,14 @@ export const rolesApi = {
         adaptRole(
           await request<RoleDTO>('/roles', {
             method: 'POST',
-            // scope.channelIds 需要转成后端的数字数组形态（见 scopeToDTO）；其余字段透传。
-            body: JSON.stringify({ name: input.name, description: input.description, permCodes: input.permCodes, scope: scopeToDTO(input.scope) }),
+            // 数据范围走平铺字段（见 roleScopeToPayload）——嵌套成 {scope:{...}} 后端不认，
+            // 会被静默丢弃成「零品牌零渠道」，角色看起来配了全部品牌实则什么都看不到。
+            body: JSON.stringify({
+              name: input.name,
+              description: input.description,
+              permCodes: input.permCodes,
+              ...roleScopeToPayload(input.scope),
+            }),
           }),
         ),
       () => mockRbacDb.createRole(input),
@@ -1105,7 +1130,12 @@ export const rolesApi = {
         adaptRole(
           await request<RoleDTO>(`/roles/${id}`, {
             method: 'PUT',
-            body: JSON.stringify({ name: input.name, description: input.description, permCodes: input.permCodes, scope: scopeToDTO(input.scope) }),
+            body: JSON.stringify({
+              name: input.name,
+              description: input.description,
+              permCodes: input.permCodes,
+              ...roleScopeToPayload(input.scope),
+            }),
           }),
         ),
       () => mockRbacDb.updateRole(id, input),

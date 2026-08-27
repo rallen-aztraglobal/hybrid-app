@@ -5,7 +5,8 @@
  */
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { qk, useArchiveChannel, useBrands, useChannels } from '@/hooks/queries';
+import { qk, useArchiveChannel, useChannels } from '@/hooks/queries';
+import { useScopedBrands } from '@/hooks/useScopedBrands';
 import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
@@ -44,7 +45,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export function ChannelsPage() {
-  const { data: brands } = useBrands();
+  const { brands, brand } = useScopedBrands();
   const { data: channels, isLoading, isFetching } = useChannels();
   const archive = useArchiveChannel();
   const qc = useQueryClient();
@@ -58,8 +59,6 @@ export function ChannelsPage() {
 
   // 本页本地筛选态（启用/停用），不污染全局 store
   const [activeFilter, setFilter] = useState<Filter>('all');
-
-  const brand = (brands ?? []).find((b) => b.code === currentBrand);
 
   const visible = useMemo(() => {
     let list = (channels ?? []).filter(
@@ -145,6 +144,13 @@ export function ChannelsPage() {
 
       {isLoading ? (
         <GridSkeleton />
+      ) : brands && brands.length === 0 ? (
+        // 数据范围为空的角色（10-rbac.md）：直说原因，别留一片白板让人以为是坏了。
+        <div className="text-center text-muted py-[60px]">
+          你的角色没有被授予任何品牌数据范围，看不到渠道包。
+          <br />
+          请让管理员在「角色管理 → 编辑角色 → 数据范围」里配置品牌/渠道范围。
+        </div>
       ) : visible.length === 0 ? (
         <div className="text-center text-muted py-[60px]">
           {search.trim() ? '没有匹配搜索的渠道' : '该筛选下暂无渠道'}

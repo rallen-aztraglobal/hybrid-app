@@ -14,7 +14,6 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  useBrands,
   useChannels,
   useCreateListingCampaign,
   useListingCampaigns,
@@ -27,6 +26,7 @@ import {
   useSendListingCampaign,
   useSendPushCampaign,
 } from '@/hooks/queries';
+import { useScopedBrands } from '@/hooks/useScopedBrands';
 import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
@@ -1331,7 +1331,7 @@ function ListingPushPanel({ pushEnabled }: { pushEnabled: boolean }) {
 
 // ── 主页面 ─────────────────────────────────────────────────────────────────
 export function PushPage() {
-  const { data: brands } = useBrands();
+  const { brands, brand } = useScopedBrands();
   const { data: pushStatus } = usePushStatus();
 
   const currentBrand = useUiStore((s) => s.currentBrand);
@@ -1345,7 +1345,6 @@ export function PushPage() {
     setSubTab('edit');
   }, [currentBrand]);
 
-  const brand = (brands ?? []).find((b) => b.code === currentBrand);
   const accentColor = brand?.accentColor ?? BRAND_META[currentBrand]?.accentColor ?? '#6366f1';
 
   const pushEnabled = pushStatus?.enabled ?? false;
