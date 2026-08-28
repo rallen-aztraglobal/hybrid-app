@@ -1,5 +1,3 @@
-| B 面外开 | debug | 系统 Chrome 被唤起（证明 manifest 的 https VIEW query 生效），**App 本体退回 A 面显示游戏** |
-| B 面系统栏/安全区 | debug | 状态栏区与底部逐点采样均为 #1C1D27 或站点底色，无白边（改前手势条区是 R237,237,238） |
 # Hexa Color Sort — AB 面网关接入说明
 
 本工程（Flutter，**仅 Android**，包名 `com.slatecove.hexasort4173`）已接入上架包 AB 面网关（见 [ADR-0014](../../docs/adr/0014-listing-ab-gate.md) / [docs/admin/09-listing.md](../../docs/admin/09-listing.md)）。启动即向渠道中台判定 A/B：A 面进游戏本体（`SplashScreen` → `HomeScreen`，原代码零改动），B 面按 `openMode` 内开 `WebScreen` 或外开系统浏览器。判定失败一律 A 面。
@@ -97,8 +95,9 @@ flutter build apk --release   # 走 R8 混淆，上架用这条
 | --- | --- | --- |
 | A 面 | debug | 判定 → 加载页 → Splash → 首页；点 Play 进游戏、移动方块生效 |
 | A 面 | **release（R8）** | 同上，且无 ClassNotFound / NoSuchMethod / NoClassDefFound —— 归因与 Firebase 的反射未被 R8 剪坏 |
-| B 面内开 | debug | 全屏 WebView 加载成功、白底状态栏 + 深色图标、无 App 外壳 |
+| B 面内开 | debug | 全屏 WebView 加载成功、edge-to-edge 铺满、系统栏区填 #1C1D27（配浅色图标）、无 App 外壳 |
 | B 面外开 | debug | 系统 Chrome 被唤起（证明 manifest 的 https VIEW query 生效），**App 本体退回 A 面显示游戏** |
+| B 面系统栏/安全区 | debug | 状态栏区与底部逐点采样均为 #1C1D27 或站点底色，无白边（改前手势条区是 R237,237,238） |
 | 推送客户端半程 | debug | Firebase 初始化成功、Installations 注册状态 REGISTERED、FCM token 已签发（sender 609439342540 与项目一致）→ 代码随即带 gateMode 发 register-token |
 
 B 面两条都要临时把判定结果写死才能验（服务端尚未建本包 listing 条目，正常判定恒为 A）；
