@@ -172,6 +172,10 @@ android {
                 storePassword localProperties.get("KEYSTORE_PASSWORD")
                 keyAlias localProperties.get("KEY_ALIAS")
                 keyPassword localProperties.get("KEY_PASSWORD")
+                // 应用商店（OPPO/vivo/小米/华为）后台校验签名仍走 v1（解析 META-INF/*.RSA）。
+                // minSdk ≥ 24 时 AGP 默认关闭 v1，只出 v2，会被商店判「签名无效」，这里显式打开 v1+v2。
+                enableV1Signing true
+                enableV2Signing true
             }
         }
     }
