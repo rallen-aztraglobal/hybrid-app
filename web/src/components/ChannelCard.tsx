@@ -1,9 +1,13 @@
 /**
- * 渠道卡片 —— 复刻原型 .card：图标/应用名/flavor/包名/PAL_CODE/域名健康点/状态 + 悬浮操作。
+ * 渠道卡片 —— 复刻原型 .card：图标/应用名/flavor/包名/PAL_CODE/线上版本号/域名健康点/状态 + 悬浮操作。
  * 健康点取「该渠道实际生效的域名清单」（继承品牌或自身覆盖）的健康度。
+ * 「线上版本号」是人工备忘（包太多记不清上次发的版本），直接放在卡片正面、有权限时就地可改。
  */
+import { useEffect, useRef, useState } from 'react';
 import type { Brand, Channel, DomainEntry } from '@/lib/types';
 import { iconInitials } from '@/lib/brands';
+import { friendlyNotFoundMessage } from '@/lib/api';
+import { useSaveChannelLiveVersion } from '@/hooks/queries';
 import { apkFileName } from '@/lib/text';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/authStore';
@@ -84,6 +88,7 @@ export function ChannelCard({
       <div className="mt-[13px] flex flex-col gap-[7px]">
         <Row k="包名" v={channel.applicationId} />
         <Row k="PAL_CODE" v={channel.palCode} />
+        <LiveVersionRow channel={channel} editable={canEdit} />
       </div>
 
       <div className="mt-[14px] pt-[13px] border-t border-line-2 flex items-center gap-[10px]">
@@ -148,6 +153,89 @@ function Row({ k, v }: { k: string; v: string }) {
       <span className="font-mono text-ink-2 truncate" title={v}>
         {v}
       </span>
+    </div>
+  );
+}
+
+/**
+ * 「线上版本号」行：人工备忘、就地编辑。
+ * 有 channel:edit 权限 → 一个贴合行高的小输入框：回车/失焦保存（只 PUT 这一个字段）、Esc 放弃；
+ * 无权限 → 只读展示。保存成功后由 query 失效刷新列表，草稿随之同步；编辑中不被外部刷新打断。
+ */
+function LiveVersionRow({ channel, editable }: { channel: Channel; editable: boolean }) {
+  const save = useSaveChannelLiveVersion();
+  const current = channel.liveVersion ?? '';
+  const [draft, setDraft] = useState(current);
+  const [focused, setFocused] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // Esc 放弃：blur 会紧跟着触发，用 ref 让本次 blur 跳过提交（state 更新是异步的，闭包里拿不到复位值）。
+  const cancelRef = useRef(false);
+
+  useEffect(() => {
+    if (!focused) setDraft(current);
+  }, [current, focused]);
+
+  if (!editable) return <Row k="线上版本" v={current || '未记录'} />;
+
+  function commit() {
+    const next = draft.trim();
+    setDraft(next);
+    if (next === current) return;
+    save.mutate(
+      { id: channel.id, liveVersion: next },
+      {
+        onSuccess: () => setErr(null),
+        // 越界渠道后端故意 404（10-rbac.md「数据权限」）：文案走统一转换，并把草稿退回原值。
+        onError: (e) => {
+          setErr(friendlyNotFoundMessage(e, '保存失败'));
+          setDraft(current);
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-[12px]">
+      <span className="text-muted w-16 flex-none">线上版本</span>
+      <input
+        className={cn(
+          'font-mono text-ink-2 flex-1 min-w-0 h-[24px] px-1.5 -ml-1.5 rounded-md bg-transparent transition',
+          'border border-transparent hover:border-line focus:border-brand focus:bg-panel focus:outline-none',
+          'placeholder:font-sans placeholder:text-muted/70 disabled:opacity-60',
+          err ? 'border-[#fecaca]' : '',
+        )}
+        placeholder="未记录，点此填写"
+        maxLength={32}
+        value={draft}
+        disabled={save.isPending}
+        title="线上版本号（人工备忘）：回车或失焦保存，Esc 放弃"
+        aria-label="线上版本号"
+        onFocus={() => setFocused(true)}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            cancelRef.current = true;
+            e.currentTarget.blur();
+          }
+        }}
+        onBlur={() => {
+          setFocused(false);
+          if (cancelRef.current) {
+            cancelRef.current = false;
+            setDraft(current);
+            return;
+          }
+          commit();
+        }}
+      />
+      {save.isPending && <span className="text-[11px] text-muted flex-none">保存中…</span>}
+      {err && !save.isPending && (
+        <span className="text-[11px] text-down flex-none max-w-[45%] truncate" title={err}>
+          {err}
+        </span>
+      )}
     </div>
   );
 }

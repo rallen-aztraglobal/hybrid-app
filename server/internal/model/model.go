@@ -93,7 +93,11 @@ type Channel struct {
 	IconSetURL      string `gorm:"column:icon_set_url;type:varchar(255)" json:"iconSetUrl"`
 	SplashURL       string `gorm:"column:splash_url;type:varchar(255)" json:"splashUrl"`
 	Remark          string `gorm:"column:remark;type:varchar(255)" json:"remark"`
-	CreatedBy       uint64 `gorm:"column:created_by" json:"createdBy"`
+	// LiveVersion 线上版本号：运营**人工维护**的「当前已上线版本」备忘（如 1.2.3）。包太多记不住上次
+	// 发的是哪个版本，故在后台记一笔。仅记录/展示：不参与打包（versionName 仍在打包中心填）、不下发 APK、
+	// 不进 CLI 渲染的 CSV。空串 = 未记录。NOT NULL DEFAULT ''，AutoMigrate 补列时存量行自然为空。
+	LiveVersion string `gorm:"column:live_version;type:varchar(32);not null;default:''" json:"liveVersion"`
+	CreatedBy   uint64 `gorm:"column:created_by" json:"createdBy"`
 
 	// StoreID 可选：渠道所属应用商店（华为/小米/Oppo 等）。非空时 flavor 形如 <base>_<store.Code>，
 	// applicationId 据此派生出点号分段（见 Brand.DeriveApplicationID）。

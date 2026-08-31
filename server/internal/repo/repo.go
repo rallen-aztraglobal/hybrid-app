@@ -219,8 +219,8 @@ func (r *Repo) ListChannels(ctx context.Context, f ChannelFilter) ([]model.Chann
 	}
 	if f.Q != "" {
 		like := "%" + f.Q + "%"
-		q = q.Where("channel.flavor_name LIKE ? OR channel.application_id LIKE ? OR channel.app_name LIKE ? OR channel.pal_code LIKE ?",
-			like, like, like, like)
+		q = q.Where("channel.flavor_name LIKE ? OR channel.application_id LIKE ? OR channel.app_name LIKE ? OR channel.pal_code LIKE ? OR channel.live_version LIKE ?",
+			like, like, like, like, like)
 	}
 	if f.ScopeRestricted {
 		if !f.ScopeAllBrands {

@@ -159,7 +159,15 @@ export function PackPage() {
                   />
                   <span className="min-w-0">
                     <span className="block text-[13.5px] font-semibold truncate">{c.appName}</span>
-                    <span className="block text-[11px] text-muted font-mono">{c.flavorName}</span>
+                    <span className="block text-[11px] text-muted font-mono truncate">
+                      {c.flavorName}
+                      {/* 线上版本号（人工备忘）：选包打新版时顺手看到上次上线到哪了 */}
+                      {c.liveVersion && (
+                        <span className="ml-1.5 text-ink-2" title="线上版本号（人工备忘）">
+                          · 线上 {c.liveVersion}
+                        </span>
+                      )}
+                    </span>
                   </span>
                   {c.status === 'disabled' && (
                     <span className="ml-auto text-[10px] text-[#64748b] bg-[#f1f5f9] px-2 py-0.5 rounded-full">

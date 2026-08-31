@@ -100,6 +100,18 @@ export function useSaveChannel() {
   });
 }
 
+/** 卡片就地改「线上版本号」（只发这一个字段）；成功后失效渠道列表让各处展示同步。 */
+export function useSaveChannelLiveVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, liveVersion }: { id: string; liveVersion: string }) =>
+      channelApi.updateLiveVersion(id, liveVersion),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.channels });
+    },
+  });
+}
+
 export function useArchiveChannel() {
   const qc = useQueryClient();
   return useMutation({

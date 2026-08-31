@@ -268,6 +268,7 @@ interface ChannelDTO {
   iconMasterUrl?: string;
   splashUrl?: string;
   remark?: string;
+  liveVersion?: string;
   latestApkUrl?: string;
   updatedAt?: string;
   storeId?: number | null;
@@ -296,6 +297,7 @@ function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
     iconMasterUrl: c.iconMasterUrl || undefined,
     splashUrl: c.splashUrl || undefined,
     remark: c.remark || undefined,
+    liveVersion: c.liveVersion || undefined,
     latestApkUrl: c.latestApkUrl || undefined,
     updatedAt: c.updatedAt,
     storeId: c.storeId ?? null,
@@ -536,6 +538,7 @@ export const channelApi = {
             palCode: input.palCode.trim(),
             appName: input.appName.trim(),
             remark: input.remark ?? '',
+            liveVersion: input.liveVersion?.trim() ?? '',
             storeId: input.storeId ?? null,
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
@@ -561,6 +564,7 @@ export const channelApi = {
             appName: input.appName.trim(),
             status: input.status,
             remark: input.remark ?? '',
+            liveVersion: input.liveVersion?.trim() ?? '',
             // adjustAppToken/adjustEvents：08-adjust.md §6 跨层契约，随保存接口一起提交。
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
@@ -571,6 +575,27 @@ export const channelApi = {
         return ch;
       },
       () => mockDb.upsertChannel({ ...inputToChannel(input), id }),
+    );
+  },
+  /**
+   * 卡片就地改「线上版本号」：只 PUT 这一个字段（后端 UpdateChannelInput 指针字段，未传的不动），
+   * 不会连带覆盖 palCode/appName 等——避免列表页与抽屉并发编辑时互相踩。空串 = 清空。
+   */
+  updateLiveVersion(id: string, liveVersion: string): Promise<Channel> {
+    const v = liveVersion.trim();
+    return withFallback(
+      async () => {
+        const updated = await request<ChannelDTO>(`/channels/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ liveVersion: v }),
+        });
+        return adaptChannel(updated);
+      },
+      () => {
+        const cur = mockDb.getChannel(id);
+        if (!cur) throw new Error('渠道不存在');
+        return mockDb.upsertChannel({ ...cur, liveVersion: v || undefined });
+      },
     );
   },
   archive(id: string): Promise<void> {
@@ -1514,6 +1539,7 @@ function inputToChannel(input: ChannelInput): Channel {
     iconMasterUrl: input.iconMasterDataUrl,
     splashUrl: input.splashDataUrl,
     remark: input.remark,
+    liveVersion: input.liveVersion?.trim() || undefined,
     storeId: input.storeId ?? null,
     adjustAppToken: input.adjustAppToken?.trim() || undefined,
     adjustEvents: input.adjustEvents && Object.keys(input.adjustEvents).length ? input.adjustEvents : undefined,

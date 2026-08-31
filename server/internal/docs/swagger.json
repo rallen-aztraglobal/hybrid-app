@@ -2973,6 +2973,9 @@
                 "flavorName": {
                     "type": "string"
                 },
+                "liveVersion": {
+                    "type": "string"
+                },
                 "palCode": {
                     "type": "string"
                 },
@@ -3164,6 +3167,9 @@
                     "type": "string"
                 },
                 "flavorName": {
+                    "type": "string"
+                },
+                "liveVersion": {
                     "type": "string"
                 },
                 "palCode": {

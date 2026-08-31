@@ -1,7 +1,7 @@
 /**
  * 渠道管理页 —— 复刻原型「渠道管理」视图：
  * 3 大渠道 Tab + 状态筛选 chip + 同步状态 + 新增渠道 + 渠道卡片网格。
- * 顶栏全局搜索（uiStore.search）联动过滤 flavor/包名/PAL_CODE/应用名。
+ * 顶栏全局搜索（uiStore.search）联动过滤 flavor/包名/PAL_CODE/应用名/线上版本号。
  */
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -71,7 +71,7 @@ export function ChannelsPage() {
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter((c) =>
-        [c.flavorName, c.applicationId, c.palCode, c.appName].some((f) =>
+        [c.flavorName, c.applicationId, c.palCode, c.appName, c.liveVersion ?? ''].some((f) =>
           f.toLowerCase().includes(q),
         ),
       );

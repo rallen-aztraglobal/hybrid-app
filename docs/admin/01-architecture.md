@@ -181,6 +181,7 @@ CREATE TABLE channel (
   icon_set_url       VARCHAR(255) DEFAULT NULL,      -- 生成的多密度资源 zip
   splash_url         VARCHAR(255) DEFAULT NULL,      -- splash_fullscreen 源图
   remark             VARCHAR(255) DEFAULT NULL,
+  live_version       VARCHAR(32)  NOT NULL DEFAULT '', -- 线上版本号（人工备忘，不参与打包/不下发）
   created_by         BIGINT       DEFAULT NULL,
   created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

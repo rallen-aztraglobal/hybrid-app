@@ -109,6 +109,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
         domains: editChannel.domains ?? EMPTY_DOMAINS,
         status: editChannel.status,
         remark: editChannel.remark,
+        liveVersion: editChannel.liveVersion ?? '',
         storeId: editChannel.storeId ?? null,
         adjustAppToken: editChannel.adjustAppToken ?? '',
         adjustEvents: editChannel.adjustEvents ?? {},
@@ -183,6 +184,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
    * 从已有渠道复制（仅新增模式）：搬过来「可复用」项——应用名 / 域名配置（含继承开关）/
    * 状态 / 备注 / 图标 / 启动图；但**留空唯一字段**（flavor、派生 applicationId、PAL_CODE），
    * 强制用户填新值，从源头避免复制出重复脏数据（ADR-0009 唯一性护栏）。
+   * 线上版本号也不复制：它是「这个包」上线到哪了的备忘，新包还没上线。
    * 图标/splash 必须抓成 dataURL 才能随新渠道真正上传（见 urlToDataUrl 注释）。
    */
   function copyFrom(src: Channel) {
@@ -198,6 +200,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       domains: (src.domains ?? EMPTY_DOMAINS).map((d) => ({ ...d, health: 'unconfigured' })),
       status: src.status === 'archived' ? 'enabled' : src.status,
       remark: src.remark,
+      liveVersion: '',
       storeId: null,
     });
     setTouched(false);
@@ -253,6 +256,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       domains: form.useBrandDomains ? undefined : form.domains,
       adjustAppToken: form.adjustAppToken?.trim() ?? '',
       adjustEvents: form.adjustEvents ?? {},
+      liveVersion: form.liveVersion?.trim() ?? '',
     };
     try {
       await save.mutateAsync({ id: editing ?? undefined, input: payload });
@@ -403,6 +407,19 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               {errOf('applicationId') && (
                 <div className="mt-1 text-[12px] text-down">{errOf('applicationId')}</div>
               )}
+            </Field>
+            {/* 线上版本号：纯人工备忘（包太多记不清上次发的版本）。不参与打包、不下发；卡片正面也能就地改。 */}
+            <Field
+              label="线上版本号"
+              hint="人工备忘：当前已上线的版本，例如 1.2.3；不参与打包，卡片上也可直接改"
+            >
+              <input
+                className="field-input mono"
+                placeholder="例如 1.2.3（未记录可留空）"
+                maxLength={32}
+                value={form.liveVersion ?? ''}
+                onChange={(e) => set('liveVersion', e.target.value)}
+              />
             </Field>
           </div>
 
@@ -582,6 +599,7 @@ function blankForm(brandCode: BrandMeta['code']): ChannelInput {
     storeId: null,
     adjustAppToken: '',
     adjustEvents: {},
+    liveVersion: '',
   };
 }
 

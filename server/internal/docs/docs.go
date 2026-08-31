@@ -2980,6 +2980,9 @@ const docTemplate = `{
                 "flavorName": {
                     "type": "string"
                 },
+                "liveVersion": {
+                    "type": "string"
+                },
                 "palCode": {
                     "type": "string"
                 },
@@ -3171,6 +3174,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "flavorName": {
+                    "type": "string"
+                },
+                "liveVersion": {
                     "type": "string"
                 },
                 "palCode": {

@@ -20,6 +20,7 @@ type CreateChannelInput struct {
 	PalCode        string            `json:"palCode" validate:"required"`
 	AppName        string            `json:"appName" validate:"required"`
 	Remark         string            `json:"remark"`
+	LiveVersion    string            `json:"liveVersion"`
 	StoreID        *uint64           `json:"storeId"`
 	AdjustAppToken string            `json:"adjustAppToken"`
 	AdjustEvents   map[string]string `json:"adjustEvents"`
@@ -31,12 +32,16 @@ type CreateChannelInput struct {
 // AdjustAppToken/AdjustEvents 同样是指针字段（未传 = 不改动）：
 //   - AdjustAppToken 传空字符串 → 显式解绑 Adjust；
 //   - AdjustEvents 传 nil/空对象 → 清空事件表。
+//
+// LiveVersion（线上版本号，人工备忘）：传空字符串 → 清空；未传 → 不改动。
+// 卡片上的就地编辑只发这一个字段，其余字段保持原值。
 type UpdateChannelInput struct {
 	FlavorName     *string            `json:"flavorName"`
 	PalCode        *string            `json:"palCode"`
 	AppName        *string            `json:"appName"`
 	Status         *string            `json:"status"`
 	Remark         *string            `json:"remark"`
+	LiveVersion    *string            `json:"liveVersion"`
 	AdjustAppToken *string            `json:"adjustAppToken"`
 	AdjustEvents   *map[string]string `json:"adjustEvents"`
 }
@@ -130,6 +135,7 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 		Status:          model.ChannelEnabled,
 		UseBrandDomains: true,
 		Remark:          in.Remark,
+		LiveVersion:     in.LiveVersion,
 		StoreID:         in.StoreID,
 		AdjustAppToken:  adjustToken,
 		AdjustEvents:    model.AdjustEvents(in.AdjustEvents),
@@ -214,6 +220,13 @@ func (s *Service) UpdateChannel(ctx context.Context, id uint64, in UpdateChannel
 	if in.Remark != nil {
 		ch.Remark = *in.Remark
 	}
+	if in.LiveVersion != nil {
+		v, err := normalizeLiveVersion(*in.LiveVersion)
+		if err != nil {
+			return nil, err
+		}
+		ch.LiveVersion = v
+	}
 	if in.Status != nil {
 		st := *in.Status
 		if st != model.ChannelEnabled && st != model.ChannelDisabled && st != model.ChannelArchived {
@@ -271,11 +284,15 @@ func (in *CreateChannelInput) normalize() {
 	in.FlavorName = strings.TrimSpace(in.FlavorName)
 	in.PalCode = strings.TrimSpace(in.PalCode)
 	in.AppName = strings.TrimSpace(in.AppName)
+	in.LiveVersion = strings.TrimSpace(in.LiveVersion)
 }
 
 func (in *CreateChannelInput) validate() error {
 	if in.BrandCode == "" || in.FlavorName == "" || in.PalCode == "" || in.AppName == "" {
 		return errBadRequest("brandCode / flavorName / palCode / appName 均为必填")
+	}
+	if _, err := normalizeLiveVersion(in.LiveVersion); err != nil {
+		return err
 	}
 	// flavor 仅允许字母数字与下划线分段（下划线用于商店后缀，如 <base>_<storeCode>）。
 	if !looksLikeFlavor(in.FlavorName) {
@@ -316,6 +333,19 @@ func looksLikeFlavorSegment(seg string) bool {
 		return false
 	}
 	return true
+}
+
+// maxLiveVersionLen 与 channel.live_version 列定义 VARCHAR(32) 对齐。
+const maxLiveVersionLen = 32
+
+// normalizeLiveVersion 规范化线上版本号：去首尾空白；空串合法（= 未记录/清空）；超长拒绝。
+// 不校验格式——它只是人工备忘，运营想写 "1.2.3" 还是 "1.2.3(商店审核中)" 都行。
+func normalizeLiveVersion(raw string) (string, error) {
+	v := strings.TrimSpace(raw)
+	if len(v) > maxLiveVersionLen {
+		return "", errBadRequest(fmt.Sprintf("liveVersion 长度不能超过 %d", maxLiveVersionLen))
+	}
+	return v, nil
 }
 
 // maxAdjustAppTokenLen 与 channel.adjust_app_token 列定义 VARCHAR(64) 对齐（ADR-0013）。

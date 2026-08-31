@@ -129,6 +129,11 @@ export interface Channel {
   iconMasterUrl?: string;
   splashUrl?: string;
   remark?: string;
+  /**
+   * 线上版本号（人工备忘）：运营手工记录「当前已上线的版本」，包太多记不清上次发的是哪个版本。
+   * 仅记录/展示，不参与打包、不下发 APK。空/未设置 = 未记录。卡片正面可就地编辑。
+   */
+  liveVersion?: string;
   /** ADR-0008：该子渠道最近一次成功构建的 APK 下载地址（后端 latestApkUrl）。 */
   latestApkUrl?: string;
   updatedAt?: string;
@@ -172,6 +177,8 @@ export interface ChannelInput {
   iconMasterDataUrl?: string;
   splashDataUrl?: string;
   remark?: string;
+  /** 线上版本号（人工备忘，见 Channel.liveVersion）；空字符串 = 清空/未记录。 */
+  liveVersion?: string;
   /** 应用商店主键（可空 = 无商店/默认）。 */
   storeId?: string | number | null;
   /** Adjust App Token；空字符串 = 不启用（见 Channel.adjustAppToken 注释）。 */
