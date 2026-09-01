@@ -34,12 +34,14 @@ class _WebScreenState extends State<WebScreen> {
   /// B 面系统栏/安全区填充色。
   static const Color _chrome = Color(GateConfig.bSideChromeColor);
 
-  /// 感知亮度 > 0.6 视为浅色（与渠道壳 isLightColor 一致）。
-  static bool get _chromeIsLight {
-    final l =
-        (0.299 * _chrome.r + 0.587 * _chrome.g + 0.114 * _chrome.b) / 255.0;
-    return l > 0.6;
-  }
+  /// 感知亮度 > 0.6 视为浅色（与渠道壳 isLightColor 同一阈值与权重）。
+  ///
+  /// 注意 `Color.r/g/b` 在 Flutter 3.27 之后已经是 **0..1 的 double**（不再是 0..255 的 int），
+  /// 加权和本身就落在 0..1，直接和 0.6 比即可 —— 再除 255 会把结果压到千分位、
+  /// 任何颜色都恒判"深色"。当前的 #1C1D27 两种算法都得深色，但一旦改成浅色站的白色填充，
+  /// 除 255 的版本会继续给白底配白图标，状态栏图标直接隐形。
+  static bool get _chromeIsLight =>
+      0.299 * _chrome.r + 0.587 * _chrome.g + 0.114 * _chrome.b > 0.6;
 
   @override
   void initState() {

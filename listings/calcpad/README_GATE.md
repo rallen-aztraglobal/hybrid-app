@@ -6,7 +6,38 @@
 B 面按 `openMode` 内开 `WebScreen` 或外开系统浏览器。判定失败一律 A 面。
 
 接入方式与 [colorstack](../colorstack/README_GATE.md) / [hexacolorsort](../hexacolorsort/README_GATE.md)
-完全同构，仅 A 面入口不同（本包是 `CalculatorScreen`，hexa 是 `SplashScreen`，colorstack 是 `HomeScreen`）。
+基本同构，A 面入口不同（本包是 `CalculatorScreen`，hexa 是 `SplashScreen`，colorstack 是 `HomeScreen`），
+另有一处刻意的修正见下。
+
+## 与 hexacolorsort 的唯一差异：亮度判定去掉了一个 `/255`
+
+`web_screen.dart` 里决定系统栏图标明暗的那段，原先写的是：
+
+```dart
+final l = (0.299 * _chrome.r + 0.587 * _chrome.g + 0.114 * _chrome.b) / 255.0;
+return l > 0.6;
+```
+
+但 `Color.r/g/b` 在 **Flutter 3.27 之后已经是 0..1 的 double**（不再是 0..255 的 int），
+加权和本身就落在 0..1，再除 255 会把结果压到千分位 —— **任何颜色都恒判"深色"**，
+于是永远配浅色图标。
+
+当前填充色是 `#1C1D27`（`gp` 深色站），两种算法都得"深色"，所以这个错误在本包与
+hexacolorsort 上都表现不出来。但只要本包改挂 `ap`/`bp` 这类浅色站、
+`GateConfig.bSideChromeColor` 换成白色，除 255 的版本就会继续给白底配白图标，
+**状态栏图标直接隐形**。
+
+现在是：
+
+```dart
+static bool get _chromeIsLight =>
+    0.299 * _chrome.r + 0.587 * _chrome.g + 0.114 * _chrome.b > 0.6;
+```
+
+行为在当前配色下**完全不变**（`#1C1D27` 的加权亮度 ≈ 0.117，两种写法都 < 0.6）。
+tilefit 上的同一处也是这么写的。**hexacolorsort 与 colorstack 尚未同步这个修正**
+（colorstack 的 `web_screen.dart` 里没有这段亮度判定逻辑，故不受影响；
+hexacolorsort 在另一个分支上，需要单独改）。
 
 ## 新增文件
 - `lib/gate/gate_config.dart` — 编译期配置（**Adjust token 待填**，见下）
@@ -149,9 +180,9 @@ flutter build appbundle --release   # 46.5MB，上架传这个
 
 ## 仍未验证
 - **B 面两条路径（内开 / 外开）** —— 服务端尚未建本包 listing 条目，正常判定恒为 A。
-  `lib/gate/web_screen.dart` 与 hexacolorsort 上已实测通过的那份逐字节相同
-  （含 edge-to-edge、chrome 底色填充、亮度自适应图标色、错误时停 loading），
-  但本包自身没跑过 B 面。
+  `lib/gate/web_screen.dart` 与 hexacolorsort 上已实测通过的那份**仅差亮度判定一处**
+  （见下面「与 hexacolorsort 的唯一差异」），其余（edge-to-edge、chrome 底色填充、
+  亮度自适应图标色、错误时停 loading）逐字节相同，但本包自身没跑过 B 面。
 - 服务端真实判 B（需先在 Console 建 listing 条目）。
 - 推送：`google-services.json` 未放，客户端半程都没跑起来。
 - Adjust 上报：App Token 与 event token 都还是占位符。
