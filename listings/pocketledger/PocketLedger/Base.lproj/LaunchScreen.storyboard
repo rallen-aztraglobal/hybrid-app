@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="32700.99.1234" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="pkl-launch-vc">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="22685"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="pkl-launch-scene">
+            <objects>
+                <viewController id="pkl-launch-vc" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="pkl-launch-view">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="PocketLedger" textAlignment="center" lineBreakMode="tailTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="pkl-title">
+                                <rect key="frame" x="24" y="398" width="345" height="41"/>
+                                <fontDescription key="fontDescription" type="boldSystem" pointSize="34"/>
+                                <color key="textColor" red="0.071" green="0.078" blue="0.102" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Cards, e-wallets and cash in one place" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="pkl-subtitle">
+                                <rect key="frame" x="24" y="447" width="345" height="20"/>
+                                <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
+                                <color key="textColor" red="0.184" green="0.420" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="pkl-safe-area"/>
+                        <color key="backgroundColor" red="0.961" green="0.965" blue="0.973" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstItem="pkl-title" firstAttribute="centerX" secondItem="pkl-launch-view" secondAttribute="centerX" id="pkl-title-centerx"/>
+                            <constraint firstItem="pkl-title" firstAttribute="centerY" secondItem="pkl-launch-view" secondAttribute="centerY" constant="-20" id="pkl-title-centery"/>
+                            <constraint firstItem="pkl-title" firstAttribute="leading" secondItem="pkl-safe-area" secondAttribute="leading" constant="24" id="pkl-title-leading"/>
+                            <constraint firstItem="pkl-safe-area" firstAttribute="trailing" secondItem="pkl-title" secondAttribute="trailing" constant="24" id="pkl-title-trailing"/>
+                            <constraint firstItem="pkl-subtitle" firstAttribute="top" secondItem="pkl-title" secondAttribute="bottom" constant="8" id="pkl-subtitle-top"/>
+                            <constraint firstItem="pkl-subtitle" firstAttribute="leading" secondItem="pkl-title" secondAttribute="leading" id="pkl-subtitle-leading"/>
+                            <constraint firstItem="pkl-subtitle" firstAttribute="trailing" secondItem="pkl-title" secondAttribute="trailing" id="pkl-subtitle-trailing"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="pkl-first-responder" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="53" y="375"/>
+        </scene>
+    </scenes>
+</document>
