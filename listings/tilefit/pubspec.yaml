@@ -1,0 +1,49 @@
+name: tilefit
+description: "TileFit — a calm 8×8 block fitting puzzle."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 最高分本地存档（只存一个 int，不出设备，见 lib/storage/best_score_store.dart）。
+  shared_preferences: ^2.3.0
+
+  # AB 面网关：B 面全屏 WebView + 本机 IANA 时区上报（判定用）。
+  webview_flutter: ^4.10.0
+  flutter_timezone: ^4.1.1
+  # 外开：openMode=external 时唤起系统外部浏览器打开 B 面（内开仍走上面的 WebView）。
+  url_launcher: ^6.3.1
+  # 推送：FCM 收推送 + 取 token（随 AB 面判定结果上报，后端只推 B 面设备）。
+  firebase_core: ^4.1.1
+  firebase_messaging: ^16.0.2
+  # 归因（A/B 都初始化；未配 key 时 SDK no-op，见 lib/tracking/tracking_service.dart）。
+  appsflyer_sdk: ^6.16.2
+  adjust_sdk: ^5.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  # 只给 tool/generate_icons.dart 用，生成三张图标源图。dev 依赖，不进 APK。
+  image: ^4.3.0
+
+flutter:
+  uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  image_path: "icon.png"
+  min_sdk_android: 21
+  # 自适应图标（Android 8+）：只给 legacy 图标时，启动器会把它缩小塞进一个自己生成的
+  # 浅色圆底里，深色图标外面套一圈不搭的亮环。给了前景/背景两层后，启动器用我们自己的
+  # 底图铺满、前景按各家形状裁切。前景的图形已收在 108dp 的中心安全区内。
+  adaptive_icon_background: "icon_background.png"
+  adaptive_icon_foreground: "icon_foreground.png"
