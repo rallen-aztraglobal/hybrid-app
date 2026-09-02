@@ -122,21 +122,18 @@ Console → 上架包，新建一条：platform=`ios`、bundleId=`com.stillwater
 - `appsFlyerDevKey`：已填 `fXoKsKQwxPCRdhD8CD8q6F`（账号级 key，与其余上架包同一 AF 账号）。
 - `appsFlyerAppleAppID`：**待填，现在是 `TODO_APPSTORE_APP_ID`**。要在 App Store Connect
   建好 App 条目后拿到那串数字 id（形如 6780248860，不带 `id` 前缀）。占位期间 AF 全链路 no-op。
-- `adjustAppToken`：**Adjust 后台的 App 条目已建好，但 token 待回填**（现在仍是
-  `TODO_ADJUST_APP_TOKEN`）。Adjust 里的 App 名为 **`PocketLedger`**，iOS 平台已配
-  `com.stillwater.pocketledger`（store `itunes` / `app_store`，`app_state: not_verified` ——
-  ASC 条目还没建，数字 App ID 留空，与 ColorStack 的 iOS 平台同样处理），
-  reporting currency **PHP**、`no_eea_users: true`。
-  取值方式：Adjust Suite → AppView → `PocketLedger` → App information，复制 12 位 App Token。
-  **不可复用其他包的 token**（decktallypro `sn947o53ym80` / colorstack `bytg13h7yubk` /
-  hexacolorsort `2yhxl7paa3ls`），复用会把本包的安装与会话归到别的 App 上。
-- `adjustOpenBLandingToken`：**event 已建好，token 待回填**（现在仍是空串）。
+- `adjustAppToken`：**已填 `zoavz0rdks1s`** ✅。Adjust 里的 App 名为 **`PocketLedger`**，
+  iOS 平台已配 `com.stillwater.pocketledger`（store `itunes` / `app_store`，
+  `app_state: not_verified` —— ASC 条目还没建，数字 App ID 留空，与 ColorStack 的
+  iOS 平台同样处理），reporting currency **PHP**、`no_eea_users: true`。
+  这是本包**专属**的 token，与其余包互不相同（decktallypro `sn947o53ym80` /
+  colorstack `bytg13h7yubk` / hexacolorsort `2yhxl7paa3ls` / gridslide `4w8yd18jd0qo`）——
+  复用会把本包的安装与会话归到别的 App 上。
+- `adjustOpenBLandingToken`：**已填 `c72a3u`** ✅（取自 `PocketLedger` 的 Events 页）。
   `PocketLedger` 下已建齐与 DeckTallyPro 相同的 7 个事件：`AddToCart` /
   `CompleteRegistration` / `Login` / `OldRegPurchase` / **`OpenBLanding`** / `Purchase` /
-  `TPFirstDeposit`（均非 unique）。
-  取值方式：该 App → Events 页，复制 `OpenBLanding` 那一行的 6 位 token。
-  留空时 `TrackingService.trackOpenBLanding()` 只发 AppsFlyer、跳过 Adjust —— 不崩，
-  但 Adjust 侧看不到外开事件。
+  `TPFirstDeposit`（均非 unique）。其余 6 个是渠道壳 APK 的事件契约（ADR-0013），
+  上架包本体只发 `OpenBLanding`，建齐只是为了与既有上架包保持同构。
 - `adjustContentViewToken`：保持空串。与其余上架包一致，本包不发这个事件。
 
 ### 3. 加 AppsFlyer / Adjust / Firebase 的 SPM 包（一次性）

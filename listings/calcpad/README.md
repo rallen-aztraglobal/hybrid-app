@@ -33,8 +33,8 @@ flutter build apk --release   # 47.7MB，已在 Android 35 模拟器上实跑验
 
 上架前还差的（都在 `README_GATE.md` 里有步骤）：
 
-- [ ] Adjust 后台建 App，填 `adjustAppToken` 与 `adjustOpenBLandingToken`
-- [ ] Firebase 注册本包，放入**裁剪过的** `android/app/google-services.json`
+- [x] Adjust 后台建 App，填 `adjustAppToken` 与 `adjustOpenBLandingToken`
+- [x] Firebase 注册本包，放入**裁剪过的** `android/app/google-services.json`
 - [ ] 生成 release keystore（现在缺 `key.properties`，release 回退 debug 签名，Play 拒收）
 - [ ] 渠道中台建 listing 条目（建好之前判定恒为 A 面，属预期的 fail-closed）
 - [ ] 托管隐私政策、定支持邮箱（都**不要**复用其他上架包的）

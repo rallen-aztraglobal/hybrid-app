@@ -47,8 +47,8 @@
 
 - [ ] **在 Mac 上编译并跑通**（从未编译过 —— 第一优先级）
 - [ ] App Store Connect 建 App 条目，拿数字 App ID 填进 `GateConfig.appsFlyerAppleAppID`
-- [ ] Adjust 后台建 App，填 `adjustAppToken` 与 `adjustOpenBLandingToken`
-- [ ] Firebase 注册本包，放入 `GridSlide/GoogleService-Info.plist`
+- [x] Adjust 后台建 App，填 `adjustAppToken` 与 `adjustOpenBLandingToken`
+- [x] Firebase 注册本包，放入 `GridSlide/GoogleService-Info.plist`
 - [ ] 定 Apple Developer team 并配好签名（现在 `DEVELOPMENT_TEAM` 是空的）
 - [ ] 渠道中台建 listing 条目（建好之前判定恒为 A 面，属预期的 fail-closed）
 - [ ] 托管隐私政策、定支持邮箱（都**不要**复用其他上架包的）

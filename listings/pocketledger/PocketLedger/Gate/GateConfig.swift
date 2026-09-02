@@ -34,15 +34,21 @@ enum GateConfig {
     /// 本包在 Adjust 后台的应用识别码（App Token）。Adjust 按 App 建，故**不能**复用
     /// decktallypro(sn947o53ym80) / colorstack(bytg13h7yubk) / hexacolorsort(2yhxl7paa3ls)
     /// 的 token —— 复用会把本包的安装与会话归到别的 App 上。
-    /// **本包尚未在 Adjust 建条目**：占位期间 Adjust 全链路 no-op，不影响网关与 App 本体。
-    static let adjustAppToken = "TODO_ADJUST_APP_TOKEN"
+    /// Adjust 后台的 App 名为 `PocketLedger`，iOS 平台 `com.stillwater.pocketledger`
+    /// （store itunes / app_store，app_state 为 not_verified —— ASC 条目还没建，
+    /// 数字 App ID 留空，与 ColorStack 的 iOS 平台同样处理），
+    /// reporting currency PHP、no_eea_users=true。
+    static let adjustAppToken = "zoavz0rdks1s"
     /// 生产 "production"，联调 "sandbox"。
     static let adjustEnvironment = "production"
     /// 「进入 B 面」的 Adjust 事件 token（可留空，只发 AF 标准事件也可）。
     static let adjustContentViewToken = ""
     /// 「外开进入 B 面」的 Adjust 事件 token（Adjust 后台 event `OpenBLanding`）。
     /// 仅在 openMode=external 唤起外部浏览器成功后触发；留空则该端不发 Adjust 事件。
-    static let adjustOpenBLandingToken = ""
+    ///
+    /// 取自 Adjust 后台 App `PocketLedger` 的 Events 页。与上面的 `adjustAppToken` 成对生效：
+    /// `TrackingService.trackOpenBLanding()` 要求两者都已配置才会发 Adjust 事件。
+    static let adjustOpenBLandingToken = "c72a3u"
 
     /// 占位/空值判定：TODO 前缀或空串都视为「未配置」。
     static func isConfigured(_ value: String) -> Bool {

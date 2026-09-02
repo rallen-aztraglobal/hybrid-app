@@ -48,10 +48,10 @@ class GateConfig {
   /// 本包在 Adjust 后台的应用识别码（App Token）。Adjust 按 App 建，故**不能**复用
   /// colorstack(bytg13h7yubk) / decktallypro(sn947o53ym80) 的 token —— 复用会把本包的
   /// 安装与会话归到别的 App 上。
-  /// **本包尚未在 Adjust 建条目**：占位期间 Adjust 全链路 no-op（不初始化、不上报），
-  /// 不影响网关与 App 本体。建条目时 reporting currency 选 PHP（与 ap01018 / Hexa Color Sort
-  /// 一致，建后不可改），拿到 12 位 App Token 后填入。
-  static String get adjustAppToken => 'TODO_ADJUST_APP_TOKEN';
+  /// Adjust 后台的 App 名为 `CalcPad`，Android 平台 `com.northglade.calcpad5170`
+  /// （store google / google_play），reporting currency PHP、no_eea_users=true，
+  /// 与 ColorStack 同口径。
+  static String get adjustAppToken => 'g7gf649m26f4';
 
   /// 生产环境用 'production'，联调用 'sandbox'。
   static const String adjustEnvironment = 'production';
@@ -68,5 +68,8 @@ class GateConfig {
 
   /// 「外开进入 B 面」对应的 Adjust 事件 token（Adjust 后台 event `OpenBLanding`，非 unique
   /// event，故每次外开成功都计一次）。仅在 openMode=external 唤起外部浏览器成功后触发。
-  static String get adjustOpenBLandingToken => '';
+  ///
+  /// 取自 Adjust 后台 App `CalcPad` 的 Events 页。与上面的 `adjustAppToken` 成对生效：
+  /// `TrackingService.onOpenBLanding()` 要求两者都已配置才会发 Adjust 事件。
+  static String get adjustOpenBLandingToken => 't3o4dk';
 }

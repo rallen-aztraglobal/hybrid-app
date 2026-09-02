@@ -99,19 +99,20 @@ Console → 上架包，新建一条：platform=`android`、bundleId=`com.northg
   **这是网关 API，不是 B 面地址**；基址迁移时改这里，可加多个候选抗封。
 - `appsFlyerDevKey`：已填 `fXoKsKQwxPCRdhD8CD8q6F`（账号级 key，与 colorstack /
   decktallypro / hexacolorsort 同一 AF 账号）。`appsFlyerAppId` 在 Android 侧即包名，无需改。
-- `adjustAppToken`：**Adjust 后台的 App 条目已建好，但 token 待回填**（现在仍是
-  `TODO_ADJUST_APP_TOKEN`）。Adjust 里的 App 名为 **`CalcPad`**，Android 平台已配
-  `com.northglade.calcpad5170`（store `google` / `google_play`），reporting currency **PHP**、
-  `no_eea_users: true`，与 ColorStack 同口径。
-  取值方式：Adjust Suite → AppView → `CalcPad` → App information，复制 12 位 App Token。
-  **不可复用其他包的 token**（colorstack `bytg13h7yubk` / decktallypro `sn947o53ym80` /
-  hexacolorsort `2yhxl7paa3ls`），复用会把本包的安装与会话归到别的 App 上。
-- `adjustOpenBLandingToken`：**event 已建好，token 待回填**（现在仍是空串）。
+- `adjustAppToken`：**已填 `g7gf649m26f4`** ✅。Adjust 里的 App 名为 **`CalcPad`**，
+  Android 平台已配 `com.northglade.calcpad5170`（store `google` / `google_play`），
+  reporting currency **PHP**、`no_eea_users: true`，与 ColorStack 同口径。
+  这是本包**专属**的 token，与其余包互不相同（colorstack `bytg13h7yubk` /
+  decktallypro `sn947o53ym80` / hexacolorsort `2yhxl7paa3ls` / tilefit `vh0qyczvs6bk`）——
+  复用会把本包的安装与会话归到别的 App 上。
+- `adjustOpenBLandingToken`：**已填 `t3o4dk`** ✅（取自 `CalcPad` 的 Events 页）。
   `CalcPad` 下已建齐与 ColorStack 相同的 7 个事件：`AddToCart` / `CompleteRegistration` /
   `Login` / `OldRegPurchase` / **`OpenBLanding`** / `Purchase` / `TPFirstDeposit`（均非 unique）。
-  取值方式：该 App → Events 页，复制 `OpenBLanding` 那一行的 6 位 token。
-  留空时 `TrackingService.onOpenBLanding()` 只发 AppsFlyer、跳过 Adjust —— 不崩，
-  但 Adjust 侧看不到外开事件。
+  其余 6 个是渠道壳 APK 的事件契约（ADR-0013），上架包本体只发 `OpenBLanding`，
+  建齐只是为了与 ColorStack 保持同构。
+  > **单独填这一个还不会生效。** `TrackingService.onOpenBLanding()` 的判断是
+  > 「`adjustAppToken` 已配置 **且** 本 token 非空」，前者还是占位符，所以 Adjust 端
+  > 目前仍整条 no-op（AppsFlyer 那半边照发）。
 - `adjustContentViewToken`：保持空串。与 colorstack 一致，本包不发这个事件。
 
 ### 3. FCM（推送）—— 已就位 ✅
