@@ -1,0 +1,17 @@
+# Xcode / iOS 构建与用户态产物
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+.DS_Store
+
+# SwiftPM
+.swiftpm/
+Package.resolved
+
+# 机密：签名相关绝不进 git（与主工程护栏 #4 同源）
+*.p8
+*.p12
+*.mobileprovision
+*.certSigningRequest
