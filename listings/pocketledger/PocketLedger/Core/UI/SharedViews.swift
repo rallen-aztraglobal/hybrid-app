@@ -117,7 +117,11 @@ final class EmptyStateView: UIView {
                 top: 12, leading: 26, bottom: 12, trailing: 26
             )
             var titleAttributes = AttributeContainer()
-            titleAttributes.font = .systemFont(ofSize: 16, weight: .semibold)
+            // 写全 `UIFont.` 而不是靠前导点做隐式成员查找：这里要先经 AttributeContainer 的
+            // dynamicMemberLookup 推出 Value == UIFont，再在其上查找 —— 双重推导，
+            // 而这是本包唯一一处没有「同款写法已在本仓库验证过能编译」背书的 API，
+            // 不值得省这几个字符。（gridslide 的同一处也是这么写的。）
+            titleAttributes.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
             config.attributedTitle = AttributedString(actionTitle, attributes: titleAttributes)
             button.configuration = config
             button.addTarget(self, action: #selector(handleTap), for: .touchUpInside)
