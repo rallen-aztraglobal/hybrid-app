@@ -1,12 +1,19 @@
 # Security Notes — Hexa Color Sort
 
 ## 签名材料绝不进仓库
-`android/key.properties`、`*.jks`、`*.keystore` 都在 `.gitignore` 里。本包目前**还没有**
-release keystore —— `android/app/build.gradle.kts` 在缺 `key.properties` 时回退 debug 签名，
-本地能跑通，但 **Play 拒收 debug 签名的包**，上架前必须先生成正式 keystore。
+`android/key.properties`、`*.jks`、`*.keystore` 都在 `.gitignore` 里。
 
-生成后照 `android/key.properties.example` 填 `android/key.properties`，keystore 文件放
-`android/` 下（或放仓库外、CI 用 secret 注入）。
+release keystore **已经生成好了**，就在开发机的 `android/hexasort4173.jks`，配套的
+`android/key.properties` 四个字段（`storeFile` / `keyAlias` / `storePassword` /
+`keyPassword`）都已填好、`storeFile` 能解析到。也就是说 release 构建走的是正式签名，
+不是 debug 回退。签名不是上架的阻塞项。
+
+> 换机器或换人接手时这两个文件不会跟着仓库走（本来就不该走），照
+> `android/key.properties.example` 重新配即可 —— 但 **keystore 文件本身必须是同一把**，
+> 重新生成一把新的会导致无法更新已上架的应用。
+
+`android/app/build.gradle.kts` 在缺 `key.properties` 时回退 debug 签名，本地能跑通，
+但 **Play 拒收 debug 签名的包** —— 所以在任何要出上架产物的机器上，先确认这两个文件在位。
 
 > ⚠️ 这把 key 丢了就再也无法更新这个应用（除非启用 Play App Signing 并走密钥重置流程）。
 > 请离线备份 keystore 与口令，别只留在开发机上。

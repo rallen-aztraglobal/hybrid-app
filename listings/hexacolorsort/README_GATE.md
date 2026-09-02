@@ -36,6 +36,15 @@ Console → 上架包，新建一条：platform=`android`、bundleId=`com.slatec
 - `adjustAppToken`：**已填 `2yhxl7paa3ls`**（Adjust 后台 App name `Hexa Color Sort`、reporting currency PHP，与 ap01018 等现有 app 一致）。不可复用 colorstack(`bytg13h7yubk`) / decktallypro(`sn947o53ym80`) 的 token，复用会把本包的安装与会话归到别的 App 上。
 - `adjustOpenBLandingToken`：**已填 `ch4iyt`**（Adjust 后台 event `OpenBLanding`，非 unique event，每次外开成功都计一次）。
 
+> **Adjust 事件集（2026-09-02 补齐）**：后台原本只有 `OpenBLanding` 与 `General Revenue`
+> 两个事件，已补上 `AddToCart` · `CompleteRegistration` · `Login` · `OldRegPurchase` ·
+> `Purchase` · `TPFirstDeposit`，现共 8 个，与 colorstack 完全一致。
+>
+> 注意这是**后台配置的一致性对齐，不是修 bug**：`lib/tracking/tracking_service.dart`
+> 只会发 `OpenBLanding`（Adjust）与 `af_content_view` / `OpenBLanding`（AppsFlyer），
+> 新增的 6 个事件由渠道壳 APK 那边触发，上架包本体一次都不发。补齐前也没有漏报数据。
+> 已有的 `OpenBLanding` token 未改动，代码里烧录的 `ch4iyt` 仍然有效。
+
 ### 3. FCM（推送）—— 已就位 ✅
 `android/app/google-services.json` 已放入：Firebase 项目 **`hybrid-listings-51660`**
 （project_number `609439342540`）下以包名 `com.slatecove.hexasort4173` 注册的 Android App，

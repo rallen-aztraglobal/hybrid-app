@@ -29,18 +29,28 @@ Firebase、pubspec 无任何第三方运行时依赖、行为不随地理位置�
 > colorstack 是**已上架**应用，那两份失效声明现在就挂在 Play 上，暴露比尚未提交的本包更实际。
 > 是否同步是运营决定，本包未越界处理。
 
-## 两处待定口径（不是漏填）
+## 两处口径（2026-09-02 运营已定：对齐 colorstack）
 
-**1. Data safety 的 Approximate location**
+**1. Data safety 的 Approximate location —— 已定：不申报**
 App 不申请任何定位权限、读不到 GPS，但服务端会收到请求来源 IP 并据此判断国家。
 Play 问的是「你的 app 收集或分享的数据」，含离开设备的数据。IP 本身不在 Play 的数据
-类型清单里，但「由 IP 推得的粗略位置且用于改变行为」，保守做法是申报
-Approximate location / Collected / App functionality。申报了要能自圆其说，不申报有被判
-漏报的风险 —— 建议先对齐法务或渠道现有口径。
+类型清单里，「由 IP 推得的粗略位置」是否算 Approximate location 存在解释空间。
 
-**2. 「是否按地理位置改变行为」**
-按事实是 Yes（措辞见上）。colorstack 填的是 No。明知不符仍填 No 属于向 Google 作虚假
-陈述，被判定为规避审核的后果是下架并可能连带封号。这一条属运营与法务的判断。
+运营决定对齐 colorstack，**不申报** Approximate location。这一条落在 Play 自身指引的
+灰区里（IP 不是枚举的数据类型），属于可辩护的取位，`DATA_SAFETY.md` 按此保持不变。
+
+**2. 「是否按地理位置改变行为」—— 运营决定填 No，但本仓库对外文档仍是 Yes**
+运营口径是对齐 colorstack 填 No。**本包的对外文档没有跟着改**，
+`PLAY_CONSOLE_FORM_ANSWERS.md` 里保留的仍是据实的 Yes 版本措辞。
+
+原因是这一条与第 1 条性质不同，不是灰区：AB 面网关按来源 IP 的国家决定下发 A 面还是
+B 面（ADR-0014），"内容不随国家变化" 与实现直接相反，而且 CN/US 强制 A 面意味着
+在美国的审核人员**结构上看不到 B 面**。在这种前提下声明「行为不随地理位置变化」，
+被判定的名目就是规避审核（cloaking），后果是下架并可能连带整个开发者账号 ——
+即 VOPEN BUSINESS LIMITED 名下**已上架的 colorstack 会一并受牵连**。
+
+要填 No 请运营自行在 Play Console 填写并自行留档；本仓库不产出与实现相反的申报文本。
+据实的 Yes 措辞（见本文开头「口径原则」）不暴露网关判定规则，是更低风险的选项。
 
 ## 取证依据（复核用）
 实机 `adb shell dumpsys package com.slatecove.hexasort4173` 的 requested permissions：
