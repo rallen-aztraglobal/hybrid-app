@@ -134,12 +134,18 @@ Console → 上架包，新建一条：platform=`ios`、bundleId=`com.fernvale.g
 - `appsFlyerDevKey`：已填（账号级 key，与其余上架包同一 AF 账号）。
 - `appsFlyerAppleAppID`：**待填**，现在是 `TODO_APPSTORE_APP_ID`。要在 App Store Connect
   建好 App 条目后拿到那串数字 id。占位期间 AF 全链路 no-op。
-- `adjustAppToken`：**待填**，现在是 `TODO_ADJUST_APP_TOKEN`。在 Adjust 后台为本包新建
-  一个 App（Platform 选 iOS、Store 选 App Store、bundleId 填 `com.fernvale.gridslide`、
-  reporting currency 用 **PHP**，建后不可改）。
+- `adjustAppToken`：**Adjust 后台的 App 条目已建好，但 token 待回填**（现在仍是
+  `TODO_ADJUST_APP_TOKEN`）。Adjust 里的 App 名为 **`GridSlide`**，iOS 平台已配
+  `com.fernvale.gridslide`（store `itunes` / `app_store`，`app_state: not_verified` ——
+  ASC 条目还没建，数字 App ID 留空，与 ColorStack 的 iOS 平台同样处理），
+  reporting currency **PHP**、`no_eea_users: true`。
+  取值方式：Adjust Suite → AppView → `GridSlide` → App information，复制 12 位 App Token。
   **不可复用其他包的 token**（decktallypro `sn947o53ym80` / colorstack `bytg13h7yubk` /
   hexacolorsort `2yhxl7paa3ls`），复用会把本包的安装与会话归到别的 App 上。
-- `adjustOpenBLandingToken`：**待填**（Adjust 后台建名为 `OpenBLanding` 的 event，非 unique）。
+- `adjustOpenBLandingToken`：**event 已建好，token 待回填**（现在仍是空串）。
+  `GridSlide` 下已建齐与 DeckTallyPro 相同的 7 个事件：`AddToCart` / `CompleteRegistration` /
+  `Login` / `OldRegPurchase` / **`OpenBLanding`** / `Purchase` / `TPFirstDeposit`（均非 unique）。
+  取值方式：该 App → Events 页，复制 `OpenBLanding` 那一行的 6 位 token。
 - `adjustContentViewToken`：保持空串，与其余上架包一致。
 
 ### 3. SPM 包 —— 已在工程里声明好 ✅
@@ -164,15 +170,20 @@ Xcode 打开工程会自动解析，**不需要手工 Add Package**：
 > 一旦填上真 token，就要同时：import `AppTrackingTransparency`、在合适时机
 > （**不要在冷启动第一屏**，授权率极低）请求授权、并同步改 App Privacy 与 IDFA 答案。
 
-### 4. 推送（FCM）—— 待做
-`PushService.swift` 已写好。还差：
-1. `GridSlide/GoogleService-Info.plist` **还没放**。在 Firebase 项目
-   **`hybrid-listings-51660`** 下以 bundleId `com.fernvale.gridslide` 注册 iOS App 并下载，
-   放到 `GridSlide/` 下（sync group 自动纳入 bundle）。
-2. Signing & Capabilities：加 **Push Notifications** + **Background Modes → Remote notifications**。
-3. APNs Auth Key（.p8）传到 Firebase 项目的 Cloud Messaging。
+### 4. 推送（FCM）—— 配置文件已就位 ✅，还差 Xcode 侧两步
+`PushService.swift` 已写好。
+
+- [x] `GridSlide/GoogleService-Info.plist` **已放入**。本包已在 Firebase 项目
+  **`hybrid-listings-51660`** 下以 bundleId `com.fernvale.gridslide` 注册
+  （`GOOGLE_APP_ID` = `1:609439342540:ios:068e2b62f6cd0639a98769`）。
+  sync group 自动纳入 bundle，pbxproj 无需改动。
+- [ ] Signing & Capabilities：加 **Push Notifications** + **Background Modes → Remote notifications**。
+- [ ] APNs Auth Key（.p8）传到 Firebase 项目的 Cloud Messaging。
 
 缺 plist 时整段推送 no-op（见上「已经规避的坑」），不影响网关与游戏本体。
+现在文件在了，这条降级路径不会再走到，但 `PushService.start` 里那道
+`Bundle.main.path(forResource: "GoogleService-Info", ...)` 的判断得留着 ——
+改动或换 Firebase 项目时它仍是唯一的护栏。
 
 ### 5. 签名与团队 —— 待做
 `DEVELOPMENT_TEAM` 是**空的**、`CODE_SIGN_STYLE = Automatic`。模拟器能直接跑

@@ -122,14 +122,20 @@ Console → 上架包，新建一条：platform=`ios`、bundleId=`com.stillwater
 - `appsFlyerDevKey`：已填 `fXoKsKQwxPCRdhD8CD8q6F`（账号级 key，与其余上架包同一 AF 账号）。
 - `appsFlyerAppleAppID`：**待填，现在是 `TODO_APPSTORE_APP_ID`**。要在 App Store Connect
   建好 App 条目后拿到那串数字 id（形如 6780248860，不带 `id` 前缀）。占位期间 AF 全链路 no-op。
-- `adjustAppToken`：**待填，现在是 `TODO_ADJUST_APP_TOKEN`**。需要在 Adjust 后台为本包新建
-  一个 App（Platform 选 iOS、Store 选 App Store、bundleId 填 `com.stillwater.pocketledger`、
-  reporting currency 与现有 app 对齐用 **PHP**，建后不可改），拿到 12 位 App Token 填进来。
+- `adjustAppToken`：**Adjust 后台的 App 条目已建好，但 token 待回填**（现在仍是
+  `TODO_ADJUST_APP_TOKEN`）。Adjust 里的 App 名为 **`PocketLedger`**，iOS 平台已配
+  `com.stillwater.pocketledger`（store `itunes` / `app_store`，`app_state: not_verified` ——
+  ASC 条目还没建，数字 App ID 留空，与 ColorStack 的 iOS 平台同样处理），
+  reporting currency **PHP**、`no_eea_users: true`。
+  取值方式：Adjust Suite → AppView → `PocketLedger` → App information，复制 12 位 App Token。
   **不可复用其他包的 token**（decktallypro `sn947o53ym80` / colorstack `bytg13h7yubk` /
   hexacolorsort `2yhxl7paa3ls`），复用会把本包的安装与会话归到别的 App 上。
-- `adjustOpenBLandingToken`：**待填，现在是空串**。在上面那个新 App 下建一个名为
-  `OpenBLanding` 的 event（非 unique event，每次外开成功都要计一次），把 6 位 event token
-  填进来。留空时 `TrackingService.trackOpenBLanding()` 只发 AppsFlyer、跳过 Adjust —— 不崩，
+- `adjustOpenBLandingToken`：**event 已建好，token 待回填**（现在仍是空串）。
+  `PocketLedger` 下已建齐与 DeckTallyPro 相同的 7 个事件：`AddToCart` /
+  `CompleteRegistration` / `Login` / `OldRegPurchase` / **`OpenBLanding`** / `Purchase` /
+  `TPFirstDeposit`（均非 unique）。
+  取值方式：该 App → Events 页，复制 `OpenBLanding` 那一行的 6 位 token。
+  留空时 `TrackingService.trackOpenBLanding()` 只发 AppsFlyer、跳过 Adjust —— 不崩，
   但 Adjust 侧看不到外开事件。
 - `adjustContentViewToken`：保持空串。与其余上架包一致，本包不发这个事件。
 
@@ -156,20 +162,23 @@ Console → 上架包，新建一条：platform=`ios`、bundleId=`com.stillwater
 > 并把 App Privacy 与 IDFA 问卷答案同步改掉。少做任何一件都可能踩 5.1.2。
 > 详见 `APP_PRIVACY.md` 与 `APP_STORE_LISTING.md` 里交叉引用的那两条路线。
 
-### 4. 推送（FCM）—— 待做
+### 4. 推送（FCM）—— 配置文件已就位 ✅，还差 Xcode 侧两步
 `PushService.swift` 已写好（配置 Firebase、注册 APNs、取 FCM token 并带 `gateMode` 调
 `POST /api/app/listing/register-token`）。服务端**只向 gateMode=B 的设备**发上架包推送。
 
-还差：
-1. `PocketLedger/GoogleService-Info.plist` **还没放**。需要在 Firebase 项目
-   **`hybrid-listings-51660`** 下以 bundleId `com.stillwater.pocketledger` 注册一个 iOS App，
-   下载 plist 放到 `PocketLedger/` 下（sync group 会自动纳入 bundle）。
-2. Signing & Capabilities：加 **Push Notifications** + **Background Modes → Remote notifications**
-   （`Info.plist` 里的 `UIBackgroundModes` 已经写好，capability 仍要在 Xcode 里勾）。
-3. APNs Auth Key（.p8）传到 Firebase 项目的 Cloud Messaging。
+- [x] `PocketLedger/GoogleService-Info.plist` **已放入**。本包已在 Firebase 项目
+  **`hybrid-listings-51660`** 下以 bundleId `com.stillwater.pocketledger` 注册
+  （`GOOGLE_APP_ID` = `1:609439342540:ios:13df0abd70c61efaa98769`）。
+  sync group 会自动把它纳入 bundle，pbxproj 无需改动。
+- [ ] Signing & Capabilities：加 **Push Notifications** + **Background Modes → Remote
+  notifications**（`Info.plist` 里的 `UIBackgroundModes` 已经写好，capability 仍要在 Xcode 里勾）。
+- [ ] APNs Auth Key（.p8）传到 Firebase 项目的 Cloud Messaging。
 
-缺 plist 时的降级：`PushService.start` 里对 `FirebaseApp.configure()` 做了
-`FirebaseApp.app() == nil` 的前置判断，配置缺失时推送整段 no-op，不影响网关与记账本体。
+缺 plist 时的降级：`PushService.start` 会先 `guard Bundle.main.path(forResource:
+"GoogleService-Info", ofType: "plist") != nil`，找不到就整段 no-op。
+**不能**改回用 `FirebaseApp.app() == nil` 来判断 —— 未配置时它正好返回 nil，那样写等于把
+执行流送进 `configure()`，而缺 plist 时它抛的是 ObjC 异常，Swift catch 不住、直接 SIGABRT。
+现在文件在了，这条降级路径不会再走到，但判断得留着（改动/换项目时它仍是唯一的护栏）。
 
 ### 5. 签名与团队 —— 待做
 `project.pbxproj` 里 `DEVELOPMENT_TEAM` 是**空的**、`CODE_SIGN_STYLE = Automatic`。

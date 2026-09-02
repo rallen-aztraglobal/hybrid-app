@@ -99,35 +99,42 @@ Console → 上架包，新建一条：platform=`android`、bundleId=`com.northg
   **这是网关 API，不是 B 面地址**；基址迁移时改这里，可加多个候选抗封。
 - `appsFlyerDevKey`：已填 `fXoKsKQwxPCRdhD8CD8q6F`（账号级 key，与 colorstack /
   decktallypro / hexacolorsort 同一 AF 账号）。`appsFlyerAppId` 在 Android 侧即包名，无需改。
-- `adjustAppToken`：**待填，现在是 `TODO_ADJUST_APP_TOKEN`**。需要在 Adjust 后台为本包
-  新建一个 App（Platform 选 Android、Store 选 Google Play、bundleId 填
-  `com.northglade.calcpad5170`、reporting currency 与现有 app 对齐用 **PHP**），
-  拿到 12 位 App Token 填进来。
+- `adjustAppToken`：**Adjust 后台的 App 条目已建好，但 token 待回填**（现在仍是
+  `TODO_ADJUST_APP_TOKEN`）。Adjust 里的 App 名为 **`CalcPad`**，Android 平台已配
+  `com.northglade.calcpad5170`（store `google` / `google_play`），reporting currency **PHP**、
+  `no_eea_users: true`，与 ColorStack 同口径。
+  取值方式：Adjust Suite → AppView → `CalcPad` → App information，复制 12 位 App Token。
   **不可复用其他包的 token**（colorstack `bytg13h7yubk` / decktallypro `sn947o53ym80` /
   hexacolorsort `2yhxl7paa3ls`），复用会把本包的安装与会话归到别的 App 上。
-- `adjustOpenBLandingToken`：**待填，现在是空串**。在上面那个新 App 下建一个名为
-  `OpenBLanding` 的 event（非 unique event，每次外开成功都要计一次），把 6 位 event token
-  填进来。留空时 `TrackingService.onOpenBLanding()` 只发 AppsFlyer、跳过 Adjust —— 不崩，
+- `adjustOpenBLandingToken`：**event 已建好，token 待回填**（现在仍是空串）。
+  `CalcPad` 下已建齐与 ColorStack 相同的 7 个事件：`AddToCart` / `CompleteRegistration` /
+  `Login` / `OldRegPurchase` / **`OpenBLanding`** / `Purchase` / `TPFirstDeposit`（均非 unique）。
+  取值方式：该 App → Events 页，复制 `OpenBLanding` 那一行的 6 位 token。
+  留空时 `TrackingService.onOpenBLanding()` 只发 AppsFlyer、跳过 Adjust —— 不崩，
   但 Adjust 侧看不到外开事件。
 - `adjustContentViewToken`：保持空串。与 colorstack 一致，本包不发这个事件。
 
-### 3. FCM（推送）—— 待做
-`android/app/google-services.json` **还没放**。需要在 Firebase 项目
+### 3. FCM（推送）—— 已就位 ✅
+`android/app/google-services.json` **已放入**。本包已在 Firebase 项目
 **`hybrid-listings-51660`**（project_number `609439342540`）下以包名
-`com.northglade.calcpad5170` 注册一个 Android App，下载 `google-services.json` 放到
-`android/app/` 下。该文件非机密（随 APK 分发），进 git，与其余上架包同口径。
+`com.northglade.calcpad5170` 注册（`mobilesdk_app_id` =
+`1:609439342540:android:bad350c33e909f58a98769`）。该文件非机密（随 APK 分发），进 git，
+与其余上架包同口径。
 
-**放进来之前记得裁剪 —— 只保留本包一个 client 条目。**
-Firebase 控制台下载的原始文件会把该项目下**所有** Android App 都列进来，包括
-`com.vividnest.colorstack5821` 和 `com.slatecove.hexasort4173`。带着它出包，等于在
-CalcPad 的 APK 里明写另外两个上架包的包名，任何人解压 APK 就能看出这几个包同属一家 ——
-这正是各包使用互不相关的厂商命名空间（`vividnest` / `deck` / `slatecove` / `northglade`）
-想避免的事。google-services 插件只按 applicationId 取匹配的那条 client，多余条目会被忽略。
+**已按规矩裁剪 —— 只保留本包一个 client 条目。**
+Firebase 控制台下载的原始文件会把该项目下**所有** Android App 都列进来（本次下载里就有
+`com.vividnest.colorstack5821` 与 `com.slatecove.hexasort4173` 两条，已全部裁掉）。
+带着它出包，等于在 CalcPad 的 APK 里明写另外两个上架包的包名，任何人解压 APK 就能看出
+这几个包同属一家 —— 这正是各包使用互不相关的厂商命名空间
+（`vividnest` / `deck` / `slatecove` / `northglade`）想避免的事。
+google-services 插件只按 applicationId 取匹配的那条 client，多余条目会被忽略。
 
-缺这个文件时的降级路径已在 hexacolorsort 上实测过：日志出现
-`Default FirebaseApp failed to initialize because no default options were found`
-之后 App 照常进 A 面、不崩 —— 即推送 no-op、不影响网关与计算器。本包当前就跑在这条
-降级路径上（`android/app/build.gradle.kts` 里 google-services 插件是条件应用的）。
+放入后已重新构建过 release APK（47.7MB，仍通过）。
+放入之前跑的是降级路径（`Default FirebaseApp failed to initialize because no default
+options were found`，推送 no-op、不影响网关与计算器）。
+
+> 注意 `android/app/build.gradle.kts` 里 google-services 插件是**按文件存在与否条件应用**的。
+> 现在文件在了，插件会真正生效 —— 加/删这个文件会改变构建路径，改动后记得重新构建一次。
 
 ### 4. 签名 —— 待做
 本包目前**没有** release keystore。`android/key.properties`（照 `key.properties.example` 填）

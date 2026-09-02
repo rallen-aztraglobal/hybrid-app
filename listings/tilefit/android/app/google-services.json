@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "609439342540",
+    "project_id": "hybrid-listings-51660",
+    "storage_bucket": "hybrid-listings-51660.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:609439342540:android:16eeab52067a58eaa98769",
+        "android_client_info": {
+          "package_name": "com.emberlane.tilefit8264"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAhbSECyb4RoH5IF_QA0MKvpktB735u0DY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
