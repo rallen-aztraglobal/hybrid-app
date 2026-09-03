@@ -81,23 +81,38 @@ func TestParseSkipsCommentsAndShortLines(t *testing.T) {
 	}
 }
 
-// TestValidateDetectsDirtyData 验证唯一性校验能抓住现有 ap.csv 的脏数据
-// （ap01035 与 ap01034 共用 applicationId com.arenaplus.ap01034）。
-func TestValidateDetectsDirtyData(t *testing.T) {
-	root := findRepoRoot(t)
-	f, err := ReadFile(filepath.Join(root, "channels", "ap.csv"))
-	if err != nil {
-		t.Fatal(err)
+// TestValidateDetectsDuplicateAppID 验证唯一性校验能抓住 applicationId 重复
+// （CLAUDE.md 护栏 5 / ADR-0009：applicationId 是唯一标识，重复会导致两个渠道包互相覆盖安装）。
+// 样本取自历史上真实出现过的脏数据：ap01035 曾与 ap01034 共用 com.arenaplus.ap01034
+// （359000d 引入、66979a1 修正）。这里内联样本而不读 channels/*.csv——真实 CSV 是会变的
+// 业务数据，拿它当断言样本会在数据被修正时假性变红。
+func TestValidateDetectsDuplicateAppID(t *testing.T) {
+	rows := []Row{
+		{"ap01034", "com.arenaplus.ap01034", "1053259243279695873", "Arena Plus"},
+		{"ap01035", "com.arenaplus.ap01034", "1053259242391433216", "Arena Plus"},
 	}
-	conflicts := Validate(f.Rows)
-	found := false
-	for _, c := range conflicts {
-		if c.Field == "applicationId" && c.Value == "com.arenaplus.ap01034" {
-			found = true
-		}
+	conflicts := Validate(rows)
+	if len(conflicts) != 1 {
+		t.Fatalf("应恰好报出 1 处冲突，实得: %v", conflicts)
 	}
-	if !found {
-		t.Errorf("应检测到 applicationId 重复 com.arenaplus.ap01034，实得冲突: %v", conflicts)
+	c := conflicts[0]
+	if c.Field != "applicationId" || c.Value != "com.arenaplus.ap01034" {
+		t.Errorf("冲突字段/值不符，实得: %v", c)
+	}
+	if len(c.Flavors) != 2 || c.Flavors[0] != "ap01034" || c.Flavors[1] != "ap01035" {
+		t.Errorf("冲突应列出两个 flavor（升序），实得: %v", c.Flavors)
+	}
+}
+
+// TestValidateDetectsDuplicateFlavor 验证 flavor 维度同样查重（Validate 的另一半约束）。
+func TestValidateDetectsDuplicateFlavor(t *testing.T) {
+	rows := []Row{
+		{"ap01034", "com.arenaplus.ap01034", "111", "Arena Plus"},
+		{"ap01034", "com.arenaplus.dup", "222", "Arena Plus"},
+	}
+	conflicts := Validate(rows)
+	if len(conflicts) != 1 || conflicts[0].Field != "flavor" || conflicts[0].Value != "ap01034" {
+		t.Errorf("应报出 flavor 重复 ap01034，实得: %v", conflicts)
 	}
 }
 
