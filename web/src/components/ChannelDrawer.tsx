@@ -11,13 +11,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { deriveApplicationId, type BrandMeta } from '@/lib/brands';
 import type { Channel, ChannelInput, DomainEntry } from '@/lib/types';
-import { useBrands, useChannels, useSaveChannel, useStores } from '@/hooks/queries';
+import { useBrands, useChannels, useSaveChannel, useSigningKeys, useStores } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
 import { friendlyNotFoundMessage } from '@/lib/api';
 import { validateChannel, composeFlavor, type FieldError } from '@/lib/validation';
 import { loadImageFile, urlToDataUrl } from '@/lib/icon';
+import { shortFingerprint } from '@/lib/text';
 import { cn } from '@/lib/cn';
 import { Button, Note, SectionHeading, Select, Switch } from './ui';
 import { CloseIcon, InfoIcon, SaveCheckIcon } from './icons';
@@ -36,6 +37,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const { data: channels } = useChannels();
   const { data: brands } = useBrands();
   const { data: stores } = useStores();
+  const { data: signingKeys } = useSigningKeys();
   const save = useSaveChannel();
   // 域名管理是独立权限点（10-rbac.md domain:edit「修改品牌域名、渠道域名」），
   // 即便拥有 channel:edit 也不代表能改渠道级覆盖域名——本区块单独按 domain:edit 收紧。
@@ -45,6 +47,21 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const storeOptions = useMemo(
     () => (stores ?? []).filter((s) => s.status === 'enabled').slice().sort((a, b) => a.sort - b.sort),
     [stores],
+  );
+
+  // 签名 key 下拉选项：清单固定很短，含默认项（id===''）；每项展示 name + SHA-1 前 8 位辨识用。
+  const signingKeyOptions = useMemo(
+    () =>
+      (signingKeys ?? []).map((k) => ({
+        value: k.id,
+        label: (
+          <span className="flex items-center justify-between gap-2 w-full">
+            <span className="truncate">{k.name}</span>
+            <span className="flex-none text-[11px] text-muted font-mono">SHA-1 {shortFingerprint(k.certSha1)}</span>
+          </span>
+        ),
+      })),
+    [signingKeys],
   );
 
   // 后端下发的本品牌视图（含真实域名 / 包前缀）。
@@ -111,6 +128,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
         remark: editChannel.remark,
         liveVersion: editChannel.liveVersion ?? '',
         storeId: editChannel.storeId ?? null,
+        signingKey: editChannel.signingKey ?? '',
         adjustAppToken: editChannel.adjustAppToken ?? '',
         adjustEvents: editChannel.adjustEvents ?? {},
       });
@@ -257,6 +275,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       adjustAppToken: form.adjustAppToken?.trim() ?? '',
       adjustEvents: form.adjustEvents ?? {},
       liveVersion: form.liveVersion?.trim() ?? '',
+      signingKey: form.signingKey?.trim() ?? '',
     };
     try {
       await save.mutateAsync({ id: editing ?? undefined, input: payload });
@@ -420,6 +439,18 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
                 value={form.liveVersion ?? ''}
                 onChange={(e) => set('liveVersion', e.target.value)}
               />
+            </Field>
+            {/* 签名 key：默认沿用统一 key；仅早年少数已上架商店的渠道需切到商店登记的老证书。 */}
+            <Field label="签名 key" hint="默认沿用统一签名 key；仅已上架商店且证书已登记的渠道需要切换" error={errOf('signingKey')}>
+              <Select
+                value={form.signingKey ?? ''}
+                onChange={(v) => set('signingKey', v)}
+                placeholder="默认 key"
+                options={signingKeyOptions}
+              />
+              <div className="mt-1 text-[11.5px] text-muted">
+                已上架商店的渠道必须与商店登记的证书一致；选错会导致商店拒收或用户无法覆盖安装。
+              </div>
             </Field>
           </div>
 
@@ -597,6 +628,7 @@ function blankForm(brandCode: BrandMeta['code']): ChannelInput {
     domains: EMPTY_DOMAINS,
     status: 'enabled',
     storeId: null,
+    signingKey: '',
     adjustAppToken: '',
     adjustEvents: {},
     liveVersion: '',

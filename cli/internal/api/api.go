@@ -182,6 +182,10 @@ type serverManifest struct {
 		// 否则 renderAdjustTokens 拿不到 token → 误判「无渠道绑定」跳过 adjust-tokens.json。
 		AdjustAppToken string            `json:"adjustAppToken"`
 		AdjustEvents   map[string]string `json:"adjustEvents"`
+		// SigningKey 签名 key ID（ADR-0016）：空=默认 key，非空则 runner 打包后按此 ID
+		// 用 apksigner 重签。同样必须拷进 manifest.Channel，否则 runner 侧永远读到空值，
+		// 商店渠道会被当默认签名投递（严重问题：同包名双证书，商店拒收或用户无法覆盖升级）。
+		SigningKey string `json:"signingKey"`
 	} `json:"channels"`
 }
 
@@ -212,6 +216,7 @@ func (c *Client) Manifest(ctx context.Context, brand string) (*manifest.Manifest
 			ResZipURL:       ch.ResZipURL,
 			AdjustAppToken:  ch.AdjustAppToken,
 			AdjustEvents:    ch.AdjustEvents,
+			SigningKey:      ch.SigningKey,
 		})
 	}
 	return m, nil

@@ -23,3 +23,5 @@ deploy/.env.*
 # build-runner 镜像【必须】烧入这一个签名 keystore（ADR-0008/0010：运营决定直接内置、
 # 私有 registry、接受风险）。CI 把 release.keystore 放到 deploy/secrets/ 后构建。
 !deploy/secrets/release.keystore
+# ADR-0016：商店老 key（empty-app）同样必须烧入，供 runner 按渠道重签。
+!deploy/secrets/store-emptyapp.keystore

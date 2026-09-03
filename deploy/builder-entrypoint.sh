@@ -59,6 +59,17 @@ export HYBRID_PACK_SERVER="${HYBRID_PACK_SERVER:-${HYBRID_SERVER_URL:-}}"
 export HYBRID_PACK_TOKEN="${HYBRID_PACK_TOKEN:-${HYBRID_RUNNER_TOKEN:-}}"
 export HYBRID_PACK_RUNNER_ID="${HYBRID_PACK_RUNNER_ID:-${HOSTNAME:-runner}}"
 
+# ---- 签名 key 注册表（ADR-0016）----
+# 非默认签名 key（如商店老 key empty-app）烧在镜像里，runner 按渠道 signingKey 查表重签。
+# 只报告「有哪些 id」，绝不打印口令。缺文件不阻断启动：默认 key 的渠道照常可打；需要非默认
+# key 的渠道会在 runner 侧 fail-closed（任务失败并说明缺哪把 key），不会把默认签名的包当商店包投递。
+export HYBRID_PACK_SIGNING_KEYS="${HYBRID_PACK_SIGNING_KEYS:-/opt/hybrid/signing-keys.properties}"
+if [ -f "${HYBRID_PACK_SIGNING_KEYS}" ]; then
+  log "签名 key 注册表 ${HYBRID_PACK_SIGNING_KEYS}：$(grep -o '^[a-z][a-z0-9_-]*\.file=' "${HYBRID_PACK_SIGNING_KEYS}" | sed 's/\.file=$//' | tr '\n' ' ')"
+else
+  log "警告：未找到签名 key 注册表 ${HYBRID_PACK_SIGNING_KEYS}；需要非默认签名 key 的渠道将无法打包。"
+fi
+
 # ---- 启动 runner ----
 # 产物目录/下载前缀（评审 D3）：runner 默认写 /var/www/apks，与 nginx 共享卷 /apks 不一致；
 # 显式对齐到 ${APKS_DIR}（compose=/apks），下载前缀默认 /apks（对应 nginx 的 /apks/ 路由）。

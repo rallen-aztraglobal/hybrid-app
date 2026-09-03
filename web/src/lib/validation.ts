@@ -17,6 +17,7 @@ export interface FieldError {
 const FLAVOR_RE = /^[a-z][a-z0-9]*$/; // Gradle flavor：小写字母开头，字母数字
 const APPID_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/; // 反域名包名，至少两段
 const PAL_RE = /^\d{6,}$/; // 现网 pal_code 都是长数字串
+const SIGNING_KEY_RE = /^[a-z][a-z0-9_-]{0,31}$/; // 签名 key ID：小写字母开头，字母数字/下划线/连字符，≤32 位
 
 /**
  * 合成 flavor：基础 flavor + 可选商店后缀（下划线连接）。
@@ -103,6 +104,12 @@ export function checkFormat(input: ChannelInput, baseFlavor?: string): FieldErro
     errors.push({ field: 'palCode', message: 'PAL_CODE 必填' });
   } else if (!PAL_RE.test(pal)) {
     errors.push({ field: 'palCode', message: 'PAL_CODE 应为纯数字串' });
+  }
+
+  // 签名 key：空 = 默认，非空须匹配 GET /api/signing-keys 下发的 id 格式。
+  const signingKey = (input.signingKey ?? '').trim();
+  if (signingKey && !SIGNING_KEY_RE.test(signingKey)) {
+    errors.push({ field: 'signingKey', message: '签名 key ID 须小写字母开头，仅含字母数字/下划线/连字符（≤32 位）' });
   }
 
   return errors;

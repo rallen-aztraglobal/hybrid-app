@@ -47,6 +47,14 @@ const SEEDED_LATEST_APK: Record<string, string> = {
   ap01040: '/apks/ap/ap01040/1.0.3/app-ap01040-release.apk',
 };
 
+// 演示用：这批 flavor 当年用「商店老 key（empty-app）」签名并已上架商店，不能换成默认 key
+// （商店按包名绑定证书）。mock CSV 中只收录了 ap01018 / gzmkt031，其余 4 个（ap01019~ap01022）
+// 不在本地演示数据集里，故此处不硬造。
+const SEEDED_SIGNING_KEY: Record<string, string> = {
+  ap01018: 'emptyapp',
+  gzmkt031: 'emptyapp',
+};
+
 function buildChannels(): Channel[] {
   const all: Channel[] = [];
   for (const brand of BRAND_ORDER) {
@@ -54,6 +62,7 @@ function buildChannels(): Channel[] {
     for (const c of list) {
       if (DISABLED_FLAVORS.has(c.flavorName)) c.status = 'disabled';
       if (SEEDED_LATEST_APK[c.flavorName]) c.latestApkUrl = SEEDED_LATEST_APK[c.flavorName];
+      if (SEEDED_SIGNING_KEY[c.flavorName]) c.signingKey = SEEDED_SIGNING_KEY[c.flavorName];
     }
     all.push(...list);
   }

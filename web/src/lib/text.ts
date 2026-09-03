@@ -28,6 +28,12 @@ export function apkFileName(url: string): string {
   return seg || 'app-release.apk';
 }
 
+/** 证书指纹（SHA-1/SHA-256）截短展示：去掉冒号分隔，取前 8 位十六进制 + 省略号。 */
+export function shortFingerprint(hex: string): string {
+  const clean = hex.replace(/:/g, '');
+  return clean ? `${clean.slice(0, 8)}…` : '';
+}
+
 /** 相对时间（粗粒度，用于构建记录展示）。 */
 export function timeAgo(iso?: string): string {
   if (!iso) return '—';

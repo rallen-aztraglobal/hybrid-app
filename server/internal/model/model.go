@@ -97,7 +97,12 @@ type Channel struct {
 	// 发的是哪个版本，故在后台记一笔。仅记录/展示：不参与打包（versionName 仍在打包中心填）、不下发 APK、
 	// 不进 CLI 渲染的 CSV。空串 = 未记录。NOT NULL DEFAULT ''，AutoMigrate 补列时存量行自然为空。
 	LiveVersion string `gorm:"column:live_version;type:varchar(32);not null;default:''" json:"liveVersion"`
-	CreatedBy   uint64 `gorm:"column:created_by" json:"createdBy"`
+	// SigningKey 签名 key 注册表 ID（见 signing_key.go）：空串 = 默认 key（构建机 Gradle
+	// signingConfigs.release 那把，CN=bingo）；非空 = 该渠道需要用注册表里对应的另一把 keystore
+	// 重签（如历史上架渠道的 CN=empty-app）。构建机 runner 打包后据此用 apksigner 重签。
+	// DB 只存 ID，不存任何密钥材料（CLAUDE.md 护栏 4）。
+	SigningKey string `gorm:"column:signing_key;type:varchar(32);not null;default:''" json:"signingKey,omitempty"`
+	CreatedBy  uint64 `gorm:"column:created_by" json:"createdBy"`
 
 	// StoreID 可选：渠道所属应用商店（华为/小米/Oppo 等）。非空时 flavor 形如 <base>_<store.Code>，
 	// applicationId 据此派生出点号分段（见 Brand.DeriveApplicationID）。

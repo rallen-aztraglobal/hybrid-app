@@ -21,6 +21,15 @@
 #   --build-arg KEYSTORE_PASSWORD=... --build-arg KEY_ALIAS=... --build-arg KEY_PASSWORD=...
 #   并把 keystore 放到构建上下文 deploy/secrets/release.keystore（gitignore，CI 注入）。
 #
+# 多签名 key（2026-09-01，ADR-0016）：一批已上架商店的渠道（ap01018~ap01022、gzmkt031）当年是用
+#   另一把 key（gzmkt031-key.jks，证书 CN=empty-app）签的，商店按包名绑定证书不能变。Gradle 仍只认
+#   上面那把默认 key（护栏 #1 不动 Gradle）；额外的 key 全部烧进本镜像，并写一份「签名 key 注册表」
+#   /opt/hybrid/signing-keys.properties（<id>.file/.alias/.storePassword/.keyPassword），runner 在
+#   打包完成后按渠道 signingKey（Console 下发，仅是 ID）用 apksigner 重签（v1+v2）再投递。
+#   → 需额外提供：--build-arg STORE_EMPTYAPP_KEYSTORE_PASSWORD/STORE_EMPTYAPP_KEY_ALIAS/STORE_EMPTYAPP_KEY_PASSWORD
+#     并把 keystore 放到 deploy/secrets/store-emptyapp.keystore（gitignore）。
+#   新增一把 key = 这里多 COPY 一份 + 注册表多一段 + server 注册表（model.SigningKeys）多一条。
+#
 # 工具链对齐现有工程：AGP 8.12 / Gradle 8.13 / compileSdk 36 / minSdk 29 / JDK 17。
 #
 # 单独构建（自测，可选）：
@@ -105,9 +114,15 @@ RUN useradd -m -u 1000 builder \
 ARG KEYSTORE_PASSWORD=""
 ARG KEY_ALIAS=""
 ARG KEY_PASSWORD=""
+# 商店老 key（empty-app，ADR-0016）：口令同样由 build ARG 注入。
+ARG STORE_EMPTYAPP_KEYSTORE_PASSWORD=""
+ARG STORE_EMPTYAPP_KEY_ALIAS=""
+ARG STORE_EMPTYAPP_KEY_PASSWORD=""
 
 # keystore 本体：CI 把它放到 deploy/secrets/release.keystore（gitignore），COPY 进固定路径。
 COPY deploy/secrets/release.keystore /opt/hybrid/release.keystore
+# 第二把 key：deploy/secrets/store-emptyapp.keystore（gitignore）→ 固定路径，仅 runner 重签时用。
+COPY deploy/secrets/store-emptyapp.keystore /opt/hybrid/store-emptyapp.keystore
 
 # 写好 local.properties（含 sdk.dir + 签名四项），供 Gradle signingConfigs.release 直接读。
 #   entrypoint 在仓库 checkout 后把它放到 ${REPO_DIR}/local.properties（仓库是运行时卷）。
@@ -119,8 +134,20 @@ RUN set -eux; \
       echo "KEY_ALIAS=${KEY_ALIAS}"; \
       echo "KEY_PASSWORD=${KEY_PASSWORD}"; \
     } > /opt/hybrid/local.properties; \
+    { \
+      echo "# 签名 key 注册表（ADR-0016）：runner 按渠道 signingKey 查此表用 apksigner 重签。"; \
+      echo "# 默认 key（Gradle signingConfigs.release）不在此表；此处只放「非默认」的 key。"; \
+      echo "emptyapp.file=/opt/hybrid/store-emptyapp.keystore"; \
+      echo "emptyapp.alias=${STORE_EMPTYAPP_KEY_ALIAS}"; \
+      echo "emptyapp.storePassword=${STORE_EMPTYAPP_KEYSTORE_PASSWORD}"; \
+      echo "emptyapp.keyPassword=${STORE_EMPTYAPP_KEY_PASSWORD}"; \
+    } > /opt/hybrid/signing-keys.properties; \
     chown -R builder:builder /opt/hybrid; \
-    chmod 0600 /opt/hybrid/release.keystore /opt/hybrid/local.properties
+    chmod 0600 /opt/hybrid/release.keystore /opt/hybrid/local.properties \
+               /opt/hybrid/store-emptyapp.keystore /opt/hybrid/signing-keys.properties
+
+# runner 读注册表的路径（可被 compose 环境覆盖）。
+ENV HYBRID_PACK_SIGNING_KEYS=/opt/hybrid/signing-keys.properties
 
 WORKDIR /workspace
 USER builder

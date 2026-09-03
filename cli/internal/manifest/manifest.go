@@ -55,6 +55,13 @@ type Channel struct {
 	// （token,name,unique）」得到（unique 列已在后台丢弃）。CLI 不再解析，原样透传进
 	// adjust-tokens.json 的 events 字段。AdjustAppToken 为空时该字段无意义（可为空）。
 	AdjustEvents map[string]string `json:"adjustEvents,omitempty"`
+	// SigningKey 该渠道应使用的签名 key ID（ADR-0016）。空串 = 默认 key（Gradle
+	// signingConfigs.release 直接出包，不重签）；非空则是构建机本地「签名 key 注册表」
+	// （internal/signing）里的一个 ID，如 "emptyapp"——用于一批已上架商店、当年用另一把
+	// key 签名、商店按包名绑定证书不可更换的老渠道。Gradle 逻辑不动（护栏 #1）：runner 在
+	// assemble 成功后、投递产物前，用 apksigner 按此 ID 对该渠道的 APK 重签（v1+v2）。
+	// 密钥材料本身（keystore/口令）不随 manifest 下发，只在构建机注册表里，绝不上传/回传。
+	SigningKey string `json:"signingKey,omitempty"`
 }
 
 // AdjustTokenEntry 是 app/adjust-tokens.json 中单个 applicationId 对应的 Adjust 配置

@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from 'react';
 import { cn } from '@/lib/cn';
-import type { DomainHealth } from '@/lib/types';
+import type { DomainHealth, SigningKeyInfo } from '@/lib/types';
 import { iconGradient } from '@/lib/brands';
 import { apkFileName } from '@/lib/text';
 import { DownloadIcon } from './icons';
@@ -239,6 +239,35 @@ export function HealthPill({ health }: { health: DomainHealth }) {
 
 export function healthLabel(h: DomainHealth): string {
   return { ok: '正常', warn: '延迟高', down: '不可达', unknown: '未探测', unconfigured: '未配' }[h];
+}
+
+// ---------- 签名 key 徽标（非默认签名 key 时展示，提醒会用非默认证书重签） ----------
+export function SigningKeyBadge({
+  signingKey,
+  keys,
+  className,
+}: {
+  signingKey?: string;
+  keys?: SigningKeyInfo[];
+  className?: string;
+}) {
+  if (!signingKey) return null;
+  const info = keys?.find((k) => k.id === signingKey);
+  const label = info?.name ?? signingKey;
+  const title = info
+    ? `签名 key：${info.name}（SHA-1 ${info.certSha1}）`
+    : `签名 key：${signingKey}（SHA-1 未知，签名 key 清单未加载）`;
+  return (
+    <span
+      className={cn(
+        'inline-flex flex-none items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md text-[#9f1239] bg-[#ffe4e6] whitespace-nowrap',
+        className,
+      )}
+      title={title}
+    >
+      🔑 {label}
+    </span>
+  );
 }
 
 // ---------- Switch ----------

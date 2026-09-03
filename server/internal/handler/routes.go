@@ -66,6 +66,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.GET("/perms/catalog", h.PermsCatalog, active)
 	api.GET("/brands", h.ListBrands, active)
 	api.GET("/stores", h.ListStores, active)
+	// 签名 key 注册表（固定清单）：任何已登录账号可读，供渠道编辑抽屉的下拉框选择。
+	api.GET("/signing-keys", h.ListSigningKeys, active)
 
 	// 大渠道。
 	api.GET("/brands/:code/domains", h.GetBrandDomains, need(perm.PageDomains))

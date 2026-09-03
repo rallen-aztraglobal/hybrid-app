@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -286,6 +287,66 @@ func TestRunOnceBuildFailureReported(t *testing.T) {
 	}
 	if len(be.artifacts) != 0 {
 		t.Errorf("失败时不应登记产物，实得 %d", len(be.artifacts))
+	}
+}
+
+// TestRunOnceSigningKeyMissingFailsClosed 验证 ADR-0016 的 fail-closed 行为：manifest 里某渠道
+// 要求非默认签名 key（signingKey 非空），但构建机注册表里没有这把 key 时，任务应失败
+// （而不是把默认签名的包当商店包投递），且错误信息含渠道名与 key id，便于运维定位。
+func TestRunOnceSigningKeyMissingFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	r := &repo.Repo{Root: root}
+	if err := os.MkdirAll(filepath.Join(root, "channels"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "settings.gradle"), []byte("// t"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeSigningLocalProps(t, r)
+
+	be := &fakeBackend{jobs: []*manifest.BuildJob{
+		{ID: 42, Brand: "ap", Flavors: []string{"ap01018"}, VersionName: "1.0.1"},
+	}}
+	src := mapSource{m: &manifest.Manifest{
+		Brand: "ap", BrandDomains: []string{"https://x"},
+		Channels: []manifest.Channel{
+			{Flavor: "ap01018", ApplicationId: "com.arenaplus.ap01018", PalCode: "1", AppName: "A", UseBrandDomains: true, SigningKey: "emptyapp"},
+		},
+	}}
+	// 注册表路径指向不存在的文件 → Load 得到空注册表 → Lookup("emptyapp") 失败 → fail-closed。
+	emptyRegistry := filepath.Join(root, "no-such-signing-keys.properties")
+	opt := Options{
+		Once: true, Source: src, ArtifactDir: t.TempDir(),
+		SigningRegistryPath: emptyRegistry,
+		buildFn: func(_ context.Context, rr *repo.Repo, bo build.Options) (*build.Result, error) {
+			for _, f := range bo.Flavors {
+				dir := rr.APKOutputDir(f)
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					return nil, err
+				}
+				if err := os.WriteFile(filepath.Join(dir, "app-"+f+"-release.apk"), []byte("apk:"+f), 0o644); err != nil {
+					return nil, err
+				}
+			}
+			return &build.Result{LogTail: "BUILD SUCCESSFUL"}, nil
+		},
+	}
+
+	if err := Run(context.Background(), r, be, opt); err != nil {
+		t.Fatalf("Once 模式下单任务失败不应让 Run 返回错误（失败已回传后端），实得: %v", err)
+	}
+	last := be.statuses[len(be.statuses)-1]
+	if last.Status != manifest.StatusFailed {
+		t.Fatalf("末状态应为 failed，实得 %q", last.Status)
+	}
+	if !strings.Contains(last.LogExcerpt, "ap01018") {
+		t.Errorf("失败信息应含渠道名 ap01018，实得: %q", last.LogExcerpt)
+	}
+	if !strings.Contains(last.LogExcerpt, "emptyapp") {
+		t.Errorf("失败信息应含 key id emptyapp，实得: %q", last.LogExcerpt)
+	}
+	if len(be.artifacts) != 0 {
+		t.Errorf("fail-closed 时不应登记任何产物（不能把默认签名的包当商店包投递），实得 %d", len(be.artifacts))
 	}
 }
 

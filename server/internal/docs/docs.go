@@ -1245,8 +1245,20 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "按 applicationId 精确筛选",
+                        "description": "按 applicationId 精确筛选，逗号分隔支持多选",
                         "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "设备关键字（设备名/deviceKey/GAID/ADID 模糊）",
+                        "name": "device",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名关键字（applicationId 模糊）",
+                        "name": "packageName",
                         "in": "query"
                     },
                     {
@@ -1259,6 +1271,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "结束日期 YYYY-MM-DD（含）",
                         "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "最后活跃起始日期 YYYY-MM-DD（含）",
+                        "name": "activeFrom",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "最后活跃结束日期 YYYY-MM-DD（含）",
+                        "name": "activeTo",
                         "in": "query"
                     },
                     {
@@ -1365,8 +1389,20 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "按 applicationId 精确筛选",
+                        "description": "按 applicationId 精确筛选，逗号分隔支持多选",
                         "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "设备关键字（设备名/deviceKey/GAID/ADID 模糊）",
+                        "name": "device",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名关键字（applicationId 模糊）",
+                        "name": "packageName",
                         "in": "query"
                     },
                     {
@@ -1379,6 +1415,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "结束日期 YYYY-MM-DD（含）",
                         "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "最后活跃起始日期 YYYY-MM-DD（含）",
+                        "name": "activeFrom",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "最后活跃结束日期 YYYY-MM-DD（含）",
+                        "name": "activeTo",
                         "in": "query"
                     }
                 ],
@@ -1411,8 +1459,20 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "按 applicationId 精确筛选",
+                        "description": "按 applicationId 精确筛选，逗号分隔支持多选",
                         "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "设备关键字（设备名/deviceKey/GAID/ADID 模糊）",
+                        "name": "device",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名关键字（applicationId 模糊）",
+                        "name": "packageName",
                         "in": "query"
                     },
                     {
@@ -1425,6 +1485,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "结束日期 YYYY-MM-DD（含）",
                         "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "最后活跃起始日期 YYYY-MM-DD（含）",
+                        "name": "activeFrom",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "最后活跃结束日期 YYYY-MM-DD（含）",
+                        "name": "activeTo",
                         "in": "query"
                     }
                 ],
@@ -2433,6 +2505,31 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/signing-keys": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "仅返回 ID/名称/证书指纹等公开元信息，不含任何密钥材料（密钥全在构建机镜像里，见 model.SigningKeyInfo）。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "signing-keys"
+                ],
+                "summary": "签名 key 注册表（固定清单，含默认项）",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/stores": {
             "get": {
                 "security": [
@@ -2989,6 +3086,9 @@ const docTemplate = `{
                 "remark": {
                     "type": "string"
                 },
+                "signingKey": {
+                    "type": "string"
+                },
                 "storeId": {
                     "type": "integer"
                 }
@@ -3066,6 +3166,10 @@ const docTemplate = `{
                 },
                 "resZipUrl": {
                     "description": "资源 zip 地址（CLI 下载解压到 flavor 目录）",
+                    "type": "string"
+                },
+                "signingKey": {
+                    "description": "SigningKey 签名 key 注册表 ID（空 = 默认 key）：构建机 runner 打包后据此用 apksigner 重签\n（见 model.SigningKeyInfo）。CSVLine 不带出——Gradle 读的四列格式不变。",
                     "type": "string"
                 },
                 "splashUrl": {
@@ -3183,6 +3287,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "remark": {
+                    "type": "string"
+                },
+                "signingKey": {
                     "type": "string"
                 },
                 "status": {

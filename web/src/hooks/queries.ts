@@ -9,6 +9,7 @@ import {
   permsApi,
   pushApi,
   rolesApi,
+  signingKeyApi,
   storeApi,
   usersApi,
 } from '@/lib/api';
@@ -47,6 +48,7 @@ export const qk = {
   pushCampaign: (id: string) => ['push', 'campaigns', id] as const,
   pushAudience: (appIds: string[]) => ['push', 'audience', ...appIds.slice().sort()] as const,
   stores: ['stores'] as const,
+  signingKeys: ['signing-keys'] as const,
   listings: ['listings'] as const,
   listingGateLogs: (id: string) => ['listings', id, 'gateLogs'] as const,
   listingCampaigns: ['push', 'listing-campaigns'] as const,
@@ -95,6 +97,11 @@ export function useBuildJobs(brand?: BrandCode) {
 /** 应用商店清单（含 disabled）。渠道表单只取 enabled 项，设置页展示全部。 */
 export function useStores() {
   return useQuery({ queryKey: qk.stores, queryFn: storeApi.list });
+}
+
+/** 签名 key 清单（含默认项，id===''）。清单固定很短，长缓存即可。 */
+export function useSigningKeys() {
+  return useQuery({ queryKey: qk.signingKeys, queryFn: signingKeyApi.list, staleTime: 5 * 60_000 });
 }
 
 // ---------- mutations ----------

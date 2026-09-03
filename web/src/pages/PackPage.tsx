@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useChannels, useSubmitBuildJob } from '@/hooks/queries';
+import { useChannels, useSigningKeys, useSubmitBuildJob } from '@/hooks/queries';
 import { useScopedBrands } from '@/hooks/useScopedBrands';
 import { useBuildLogStream } from '@/hooks/useBuildLogStream';
 import { useUiStore } from '@/store/uiStore';
@@ -17,7 +17,7 @@ import { iconInitials } from '@/lib/brands';
 import { defaultJobName, validateVersionName } from '@/lib/validation';
 import type { Channel } from '@/lib/types';
 import { BrandTabs } from '@/components/BrandTabs';
-import { AppIcon, Button, SectionHeading, Switch } from '@/components/ui';
+import { AppIcon, Button, SectionHeading, SigningKeyBadge, Switch } from '@/components/ui';
 import { PlayIcon } from '@/components/icons';
 import { cn } from '@/lib/cn';
 
@@ -27,6 +27,7 @@ export function PackPage() {
   const navigate = useNavigate();
   const { brands, brand } = useScopedBrands();
   const { data: channels } = useChannels();
+  const { data: signingKeys } = useSigningKeys();
   const submit = useSubmitBuildJob();
   const log = useBuildLogStream();
   const canSubmit = useAuthStore((s) => s.hasPerm(PERM.BUILD_SUBMIT));
@@ -158,7 +159,11 @@ export function PackPage() {
                     radius={9}
                   />
                   <span className="min-w-0">
-                    <span className="block text-[13.5px] font-semibold truncate">{c.appName}</span>
+                    <span className="flex items-center gap-1.5 text-[13.5px] font-semibold">
+                      <span className="truncate">{c.appName}</span>
+                      {/* 非默认签名 key：提醒运营这个包会用非默认证书重签，避免商店拒收/无法覆盖安装 */}
+                      <SigningKeyBadge signingKey={c.signingKey} keys={signingKeys} />
+                    </span>
                     <span className="block text-[11px] text-muted font-mono truncate">
                       {c.flavorName}
                       {/* 线上版本号（人工备忘）：选包打新版时顺手看到上次上线到哪了 */}

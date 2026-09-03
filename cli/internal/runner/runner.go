@@ -4,11 +4,13 @@
 //
 //	pull（拉最新配置→渲染 CSV/res/bootstrap）
 //	  → ./gradlew assemble<Flavor>Release（+签名，复用现有 Gradle 机制，零改动）
+//	  → 按渠道核对签名 key（ADR-0016）：非默认 key 的渠道用 apksigner 就地重签 v1+v2 并校验
 //	  → 把产出 APK 落到目标产物目录（默认 nginx 共享卷 /var/www/apks/<brand>/<flavor>/<versionName>/）
 //	  → 回传状态/日志/产物给后端
 //
 // 安全红线（CLAUDE.md 护栏 4 / ADR-0008）：keystore 路径与口令只从环境/secret 读取，
-// 绝不上传后端、绝不进任何请求体、绝不打印口令值；产物登记只含非机密元信息。
+// 绝不上传后端、绝不进任何请求体、绝不打印口令值；产物登记只含非机密元信息。同样适用于
+// ADR-0016 的「签名 key 注册表」：只存在于构建机本地文件，不进 manifest 之外的任何请求体。
 package runner
 
 import (
@@ -27,6 +29,7 @@ import (
 	"github.com/hybrid-app/cli/internal/manifest"
 	"github.com/hybrid-app/cli/internal/render"
 	"github.com/hybrid-app/cli/internal/repo"
+	"github.com/hybrid-app/cli/internal/signing"
 )
 
 // DefaultArtifactDir 是产物落盘的默认根目录（ADR-0008：与构建机共享的 nginx /apks 卷）。
@@ -62,6 +65,13 @@ type Options struct {
 	Keystore *Keystore
 	// Source 是 pull 阶段的 manifest 来源（真实后端 = *api.Client）。必填。
 	Source api.ManifestSource
+	// SigningRegistryPath 签名 key 注册表文件路径（ADR-0016）；空则用
+	// signing.RegistryPathFromEnv()（环境变量 HYBRID_PACK_SIGNING_KEYS，未设置时用
+	// /opt/hybrid/signing-keys.properties）。仅测试/特殊部署需要覆盖默认解析逻辑时才设置。
+	SigningRegistryPath string
+	// Apksigner apksigner 可执行文件路径；空则用 signing.FindApksigner()（环境变量
+	// HYBRID_PACK_APKSIGNER 或按 ANDROID_HOME/build-tools 自动探测最高版本）。
+	Apksigner string
 	// buildFn 执行实际打包；为 nil 时用 build.Run（生产路径）。仅测试会注入桩。
 	buildFn func(ctx context.Context, r *repo.Repo, opt build.Options) (*build.Result, error)
 	// Logf 进度回调（可为 nil）。
@@ -82,6 +92,22 @@ func (o Options) manifestSource() (api.ManifestSource, error) {
 		return nil, fmt.Errorf("runner 未配置 manifest 来源（Source）")
 	}
 	return o.Source, nil
+}
+
+// signingRegistryPath 返回签名 key 注册表路径：显式配置优先，否则走环境变量/默认路径。
+func (o Options) signingRegistryPath() string {
+	if strings.TrimSpace(o.SigningRegistryPath) != "" {
+		return o.SigningRegistryPath
+	}
+	return signing.RegistryPathFromEnv()
+}
+
+// apksignerPath 返回 apksigner 可执行文件路径：显式配置优先，否则自动探测。
+func (o Options) apksignerPath() (string, error) {
+	if strings.TrimSpace(o.Apksigner) != "" {
+		return o.Apksigner, nil
+	}
+	return signing.FindApksigner()
 }
 
 func (o Options) logf(format string, args ...any) {
@@ -196,13 +222,20 @@ func processJob(ctx context.Context, r *repo.Repo, be Backend, job *manifest.Bui
 	}
 
 	// 1) pull：拉最新配置渲染回本地（构建机消费 source-of-truth，ADR-0004/0008）。
+	// manifest 只拉一次：既用于渲染，也留给后面「2b) 按渠道重签」查每个 flavor 的 signingKey
+	// （ADR-0016），避免重复请求后端。
 	src, err := opt.manifestSource()
 	if err != nil {
 		fail(ctx, be, job.ID, "", err)
 		return err
 	}
 	step("→ [#%d] pull %s ...", job.ID, job.Brand)
-	if _, err := render.Pull(ctx, r, src, job.Brand, render.Options{
+	m, err := src.Manifest(ctx, job.Brand)
+	if err != nil {
+		fail(ctx, be, job.ID, "", fmt.Errorf("拉取 %s manifest 失败: %w", job.Brand, err))
+		return err
+	}
+	if _, err := render.RenderManifest(ctx, r, src, m, render.Options{
 		Logf: func(f string, a ...any) { step("    "+f, a...) },
 	}); err != nil {
 		fail(ctx, be, job.ID, "", fmt.Errorf("pull 失败: %w", err))
@@ -235,6 +268,16 @@ func processJob(ctx context.Context, r *repo.Repo, be Backend, job *manifest.Bui
 	if buildErr != nil {
 		fail(ctx, be, job.ID, logTail, fmt.Errorf("打包失败: %w", buildErr))
 		return buildErr
+	}
+
+	// 2b) 按渠道重签（ADR-0016）：Gradle 仍只出默认 key 的包（护栏 #1 不动），一批已上架商店、
+	// 当年用另一把 key 签名的老渠道（manifest.Channel.SigningKey 非空）在此用 apksigner 重签
+	// v1+v2 并校验。fail-closed：渠道要求的 key 在构建机注册表里没有 → 整个任务失败，绝不能把
+	// 默认签名的包当商店包投递（同包名双证书会导致商店拒收或用户无法覆盖升级）。
+	step("→ [#%d] 按渠道核对签名 key ...", job.ID)
+	if err := resignArtifacts(ctx, r, job, m, opt, step); err != nil {
+		fail(ctx, be, job.ID, logTail, err)
+		return err
 	}
 
 	// 3) 收集产物 → 落到目标产物目录 → 登记。versionName 用于路径与登记元信息。
@@ -299,6 +342,76 @@ func deliverArtifacts(ctx context.Context, r *repo.Repo, be Backend, job *manife
 		}
 	}
 	return total, nil
+}
+
+// resignArtifacts 按渠道把已出包（默认 key 签名）的 APK 重签成 manifest 指定的签名 key（如有）。
+//
+// 只处理 job.Flavors 中 manifest.Channel.SigningKey 非空的渠道；空则是默认 key，跳过（无需
+// 打日志，避免刷屏）。fail-closed（ADR-0016 决策 4）：渠道要求的 key 在构建机注册表里查不到，
+// 整个任务失败，错误信息点明渠道名、key id 与注册表路径，方便运维知道该去 build-runner
+// 镜像里烧哪把 key。
+func resignArtifacts(ctx context.Context, r *repo.Repo, job *manifest.BuildJob, m *manifest.Manifest, opt Options, step func(format string, a ...any)) error {
+	chByFlavor := make(map[string]manifest.Channel, len(m.Channels))
+	for _, ch := range m.Channels {
+		chByFlavor[ch.Flavor] = ch
+	}
+
+	registryPath := opt.signingRegistryPath()
+	var registry signing.Registry
+	var registryLoaded bool
+	var apksignerPath string // 懒加载：只有真的需要重签才去定位 apksigner（避免测试/无需求场景依赖 ANDROID_HOME）
+
+	for _, flavor := range job.Flavors {
+		ch, ok := chByFlavor[flavor]
+		if !ok {
+			// 理论上不会发生（job.Flavors 来自同一份 manifest 渲染）；按默认签名处理并记警告。
+			step("    警告: manifest 未找到渠道 %s，按默认签名处理", flavor)
+			continue
+		}
+		keyID := strings.TrimSpace(ch.SigningKey)
+		if keyID == "" {
+			continue // 默认 key，Gradle 已直接签好，无需处理
+		}
+
+		if !registryLoaded {
+			reg, err := signing.Load(registryPath)
+			if err != nil {
+				return fmt.Errorf("加载签名 key 注册表 %s 失败: %w", registryPath, err)
+			}
+			registry = reg
+			registryLoaded = true
+		}
+		key, ok := registry.Lookup(keyID)
+		if !ok {
+			return fmt.Errorf("渠道 %s 需要签名 key %q，但构建机注册表（%s）中没有这把 key；"+
+				"请在 build-runner 镜像中烧入（deploy/Dockerfile.builder，ADR-0016）", flavor, keyID, registryPath)
+		}
+
+		if apksignerPath == "" {
+			p, err := opt.apksignerPath()
+			if err != nil {
+				return fmt.Errorf("定位 apksigner 失败: %w", err)
+			}
+			apksignerPath = p
+		}
+
+		apks, err := build.CollectAPKs(r, flavor)
+		if err != nil {
+			return err
+		}
+		if len(apks) == 0 {
+			// 无产物：交给后续 deliverArtifacts 统一报「未找到任何 APK 产物」，这里不重复报错。
+			continue
+		}
+		for _, apkPath := range apks {
+			info, err := signing.Resign(ctx, apksignerPath, key, apkPath, func(f string, a ...any) { step("    "+f, a...) })
+			if err != nil {
+				return fmt.Errorf("渠道 %s 用签名 key %q 重签 %s 失败: %w", flavor, keyID, filepath.Base(apkPath), err)
+			}
+			step("✓ [%s] 已用签名 key %s 重签（CN=%s，SHA-1=%s）", flavor, keyID, info.DN, info.SHA1)
+		}
+	}
+	return nil
 }
 
 // fail 把失败状态与日志摘要回传后端（best-effort），用于 processJob 各失败分支。

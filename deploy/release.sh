@@ -22,10 +22,14 @@ BOX_USER="${BOX_USER:-root}"; REMOTE_DIR="${REMOTE_DIR:-/opt/hybrid}"
 : "${SSH_KEY:?在 $CONF 填 SSH_KEY}"
 : "${KEYSTORE_PASSWORD:?在 $CONF 填 KEYSTORE_PASSWORD}"
 : "${KEY_ALIAS:?}"; : "${KEY_PASSWORD:?}"
+# 商店老 key（empty-app，ADR-0016）：已上架渠道必须用它重签，故与默认 key 同为必填。
+: "${STORE_EMPTYAPP_KEYSTORE_PASSWORD:?在 $CONF 填 STORE_EMPTYAPP_KEYSTORE_PASSWORD（商店老 key 口令，见 .env.release.example）}"
+: "${STORE_EMPTYAPP_KEY_ALIAS:?}"; : "${STORE_EMPTYAPP_KEY_PASSWORD:?}"
 
 [ -f "$SSH_KEY" ] || { echo "✗ SSH key 不存在: $SSH_KEY"; exit 1; }
 chmod 600 "$SSH_KEY" 2>/dev/null || true
 [ -f deploy/secrets/release.keystore ] || { echo "✗ 缺少 deploy/secrets/release.keystore（构建机签名需要）"; exit 1; }
+[ -f deploy/secrets/store-emptyapp.keystore ] || { echo "✗ 缺少 deploy/secrets/store-emptyapp.keystore（商店老 key，ADR-0016；可用 git show ap_xiaomi:app/gzmkt031-key.jks 导出）"; exit 1; }
 
 KEYOPT="-i $SSH_KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20"
 ssh_box(){ ssh $KEYOPT -o ServerAliveInterval=30 "${BOX_USER}@${BOX_HOST}" "$@"; }
@@ -122,6 +126,7 @@ SETUP
 log "5/6 构建镜像（build-runner 烧 keystore；go-api/web/nginx）"
 ssh_box "cd '$REMOTE_DIR' && docker build -f deploy/Dockerfile.builder \
   --build-arg KEYSTORE_PASSWORD='$KEYSTORE_PASSWORD' --build-arg KEY_ALIAS='$KEY_ALIAS' --build-arg KEY_PASSWORD='$KEY_PASSWORD' \
+  --build-arg STORE_EMPTYAPP_KEYSTORE_PASSWORD='$STORE_EMPTYAPP_KEYSTORE_PASSWORD' --build-arg STORE_EMPTYAPP_KEY_ALIAS='$STORE_EMPTYAPP_KEY_ALIAS' --build-arg STORE_EMPTYAPP_KEY_PASSWORD='$STORE_EMPTYAPP_KEY_PASSWORD' \
   -t registry.example.com/hybrid/build-runner:v1.0.0 . >/dev/null && echo '  build-runner ok' && \
   docker compose -f deploy/docker-compose.allinone.yml --env-file deploy/.env build go-api web nginx >/dev/null && echo '  go-api/web/nginx ok'"
 

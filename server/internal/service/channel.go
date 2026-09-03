@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/hybrid-app/server/internal/model"
@@ -21,6 +22,7 @@ type CreateChannelInput struct {
 	AppName        string            `json:"appName" validate:"required"`
 	Remark         string            `json:"remark"`
 	LiveVersion    string            `json:"liveVersion"`
+	SigningKey     string            `json:"signingKey"`
 	StoreID        *uint64           `json:"storeId"`
 	AdjustAppToken string            `json:"adjustAppToken"`
 	AdjustEvents   map[string]string `json:"adjustEvents"`
@@ -35,6 +37,9 @@ type CreateChannelInput struct {
 //
 // LiveVersion（线上版本号，人工备忘）：传空字符串 → 清空；未传 → 不改动。
 // 卡片上的就地编辑只发这一个字段，其余字段保持原值。
+//
+// SigningKey（签名 key 注册表 ID）：未传 → 不改动；传 "" → 恢复默认 key；传其它值必须是
+// 已注册的 key ID，否则 400。DB 只存 ID，不存密钥材料（见 model.SigningKeyInfo）。
 type UpdateChannelInput struct {
 	FlavorName     *string            `json:"flavorName"`
 	PalCode        *string            `json:"palCode"`
@@ -42,6 +47,7 @@ type UpdateChannelInput struct {
 	Status         *string            `json:"status"`
 	Remark         *string            `json:"remark"`
 	LiveVersion    *string            `json:"liveVersion"`
+	SigningKey     *string            `json:"signingKey"`
 	AdjustAppToken *string            `json:"adjustAppToken"`
 	AdjustEvents   *map[string]string `json:"adjustEvents"`
 }
@@ -136,6 +142,7 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 		UseBrandDomains: true,
 		Remark:          in.Remark,
 		LiveVersion:     in.LiveVersion,
+		SigningKey:      in.SigningKey,
 		StoreID:         in.StoreID,
 		AdjustAppToken:  adjustToken,
 		AdjustEvents:    model.AdjustEvents(in.AdjustEvents),
@@ -227,6 +234,13 @@ func (s *Service) UpdateChannel(ctx context.Context, id uint64, in UpdateChannel
 		}
 		ch.LiveVersion = v
 	}
+	if in.SigningKey != nil {
+		v, err := normalizeSigningKey(*in.SigningKey)
+		if err != nil {
+			return nil, err
+		}
+		ch.SigningKey = v
+	}
 	if in.Status != nil {
 		st := *in.Status
 		if st != model.ChannelEnabled && st != model.ChannelDisabled && st != model.ChannelArchived {
@@ -285,6 +299,7 @@ func (in *CreateChannelInput) normalize() {
 	in.PalCode = strings.TrimSpace(in.PalCode)
 	in.AppName = strings.TrimSpace(in.AppName)
 	in.LiveVersion = strings.TrimSpace(in.LiveVersion)
+	in.SigningKey = strings.TrimSpace(in.SigningKey)
 }
 
 func (in *CreateChannelInput) validate() error {
@@ -292,6 +307,9 @@ func (in *CreateChannelInput) validate() error {
 		return errBadRequest("brandCode / flavorName / palCode / appName 均为必填")
 	}
 	if _, err := normalizeLiveVersion(in.LiveVersion); err != nil {
+		return err
+	}
+	if _, err := normalizeSigningKey(in.SigningKey); err != nil {
 		return err
 	}
 	// flavor 仅允许字母数字与下划线分段（下划线用于商店后缀，如 <base>_<storeCode>）。
@@ -344,6 +362,31 @@ func normalizeLiveVersion(raw string) (string, error) {
 	v := strings.TrimSpace(raw)
 	if len(v) > maxLiveVersionLen {
 		return "", errBadRequest(fmt.Sprintf("liveVersion 长度不能超过 %d", maxLiveVersionLen))
+	}
+	return v, nil
+}
+
+// signingKeyRe 签名 key 注册表 ID 命名规范：小写字母开头，其余小写字母数字下划线短横线，
+// 与 channel.signing_key 列定义 VARCHAR(32) 对齐。
+var signingKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+
+// normalizeSigningKey 规范化并校验签名 key 注册表 ID：去首尾空白；空串合法（= 默认 key）；
+// 非空必须匹配命名规范且已在 model.SigningKeys() 注册表中登记，否则拒绝——
+// 服务端只存并下发这个 ID 字符串，密钥材料全在构建机镜像里（CLAUDE.md 护栏 4），
+// 未注册的 ID 到了构建机会因找不到对应 keystore 而重签失败，必须在此拦截。
+func normalizeSigningKey(raw string) (string, error) {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return "", nil
+	}
+	if !signingKeyRe.MatchString(v) || !model.IsKnownSigningKey(v) {
+		known := make([]string, 0, len(model.SigningKeys()))
+		for _, k := range model.SigningKeys() {
+			if k.ID != "" {
+				known = append(known, k.ID)
+			}
+		}
+		return "", errBadRequest(fmt.Sprintf("signingKey %q 未注册（可选：%s，或留空使用默认 key）", v, strings.Join(known, ", ")))
 	}
 	return v, nil
 }

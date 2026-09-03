@@ -38,6 +38,7 @@ import type {
   RoleInput,
   RoleScope,
   ScopeDTO,
+  SigningKeyInfo,
   Store,
   StoreInput,
   StoreUpdateInput,
@@ -273,6 +274,8 @@ interface ChannelDTO {
   updatedAt?: string;
   storeId?: number | null;
   store?: { id: number; code: string; name: string } | null;
+  /** 签名 key ID（空/缺省 = 默认 key）。见 types.ts Channel.signingKey 注释。 */
+  signingKey?: string | null;
   /**
    * Adjust 归因（08-adjust.md / ADR-0013）。**待办**：server 的 Create/UpdateChannelInput
    * OpenAPI 契约尚未收录这两个字段，此处先行手写对接，后端补齐并重新生成 OpenAPI 后需对齐/替换。
@@ -302,6 +305,7 @@ function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
     updatedAt: c.updatedAt,
     storeId: c.storeId ?? null,
     store: c.store ?? null,
+    signingKey: c.signingKey || undefined,
     adjustAppToken: c.adjustAppToken || undefined,
     adjustEvents: c.adjustEvents && Object.keys(c.adjustEvents).length ? c.adjustEvents : undefined,
   };
@@ -540,6 +544,7 @@ export const channelApi = {
             remark: input.remark ?? '',
             liveVersion: input.liveVersion?.trim() ?? '',
             storeId: input.storeId ?? null,
+            signingKey: input.signingKey?.trim() ?? '',
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
           }),
@@ -565,6 +570,8 @@ export const channelApi = {
             status: input.status,
             remark: input.remark ?? '',
             liveVersion: input.liveVersion?.trim() ?? '',
+            // signingKey：语义同 liveVersion——传空串恢复默认 key，不传（undefined）不改动。
+            signingKey: input.signingKey?.trim() ?? '',
             // adjustAppToken/adjustEvents：08-adjust.md §6 跨层契约，随保存接口一起提交。
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
@@ -1042,6 +1049,42 @@ export const storeApi = {
       () => {
         mockStores = mockStores.filter((s) => s.id !== id);
       },
+    );
+  },
+};
+
+// =========================================================================
+// 签名 key（渠道按需选择签名证书；见 types.ts SigningKeyInfo 注释）
+// =========================================================================
+
+/**
+ * mock 签名 key 清单：默认 key + 商店老 key（empty-app，2025-09 小米/OPPO 批次注册时用的证书）。
+ * 固定 2 项、只读，真实清单由 GET /api/signing-keys 下发（见 server model.SigningKeys 注册表，
+ * 本处 id/name/证书指纹与其保持一致，ADR-0016）。
+ */
+const MOCK_SIGNING_KEYS: SigningKeyInfo[] = [
+  {
+    id: '',
+    name: '默认（release-key，CN=bingo）',
+    certSha1: 'c52c6e053310d6d29f990589c7159557332e52b0',
+    certSha256: '943f7ceda1974b70b83d180572d11cc9856bcbedf3f4272c3a61bb30c8e3060d',
+    isDefault: true,
+  },
+  {
+    id: 'emptyapp',
+    name: '商店老 key（empty-app，2025-09 小米/OPPO 批次）',
+    certSha1: 'afeaec41d6e41fb1e2da30060505320bceb0b666',
+    certSha256: 'd078768a9801bd78ceb56db5585903a11ae4d6d7bca03bfd5a46bbadc55a6bbe',
+    isDefault: false,
+  },
+];
+
+export const signingKeyApi = {
+  /** 全量签名 key（含默认项，id===''）。清单固定很短，一次性拉全。 */
+  list(): Promise<SigningKeyInfo[]> {
+    return withFallback(
+      () => request<SigningKeyInfo[]>('/signing-keys'),
+      () => MOCK_SIGNING_KEYS,
     );
   },
 };
@@ -1551,6 +1594,7 @@ function inputToChannel(input: ChannelInput): Channel {
     remark: input.remark,
     liveVersion: input.liveVersion?.trim() || undefined,
     storeId: input.storeId ?? null,
+    signingKey: input.signingKey?.trim() || undefined,
     adjustAppToken: input.adjustAppToken?.trim() || undefined,
     adjustEvents: input.adjustEvents && Object.keys(input.adjustEvents).length ? input.adjustEvents : undefined,
   };

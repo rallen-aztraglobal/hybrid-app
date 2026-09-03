@@ -69,6 +69,18 @@ docker compose -f deploy/docker-compose.yml push        # 镜像 tag 由 .env �
 
 ---
 
+### 4.1 多把签名 key（ADR-0016）
+
+- 已上架商店的老渠道（ap01018~ap01022、gzmkt031）证书是 `empty-app`（`gzmkt031-key.jks`），不能改。
+- Console 渠道表单选「签名 key」（只存 ID，默认空=release-key）；manifest 带 `signingKey`；
+  runner 在 assemble 后对这些 flavor 用 `apksigner sign`（v1+v2）重签并 verify 后再投递。
+- 镜像多烧一把：`deploy/secrets/store-emptyapp.keystore` + `.env.release` 的
+  `STORE_EMPTYAPP_KEYSTORE_PASSWORD / STORE_EMPTYAPP_KEY_ALIAS / STORE_EMPTYAPP_KEY_PASSWORD`，
+  `release.sh` 会作为 build args 传入，镜像内生成 `/opt/hybrid/signing-keys.properties`。
+- 构建机缺这把 key 时，需要它的渠道任务直接失败（fail-closed），默认 key 的渠道不受影响。
+- 新增一把 key：server `model.SigningKeys` 加条目 → Dockerfile.builder 多 COPY 一份 + 注册表多一段 →
+  `.env.release` 补口令 → 发版 → Console 里给渠道选上。
+
 ## 5. 域名配置端点抗封（我方基建）
 
 `GET /api/app/config?appId=` 决定 APK 能否热更域名（ADR-0002/0009）。业务域名常被封，**配置端点要放在不易被封的域名/CDN**：

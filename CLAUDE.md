@@ -37,7 +37,7 @@ hybrid-app：3 个品牌（大渠道）的 **Android WebView 壳应用**，每�
 1. **不改 Gradle 构建逻辑**：后台只是 `channels/*.csv` + `res/` 的上游编辑器，CLI 把后台数据**渲染回现有格式**。`app/build.gradle` 的 `loadChannels`/`productFlavors` 一行不动。（ADR-0004）
 2. **域名不要编译期焊死**：APK 运行时拉取域名（`GET /api/app/config?palcode=`），成功即自更新本地缓存，编译期只烧录兜底清单。改域名 = 后台改一处、不重新打包。（ADR-0002）
 3. **域名容灾不要「乱换」**：只有**确认是域名故障**才切备用；本机断网只提示「网络异常」。用中立连通性探针区分「域名问题 vs 本机网络问题」。（ADR-0003）
-4. **keystore**：不进 git / DB / 配置 API / 对象存储 / 前端；本地开发用 `local.properties`；**服务器端构建直接把 keystore 烧进 `build-runner` 镜像**（运营决定「直接内置、不考虑安全」，单租户自托管 + 私有 registry、接受风险；见 ADR-0008）。运维零 keystore 操作。
+4. **keystore**：不进 git / DB / 配置 API / 对象存储 / 前端；本地开发用 `local.properties`；**服务器端构建直接把 keystore 烧进 `build-runner` 镜像**（运营决定「直接内置、不考虑安全」，单租户自托管 + 私有 registry、接受风险；见 ADR-0008）。运维零 keystore 操作。**多把 key**（ADR-0016）：已上架商店的老渠道（ap01018~ap01022、gzmkt031）证书是 `empty-app` 不可变，Console 只存 `signingKey` ID，构建机打包后按渠道用 apksigner 重签；非默认 key 同样烧进镜像 + 写 `/opt/hybrid/signing-keys.properties`；缺 key 时任务 fail-closed。
 5. **身份与唯一性**（见 ADR-0009）：**applicationId 是唯一标识，派生自 `<品牌包前缀>.<flavor>`**（ap→`com.arenaplus` 等），表单自动填充、不手填；**PAL_CODE 不全局唯一**（跨品牌可重复），仅作 URL 参数 `/?palcode=` 与编译期烧录；**域名解析键用 applicationId（`BuildConfig.APPLICATION_ID`）而非 palcode**。唯一性以 applicationId 与 `(brand, flavor)` 为准。
 
 ## 常用命令

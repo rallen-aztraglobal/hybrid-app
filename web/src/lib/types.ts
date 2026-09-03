@@ -108,6 +108,21 @@ export interface StoreUpdateInput {
   status?: Store['status'];
 }
 
+/**
+ * 签名 key 元信息（GET /api/signing-keys 元素）。部分早年上架商店的渠道当年用另一把
+ * keystore 签名（商店按包名绑定证书，换证书会导致商店拒收/用户无法覆盖安装），需保持
+ * 与商店登记证书一致，故按渠道选择签名 key。清单固定很短（目前 2 项），只读、无 CRUD。
+ * 默认项 `id === ''`、`isDefault: true`。
+ */
+export interface SigningKeyInfo {
+  id: string;
+  name: string;
+  /** 证书 SHA-1 指纹（冒号分隔十六进制，供表单/卡片展示辨识用，不参与业务逻辑）。 */
+  certSha1: string;
+  certSha256: string;
+  isDefault: boolean;
+}
+
 /** 小渠道（一个 Gradle product flavor）。对应后端 model.Channel。 */
 export interface Channel {
   /** 后端数字主键（字符串化）；mock 模式下为 `<brand>-<flavor>` */
@@ -141,6 +156,11 @@ export interface Channel {
   storeId?: string | number | null;
   /** 关联应用商店（后端下发的精简视图，供列表展示商店标签）。 */
   store?: { id: string | number; code: string; name: string } | null;
+  /**
+   * 签名 key ID（空/未设置 = 默认 key）。见 SigningKeyInfo 注释：仅早年少数已上架商店的渠道
+   * 需要设为非默认值，其余渠道保持空即可。选项来自 GET /api/signing-keys。
+   */
+  signingKey?: string;
   /**
    * Adjust App Token（08-adjust.md / ADR-0013）。空/未设置 = 该渠道未绑定 Adjust，
    * 打包时不集成、不发任何 Adjust 事件。非机密，随 APK 分发。
@@ -181,6 +201,11 @@ export interface ChannelInput {
   liveVersion?: string;
   /** 应用商店主键（可空 = 无商店/默认）。 */
   storeId?: string | number | null;
+  /**
+   * 签名 key ID（见 Channel.signingKey 注释）。PUT 传空字符串 = 恢复默认 key；
+   * 不传（undefined）= 不改动。语义与 liveVersion 一致。
+   */
+  signingKey?: string;
   /** Adjust App Token；空字符串 = 不启用（见 Channel.adjustAppToken 注释）。 */
   adjustAppToken?: string;
   /** Adjust 事件映射 `{ name: token }`（见 Channel.adjustEvents 注释）。 */

@@ -139,6 +139,8 @@ definitions:
         type: string
       remark:
         type: string
+      signingKey:
+        type: string
       storeId:
         type: integer
     required:
@@ -197,6 +199,11 @@ definitions:
         type: string
       resZipUrl:
         description: 资源 zip 地址（CLI 下载解压到 flavor 目录）
+        type: string
+      signingKey:
+        description: |-
+          SigningKey 签名 key 注册表 ID（空 = 默认 key）：构建机 runner 打包后据此用 apksigner 重签
+          （见 model.SigningKeyInfo）。CSVLine 不带出——Gradle 读的四列格式不变。
         type: string
       splashUrl:
         type: string
@@ -274,6 +281,8 @@ definitions:
       palCode:
         type: string
       remark:
+        type: string
+      signingKey:
         type: string
       status:
         type: string
@@ -1348,9 +1357,17 @@ paths:
   /api/devices:
     get:
       parameters:
-      - description: 按 applicationId 精确筛选
+      - description: 按 applicationId 精确筛选，逗号分隔支持多选
         in: query
         name: applicationId
+        type: string
+      - description: 设备关键字（设备名/deviceKey/GAID/ADID 模糊）
+        in: query
+        name: device
+        type: string
+      - description: 包名关键字（applicationId 模糊）
+        in: query
+        name: packageName
         type: string
       - description: 起始日期 YYYY-MM-DD（含）
         in: query
@@ -1359,6 +1376,14 @@ paths:
       - description: 结束日期 YYYY-MM-DD（含）
         in: query
         name: to
+        type: string
+      - description: 最后活跃起始日期 YYYY-MM-DD（含）
+        in: query
+        name: activeFrom
+        type: string
+      - description: 最后活跃结束日期 YYYY-MM-DD（含）
+        in: query
+        name: activeTo
         type: string
       - description: 页码，默认 1
         in: query
@@ -1425,9 +1450,17 @@ paths:
         name: token
         required: true
         type: string
-      - description: 按 applicationId 精确筛选
+      - description: 按 applicationId 精确筛选，逗号分隔支持多选
         in: query
         name: applicationId
+        type: string
+      - description: 设备关键字（设备名/deviceKey/GAID/ADID 模糊）
+        in: query
+        name: device
+        type: string
+      - description: 包名关键字（applicationId 模糊）
+        in: query
+        name: packageName
         type: string
       - description: 起始日期 YYYY-MM-DD（含）
         in: query
@@ -1436,6 +1469,14 @@ paths:
       - description: 结束日期 YYYY-MM-DD（含）
         in: query
         name: to
+        type: string
+      - description: 最后活跃起始日期 YYYY-MM-DD（含）
+        in: query
+        name: activeFrom
+        type: string
+      - description: 最后活跃结束日期 YYYY-MM-DD（含）
+        in: query
+        name: activeTo
         type: string
       produces:
       - text/csv
@@ -1455,9 +1496,17 @@ paths:
         name: token
         required: true
         type: string
-      - description: 按 applicationId 精确筛选
+      - description: 按 applicationId 精确筛选，逗号分隔支持多选
         in: query
         name: applicationId
+        type: string
+      - description: 设备关键字（设备名/deviceKey/GAID/ADID 模糊）
+        in: query
+        name: device
+        type: string
+      - description: 包名关键字（applicationId 模糊）
+        in: query
+        name: packageName
         type: string
       - description: 起始日期 YYYY-MM-DD（含）
         in: query
@@ -1466,6 +1515,14 @@ paths:
       - description: 结束日期 YYYY-MM-DD（含）
         in: query
         name: to
+        type: string
+      - description: 最后活跃起始日期 YYYY-MM-DD（含）
+        in: query
+        name: activeFrom
+        type: string
+      - description: 最后活跃结束日期 YYYY-MM-DD（含）
+        in: query
+        name: activeTo
         type: string
       produces:
       - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
@@ -2088,6 +2145,21 @@ paths:
       summary: 修改角色(builtin 不可改)
       tags:
       - roles
+  /api/signing-keys:
+    get:
+      description: 仅返回 ID/名称/证书指纹等公开元信息，不含任何密钥材料（密钥全在构建机镜像里，见 model.SigningKeyInfo）。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope'
+      security:
+      - BearerAuth: []
+      summary: 签名 key 注册表（固定清单，含默认项）
+      tags:
+      - signing-keys
   /api/stores:
     get:
       produces:

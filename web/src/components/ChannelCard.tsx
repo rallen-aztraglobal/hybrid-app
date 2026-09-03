@@ -7,12 +7,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { Brand, Channel, DomainEntry } from '@/lib/types';
 import { iconInitials } from '@/lib/brands';
 import { friendlyNotFoundMessage } from '@/lib/api';
-import { useSaveChannelLiveVersion } from '@/hooks/queries';
+import { useSaveChannelLiveVersion, useSigningKeys } from '@/hooks/queries';
 import { apkFileName } from '@/lib/text';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
-import { AppIcon, HealthDot } from './ui';
+import { AppIcon, HealthDot, SigningKeyBadge } from './ui';
 import { DownloadIcon, EditIcon, TrashIcon } from './icons';
 
 export function ChannelCard({
@@ -29,6 +29,7 @@ export function ChannelCard({
   const on = channel.status === 'enabled';
   const canEdit = useAuthStore((s) => s.hasPerm(PERM.CHANNEL_EDIT));
   const canArchive = useAuthStore((s) => s.hasPerm(PERM.CHANNEL_ARCHIVE));
+  const { data: signingKeys } = useSigningKeys();
   // 实际生效域名：继承品牌则用 brand.domains，否则用渠道覆盖
   const effective: DomainEntry[] = channel.useBrandDomains
     ? brand.domains
@@ -81,6 +82,7 @@ export function ChannelCard({
                 {channel.store.name}
               </span>
             )}
+            <SigningKeyBadge signingKey={channel.signingKey} keys={signingKeys} />
           </div>
         </div>
       </div>

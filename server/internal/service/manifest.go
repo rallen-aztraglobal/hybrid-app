@@ -41,6 +41,9 @@ type ManifestChannel struct {
 	ConfigSnapshotURL string            `json:"configSnapshotUrl"` // 该渠道的 CDN 配置快照地址
 	AdjustAppToken    string            `json:"adjustAppToken,omitempty"`
 	AdjustEvents      map[string]string `json:"adjustEvents,omitempty"`
+	// SigningKey 签名 key 注册表 ID（空 = 默认 key）：构建机 runner 打包后据此用 apksigner 重签
+	// （见 model.SigningKeyInfo）。CSVLine 不带出——Gradle 读的四列格式不变。
+	SigningKey string `json:"signingKey,omitempty"`
 }
 
 // CSVLine 渲染成与现有 channels/*.csv 字节级兼容的一行：flavor|applicationId|palCode|appName。
@@ -119,6 +122,7 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, scope auth.Scope, b
 			ConfigSnapshotURL: s.SnapshotURL(ch.ApplicationID),
 			AdjustAppToken:    adjustToken,
 			AdjustEvents:      map[string]string(ch.AdjustEvents),
+			SigningKey:        ch.SigningKey,
 		})
 	}
 	return out, nil
