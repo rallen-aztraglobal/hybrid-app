@@ -1,13 +1,6 @@
 # 渠道数据表  字段: flavorName|applicationId|palCode|appName
 # 新增小渠道 = 在此加一行 + 在 app/src/<flavorName>/ 放 icon 与 splash 资源
-ap01159|com.arenaplus.ap01159|1053259319096676352|ArenaPlus - daily bonus
 ap01018|com.arenaplus.ap01018|1053259232660520961|ArenaPlus:USA Basketball Live
-ap01019|com.arenaplus.ap01019|1053259233397432320|ArenaPlus PH
-ap01020|com.arenaplus.ap01020|1053259233855094784|ArenaPlus PH
-ap01021|com.arenaplus.ap01021|1053259234652815360|ArenaPlus PH
-ap01022|com.arenaplus.ap01022|1053259235099742209|ArenaPlus PH
-ap01034|com.arenaplus.ap01034|1053259243279695873|Arena Plus
-ap01035|com.arenaplus.ap01035|1053259242391433216|Arena Plus
 ap01036|com.arenaplus.ap01036|1053259243635879936|ArenaPlus:USA Basketball Live
 ap01037|com.arenaplus.ap01037|1053259244534595585|ArenaPlus:USA Basketball Live
 ap01038|com.arenaplus.ap01038|1053259244876943361|ArenaPlus:USA Basketball Live
@@ -22,3 +15,22 @@ johnc1010991|com.arenaplus.johnc1010991|1981288271076900864|Arena Plus
 johnc1010992|com.arenaplus.johnc1010992|1981288271513108480|Arena Plus
 johnc1010993|com.arenaplus.johnc1010993|1981288271957704704|Arena Plus
 johnc1010994|com.arenaplus.johnc1010994|1981288272431661056|Arena Plus
+johnc2010090|com.arenaplus.johnc2010090|1981291129042440192|Arena Plus Lite
+johnc2010091|com.arenaplus.johnc2010091|1981291129516396544|Arena Plus Lite
+johnc2010092_hw|com.arenaplus.johnc2010092.hw|1981291131735183360|Arena Plus Lite
+johnc2010093|com.arenaplus.johnc2010093|1981291130413977600|Arena Plus Lite
+johnc2010094|com.arenaplus.johnc2010094|1981291130850185216|Arena Plus Lite
+johnc2010095|com.arenaplus.johnc2010095|1981291131298975744|Arena Plus Super Ace Jackpot
+johnc2010096|com.arenaplus.johnc2010096|1981291131735183360|Super Ace Jackpot
+johnc2010097_hw|com.arenaplus.johnc2010097.hw|1981291132167196672|Super Ace Jackpot
+johnc2010098|com.arenaplus.johnc2010098|1981291132632764416|Super Ace Jackpot
+johnc2010099|com.arenaplus.johnc2010099|1981291133068972032|ArenaPlus Super Ace Jackpot
+johnc2010100|com.arenaplus.johnc2010100|1981291133496791040|Arena Plus Wild Bounty Showdown
+johnc2010101|com.arenaplus.johnc2010101|1981291133970747392|Arena Plus Wild Bounty Showdown
+johnc2010102_hw|com.arenaplus.johnc2010102.hw|1981291134423732224|Wild Bounty Showdown
+johnc2010103|com.arenaplus.johnc2010103|1981291134910271488|Wild Bounty Showdown
+johnc2010104|com.arenaplus.johnc2010104|1981291135380033536|ArenaPlus Wild Bounty Showdown
+ap01021|com.arenaplus.ap01021|1053259234652815360|ArenaPlus PH
+ap01019|com.arenaplus.ap01019|1053259233397432320|ArenaPlus PH
+ap01020|com.arenaplus.ap01020|1053259233855094784|ArenaPlus PH
+ap01022|com.arenaplus.ap01022|1053259235099742209|ArenaPlus PH
