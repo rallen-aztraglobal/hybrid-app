@@ -54,7 +54,18 @@ export const qk = {
   roles: ['roles'] as const,
   users: ['users'] as const,
   devices: (filter: DeviceFilter) =>
-    ['devices', filter.applicationId ?? '', filter.from ?? '', filter.to ?? '', filter.page, filter.pageSize] as const,
+    [
+      'devices',
+      (filter.applicationIds ?? []).join(','),
+      filter.device ?? '',
+      filter.packageName ?? '',
+      filter.from ?? '',
+      filter.to ?? '',
+      filter.activeFrom ?? '',
+      filter.activeTo ?? '',
+      filter.page,
+      filter.pageSize,
+    ] as const,
 };
 
 export function useBrands() {

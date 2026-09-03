@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
@@ -30,7 +31,7 @@ func mustCreateDeviceChannel(t *testing.T, svc *Service, ctx context.Context, br
 func firstDevice(t *testing.T, r *repo.Repo, appID string) DeviceView {
 	t.Helper()
 	ctx := context.Background()
-	list, total, err := r.ListChannelDevices(ctx, repo.DeviceFilter{ApplicationID: appID, Page: 1, PageSize: 10})
+	list, total, err := r.ListChannelDevices(ctx, repo.DeviceFilter{ApplicationIDs: []string{appID}, Page: 1, PageSize: 10})
 	if err != nil {
 		t.Fatalf("查询设备失败: %v", err)
 	}
@@ -246,7 +247,7 @@ func TestExportDevicesCSVFormat(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := svc.ExportDevicesCSV(ctx, &buf, ListDevicesInput{ApplicationID: appID}, nil); err != nil {
+	if err := svc.ExportDevicesCSV(ctx, &buf, ListDevicesInput{ApplicationIDs: []string{appID}}, nil); err != nil {
 		t.Fatalf("导出 CSV 失败: %v", err)
 	}
 
@@ -263,7 +264,7 @@ func TestExportDevicesCSVFormat(t *testing.T) {
 	if len(records) != 2 { // 表头 + 1 行
 		t.Fatalf("应有 2 行（表头+1），实际 %d: %v", len(records), records)
 	}
-	wantHeader := []string{"device_name", "gaid", "gaid_sha256", "adid", "oaid", "app_name", "palcode", "application_id", "brand", "created_at"}
+	wantHeader := []string{"device_name", "gaid", "gaid_sha256", "adid", "oaid", "app_name", "palcode", "application_id", "brand", "created_at", "last_active_at"}
 	if !equalStrSlice(records[0], wantHeader) {
 		t.Fatalf("表头不符，实际 %v，期望 %v", records[0], wantHeader)
 	}
@@ -280,6 +281,125 @@ func TestExportDevicesCSVFormat(t *testing.T) {
 	}
 	if row[2] != wantSha {
 		t.Errorf("gaid_sha256 应为 %q，实际 %q", wantSha, row[2])
+	}
+}
+
+// TestListDevicesMultiFilter 验证新筛选维度：渠道多选（applicationIds IN）、
+// 设备关键字（设备名/GAID/ADID/deviceKey 模糊）、包名关键字（applicationId 模糊），三者 AND 叠加。
+func TestListDevicesMultiFilter(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+	app1 := mustCreateDeviceChannel(t, svc, ctx, "ap", "ap01018", "ArenaPlus")
+	app2 := mustCreateDeviceChannel(t, svc, ctx, "ap", "ap01036", "ArenaPlus")
+	app3 := mustCreateDeviceChannel(t, svc, ctx, "gp", "gz001", "GameZone")
+
+	seed := []struct {
+		appID, key, name, gaid string
+	}{
+		{app1, "key-a1", "Pixel 7", "aaaa1111-0000-1111-2222-333344445555"},
+		{app2, "key-a2", "OPPO CPH2819", "bbbb2222-0000-1111-2222-333344445555"},
+		{app3, "key-g1", "Redmi Note 12", "cccc3333-0000-1111-2222-333344445555"},
+	}
+	for _, d := range seed {
+		if err := svc.RegisterDevice(ctx, RegisterDeviceInput{
+			AppID: d.appID, DeviceKey: d.key, DeviceName: d.name, GAID: d.gaid,
+		}); err != nil {
+			t.Fatalf("上报 %s 失败: %v", d.key, err)
+		}
+	}
+
+	// 渠道多选：app1 + app2 应命中 2 条，不含 app3。
+	got, err := svc.ListDevices(ctx, ListDevicesInput{ApplicationIDs: []string{app1, app2}})
+	if err != nil {
+		t.Fatalf("渠道多选查询失败: %v", err)
+	}
+	if got.Total != 2 {
+		t.Errorf("渠道多选应命中 2 条，实际 %d", got.Total)
+	}
+	for _, it := range got.Items {
+		if it.ApplicationID == app3 {
+			t.Errorf("渠道多选不应包含 %s", app3)
+		}
+	}
+
+	// 设备关键字：按设备名模糊。
+	got, err = svc.ListDevices(ctx, ListDevicesInput{DeviceKw: "cph2819"})
+	if err != nil {
+		t.Fatalf("设备关键字查询失败: %v", err)
+	}
+	if got.Total != 1 || got.Items[0].DeviceName != "OPPO CPH2819" {
+		t.Errorf("设备名关键字应恰好命中 OPPO CPH2819，实际 total=%d", got.Total)
+	}
+
+	// 设备关键字：按 GAID 片段模糊。
+	got, err = svc.ListDevices(ctx, ListDevicesInput{DeviceKw: "cccc3333"})
+	if err != nil {
+		t.Fatalf("GAID 关键字查询失败: %v", err)
+	}
+	if got.Total != 1 || got.Items[0].ApplicationID != app3 {
+		t.Errorf("GAID 关键字应恰好命中 app3 的设备，实际 total=%d", got.Total)
+	}
+
+	// 包名关键字：模糊命中 ap01018/ap01036 两条。
+	got, err = svc.ListDevices(ctx, ListDevicesInput{PackageKw: "ap010"})
+	if err != nil {
+		t.Fatalf("包名关键字查询失败: %v", err)
+	}
+	if got.Total != 2 {
+		t.Errorf("包名关键字 ap010 应命中 2 条，实际 %d", got.Total)
+	}
+
+	// AND 叠加：渠道多选 + 设备关键字取交集。
+	got, err = svc.ListDevices(ctx, ListDevicesInput{ApplicationIDs: []string{app1, app2}, DeviceKw: "pixel"})
+	if err != nil {
+		t.Fatalf("叠加筛选查询失败: %v", err)
+	}
+	if got.Total != 1 || got.Items[0].ApplicationID != app1 {
+		t.Errorf("叠加筛选应恰好命中 app1 的 Pixel 7，实际 total=%d", got.Total)
+	}
+}
+
+// TestListDevicesActiveTimeFilter 验证最后活跃时间（updated_at）筛选：
+// 刚上报的记录活跃时间为「今天」，activeFrom=今天 应命中、activeFrom=明天 应为空、
+// activeTo=昨天 应为空；updatedAt 也应随记录返回（非零值）。
+func TestListDevicesActiveTimeFilter(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+	appID := mustCreateDeviceChannel(t, svc, ctx, "ap", "ap01018", "ArenaPlus")
+	if err := svc.RegisterDevice(ctx, RegisterDeviceInput{
+		AppID: appID, DeviceKey: "key-active", DeviceName: "Pixel 7",
+		GAID: "dddd4444-0000-1111-2222-333344445555",
+	}); err != nil {
+		t.Fatalf("上报失败: %v", err)
+	}
+
+	day := func(offset int) string { return time.Now().AddDate(0, 0, offset).Format(deviceDateLayout) }
+
+	got, err := svc.ListDevices(ctx, ListDevicesInput{ActiveFrom: day(0)})
+	if err != nil {
+		t.Fatalf("activeFrom=今天 查询失败: %v", err)
+	}
+	if got.Total != 1 {
+		t.Errorf("activeFrom=今天 应命中 1 条，实际 %d", got.Total)
+	}
+	if len(got.Items) == 1 && got.Items[0].UpdatedAt.IsZero() {
+		t.Error("updatedAt 应随记录返回，实际为零值")
+	}
+
+	if got, err = svc.ListDevices(ctx, ListDevicesInput{ActiveFrom: day(1)}); err != nil {
+		t.Fatalf("activeFrom=明天 查询失败: %v", err)
+	} else if got.Total != 0 {
+		t.Errorf("activeFrom=明天 应为空，实际 %d", got.Total)
+	}
+
+	if got, err = svc.ListDevices(ctx, ListDevicesInput{ActiveTo: day(-1)}); err != nil {
+		t.Fatalf("activeTo=昨天 查询失败: %v", err)
+	} else if got.Total != 0 {
+		t.Errorf("activeTo=昨天 应为空，实际 %d", got.Total)
+	}
+
+	if _, err = svc.ListDevices(ctx, ListDevicesInput{ActiveFrom: "bad-date"}); err == nil {
+		t.Error("activeFrom 非法格式应报错")
 	}
 }
 

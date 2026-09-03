@@ -1,8 +1,8 @@
 /**
  * 设备管理页（/devices）—— 渠道包内 Android 设备注册流水查看 + CSV 导出。
- * 筛选栏（渠道 + 注册时间范围）→ 查询后重置到第 1 页；表格支持勾选（跨页保留已选，
- * 全选语义=当前页全选）；导出分两种：勾选导出（POST /devices/export，前端拦截 >1000）
- * 与按当前筛选导出全部（GET /devices/export-token → 原生 <a href> 下载 export.csv）。
+ * 筛选栏（渠道多选 + 设备/包名关键字 + 注册时间范围）→ 查询后重置到第 1 页；表格支持勾选
+ * （跨页保留已选，全选语义=当前页全选）；导出分两种：勾选导出（POST /devices/export，
+ * 前端拦截 >1000）与按当前筛选导出全部（GET /devices/export-token → 原生 <a href> 下载）。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChannels, useDevices } from '@/hooks/queries';
@@ -11,7 +11,7 @@ import { PERM } from '@/lib/permissions';
 import { deviceApi } from '@/lib/api';
 import type { ChannelDevice, DeviceFilter } from '@/lib/types';
 import { Button } from '@/components/ui';
-import { SearchSelect } from '@/components/SearchSelect';
+import { MultiSearchSelect } from '@/components/MultiSearchSelect';
 import type { SearchSelectOption } from '@/components/SearchSelect';
 import { DatePicker } from '@/components/DatePicker';
 import { DownloadIcon, SearchIcon } from '@/components/icons';
@@ -68,9 +68,13 @@ export function DevicesPage() {
   const canExport = useAuthStore((s) => s.hasPerm(PERM.DEVICE_EXPORT));
 
   // 筛选栏「待提交」输入态：点「查询」后才生效为真正发请求的 filter（并重置 page=1）。
-  const [pendingAppId, setPendingAppId] = useState('');
+  const [pendingAppIds, setPendingAppIds] = useState<string[]>([]);
+  const [pendingDeviceKw, setPendingDeviceKw] = useState('');
+  const [pendingPkgKw, setPendingPkgKw] = useState('');
   const [pendingFrom, setPendingFrom] = useState('');
   const [pendingTo, setPendingTo] = useState('');
+  const [pendingActiveFrom, setPendingActiveFrom] = useState('');
+  const [pendingActiveTo, setPendingActiveTo] = useState('');
   const [filter, setFilter] = useState<DeviceFilter>({ page: 1, pageSize: PAGE_SIZE });
 
   const { data, isLoading, isFetching, error } = useDevices(filter);
@@ -89,8 +93,9 @@ export function DevicesPage() {
     setPageJump(String(filter.page));
   }, [filter.page]);
 
+  // 多选语义下不再需要「全部渠道」空选项：什么都不勾 = 不限。
   const channelOptions: SearchSelectOption[] = useMemo(() => {
-    const opts: SearchSelectOption[] = [{ value: '', label: '全部渠道' }];
+    const opts: SearchSelectOption[] = [];
     for (const c of channels ?? []) {
       if (c.status === 'archived') continue;
       opts.push({ value: c.applicationId, label: c.appName, sub: `${c.palCode} · ${c.applicationId}` });
@@ -100,9 +105,13 @@ export function DevicesPage() {
 
   function handleQuery() {
     setFilter({
-      applicationId: pendingAppId || undefined,
+      applicationIds: pendingAppIds.length > 0 ? pendingAppIds : undefined,
+      device: pendingDeviceKw.trim() || undefined,
+      packageName: pendingPkgKw.trim() || undefined,
       from: pendingFrom || undefined,
       to: pendingTo || undefined,
+      activeFrom: pendingActiveFrom || undefined,
+      activeTo: pendingActiveTo || undefined,
       page: 1,
       pageSize: PAGE_SIZE,
     });
@@ -163,9 +172,13 @@ export function DevicesPage() {
     setExportingAll(true);
     try {
       await deviceApi.exportDevicesByFilter({
-        applicationId: filter.applicationId,
+        applicationIds: filter.applicationIds,
+        device: filter.device,
+        packageName: filter.packageName,
         from: filter.from,
         to: filter.to,
+        activeFrom: filter.activeFrom,
+        activeTo: filter.activeTo,
       });
     } catch (err) {
       setExportErr(err instanceof Error ? err.message : '导出失败');
@@ -179,9 +192,39 @@ export function DevicesPage() {
       {/* 筛选栏 */}
       <div className="section-card mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="w-[300px]">
-            <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">渠道</label>
-            <SearchSelect value={pendingAppId} onChange={setPendingAppId} options={channelOptions} placeholder="全部渠道" />
+          <div className="w-[260px]">
+            <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">渠道（可多选）</label>
+            <MultiSearchSelect
+              values={pendingAppIds}
+              onChange={setPendingAppIds}
+              options={channelOptions}
+              placeholder="全部渠道"
+              searchPlaceholder="搜索应用名 / PAL_CODE / 包名…"
+            />
+          </div>
+          <div className="w-[190px]">
+            <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">设备</label>
+            <input
+              className="field-input"
+              value={pendingDeviceKw}
+              onChange={(e) => setPendingDeviceKw(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleQuery();
+              }}
+              placeholder="设备名 / GAID / ADID"
+            />
+          </div>
+          <div className="w-[190px]">
+            <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">包名</label>
+            <input
+              className="field-input"
+              value={pendingPkgKw}
+              onChange={(e) => setPendingPkgKw(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleQuery();
+              }}
+              placeholder="applicationId，支持模糊"
+            />
           </div>
           <div className="w-[170px]">
             <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">注册开始日期</label>
@@ -190,6 +233,24 @@ export function DevicesPage() {
           <div className="w-[170px]">
             <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">注册结束日期</label>
             <DatePicker value={pendingTo} onChange={setPendingTo} min={pendingFrom || undefined} placeholder="不限" />
+          </div>
+          <div className="w-[170px]">
+            <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">活跃开始日期</label>
+            <DatePicker
+              value={pendingActiveFrom}
+              onChange={setPendingActiveFrom}
+              max={pendingActiveTo || undefined}
+              placeholder="不限"
+            />
+          </div>
+          <div className="w-[170px]">
+            <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">活跃结束日期</label>
+            <DatePicker
+              value={pendingActiveTo}
+              onChange={setPendingActiveTo}
+              min={pendingActiveFrom || undefined}
+              placeholder="不限"
+            />
           </div>
           <Button variant="primary" onClick={handleQuery}>
             <SearchIcon className="w-4 h-4" />
@@ -236,6 +297,7 @@ export function DevicesPage() {
                   <th className="text-left font-semibold px-3 py-2">应用名</th>
                   <th className="text-left font-semibold px-3 py-2">PAL_CODE</th>
                   <th className="text-left font-semibold px-3 py-2">注册时间</th>
+                  <th className="text-left font-semibold px-3 py-2">最后活跃</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,6 +325,9 @@ export function DevicesPage() {
                     </td>
                     <td className="px-3 py-[9px] mono text-ink-2">{d.palCode}</td>
                     <td className="px-3 py-[9px] text-ink-2 whitespace-nowrap">{formatDateTime(d.createdAt)}</td>
+                    <td className="px-3 py-[9px] text-ink-2 whitespace-nowrap">
+                      {d.updatedAt ? formatDateTime(d.updatedAt) : <span className="text-muted">—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

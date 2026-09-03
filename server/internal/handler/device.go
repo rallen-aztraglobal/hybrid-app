@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -50,13 +51,30 @@ func (h *Handler) RegisterDevice(c echo.Context) error {
 	return httpx.OK(c, map[string]any{"registered": true})
 }
 
-// deviceListInput 从查询参数解析设备列表筛选条件。
-func deviceListInput(c echo.Context) service.ListDevicesInput {
+// deviceFilterInput 从查询参数解析设备筛选条件（不含分页），列表与两个按筛选导出端点共用。
+// applicationId 支持逗号分隔多值（渠道多选）；device / packageName 为模糊关键字。
+func deviceFilterInput(c echo.Context) service.ListDevicesInput {
 	in := service.ListDevicesInput{
-		ApplicationID: c.QueryParam("applicationId"),
-		From:          c.QueryParam("from"),
-		To:            c.QueryParam("to"),
+		DeviceKw:   c.QueryParam("device"),
+		PackageKw:  c.QueryParam("packageName"),
+		From:       c.QueryParam("from"),
+		To:         c.QueryParam("to"),
+		ActiveFrom: c.QueryParam("activeFrom"),
+		ActiveTo:   c.QueryParam("activeTo"),
 	}
+	if raw := c.QueryParam("applicationId"); raw != "" {
+		for _, v := range strings.Split(raw, ",") {
+			if v = strings.TrimSpace(v); v != "" {
+				in.ApplicationIDs = append(in.ApplicationIDs, v)
+			}
+		}
+	}
+	return in
+}
+
+// deviceListInput 从查询参数解析设备列表筛选条件（筛选 + 分页）。
+func deviceListInput(c echo.Context) service.ListDevicesInput {
+	in := deviceFilterInput(c)
 	in.Page, _ = strconv.Atoi(c.QueryParam("page"))
 	in.PageSize, _ = strconv.Atoi(c.QueryParam("pageSize"))
 	return in
@@ -66,9 +84,13 @@ func deviceListInput(c echo.Context) service.ListDevicesInput {
 // @Summary  设备列表（分页/筛选，page:devices）
 // @Tags     device
 // @Produce  json
-// @Param    applicationId  query  string  false  "按 applicationId 精确筛选"
+// @Param    applicationId  query  string  false  "按 applicationId 精确筛选，逗号分隔支持多选"
+// @Param    device         query  string  false  "设备关键字（设备名/deviceKey/GAID/ADID 模糊）"
+// @Param    packageName    query  string  false  "包名关键字（applicationId 模糊）"
 // @Param    from           query  string  false  "起始日期 YYYY-MM-DD（含）"
 // @Param    to             query  string  false  "结束日期 YYYY-MM-DD（含）"
+// @Param    activeFrom     query  string  false  "最后活跃起始日期 YYYY-MM-DD（含）"
+// @Param    activeTo       query  string  false  "最后活跃结束日期 YYYY-MM-DD（含）"
 // @Param    page           query  int     false  "页码，默认 1"
 // @Param    pageSize       query  int     false  "每页条数，默认 50，最大 200"
 // @Success  200  {object}  httpx.Envelope
@@ -145,9 +167,13 @@ func (h *Handler) verifyDeviceExportToken(c echo.Context) error {
 // @Tags     device
 // @Produce  text/csv
 // @Param    token          query  string  true   "GET /api/devices/export-token 换来的令牌"
-// @Param    applicationId  query  string  false  "按 applicationId 精确筛选"
+// @Param    applicationId  query  string  false  "按 applicationId 精确筛选，逗号分隔支持多选"
+// @Param    device         query  string  false  "设备关键字（设备名/deviceKey/GAID/ADID 模糊）"
+// @Param    packageName    query  string  false  "包名关键字（applicationId 模糊）"
 // @Param    from           query  string  false  "起始日期 YYYY-MM-DD（含）"
 // @Param    to             query  string  false  "结束日期 YYYY-MM-DD（含）"
+// @Param    activeFrom     query  string  false  "最后活跃起始日期 YYYY-MM-DD（含）"
+// @Param    activeTo       query  string  false  "最后活跃结束日期 YYYY-MM-DD（含）"
 // @Success  200  {file}  binary
 // @Router   /api/devices/export.csv [get]
 func (h *Handler) ExportDevicesCSV(c echo.Context) error {
@@ -155,11 +181,7 @@ func (h *Handler) ExportDevicesCSV(c echo.Context) error {
 		return err
 	}
 
-	in := service.ListDevicesInput{
-		ApplicationID: c.QueryParam("applicationId"),
-		From:          c.QueryParam("from"),
-		To:            c.QueryParam("to"),
-	}
+	in := deviceFilterInput(c)
 	// 先设响应头（尚未提交响应）；真正的首字节写入在 service 层 streamDeviceCSV 里。
 	// 参数校验失败（如 from/to 格式非法）发生在任何写入之前，此时响应仍未提交，可以正常走
 	// 统一 JSON 错误响应；一旦已经开始流式写出，出错只能记日志、不能再改写响应体。
@@ -182,9 +204,13 @@ func (h *Handler) ExportDevicesCSV(c echo.Context) error {
 // @Tags     device
 // @Produce  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 // @Param    token          query  string  true   "GET /api/devices/export-token 换来的令牌"
-// @Param    applicationId  query  string  false  "按 applicationId 精确筛选"
+// @Param    applicationId  query  string  false  "按 applicationId 精确筛选，逗号分隔支持多选"
+// @Param    device         query  string  false  "设备关键字（设备名/deviceKey/GAID/ADID 模糊）"
+// @Param    packageName    query  string  false  "包名关键字（applicationId 模糊）"
 // @Param    from           query  string  false  "起始日期 YYYY-MM-DD（含）"
 // @Param    to             query  string  false  "结束日期 YYYY-MM-DD（含）"
+// @Param    activeFrom     query  string  false  "最后活跃起始日期 YYYY-MM-DD（含）"
+// @Param    activeTo       query  string  false  "最后活跃结束日期 YYYY-MM-DD（含）"
 // @Success  200  {file}  binary
 // @Router   /api/devices/export.xlsx [get]
 func (h *Handler) ExportDevicesXLSX(c echo.Context) error {
@@ -192,11 +218,7 @@ func (h *Handler) ExportDevicesXLSX(c echo.Context) error {
 		return err
 	}
 
-	in := service.ListDevicesInput{
-		ApplicationID: c.QueryParam("applicationId"),
-		From:          c.QueryParam("from"),
-		To:            c.QueryParam("to"),
-	}
+	in := deviceFilterInput(c)
 	// XLSX 是 zip 容器，无法边生成边发；参数错误都在写响应体之前抛出，可正常走 JSON 错误。
 	deviceXLSXHeaders(c)
 	if err := h.svc.ExportDevicesXLSX(c.Request().Context(), c.Response(), in); err != nil {

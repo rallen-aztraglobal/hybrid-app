@@ -75,6 +75,9 @@ function buildDevices(): ChannelDevice[] {
     const daysAgo = randInt(0, 59);
     const msAgo = daysAgo * 86_400_000 + randInt(0, 86_400_000 - 1);
     const createdAt = new Date(now - msAgo).toISOString();
+    // 最后活跃时间：注册之后、当前之前的随机一点（约 1/3 设备注册后再没打开过 = 等于注册时间）。
+    const updatedAt =
+      rand() < 0.33 ? createdAt : new Date(now - randInt(0, Math.max(1, msAgo - 1))).toISOString();
     // 无有效 GAID 的设备整条不上报（客户端+服务端双向约定），故 mock 里 gaid 恒非空；
     // ~25% 未归因 → adid 为空。
     const gaid = randUuid();
@@ -92,6 +95,7 @@ function buildDevices(): ChannelDevice[] {
       palCode: ch.palCode,
       brandCode: ch.brandCode,
       createdAt,
+      updatedAt,
     });
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -102,13 +106,30 @@ const devices: ChannelDevice[] = buildDevices();
 /** 深翻页保护缓冲页数（超过「最大可用页 + 缓冲」即视为异常翻页，模拟后端 400）。 */
 const DEEP_PAGE_BUFFER = 50;
 
-/** 按 DeviceFilter 过滤（不分页），供导出（勾选/按筛选导出）复用。 */
-function filterDevices(filter: Pick<DeviceFilter, 'applicationId' | 'from' | 'to'>): ChannelDevice[] {
+type MockDeviceFilter = Pick<
+  DeviceFilter,
+  'applicationIds' | 'device' | 'packageName' | 'from' | 'to' | 'activeFrom' | 'activeTo'
+>;
+
+/** 按 DeviceFilter 过滤（不分页），供导出（勾选/按筛选导出）复用。语义对齐后端 applyDeviceFilter：
+ * 渠道多选 IN + 设备关键字（设备名/deviceKey/GAID/ADID 模糊）+ 包名模糊 + 注册/活跃时间范围，AND 叠加。 */
+function filterDevices(filter: MockDeviceFilter): ChannelDevice[] {
+  const deviceKw = (filter.device ?? '').trim().toLowerCase();
+  const pkgKw = (filter.packageName ?? '').trim().toLowerCase();
   return devices.filter((d) => {
-    if (filter.applicationId && d.applicationId !== filter.applicationId) return false;
+    if (filter.applicationIds?.length && !filter.applicationIds.includes(d.applicationId)) return false;
+    if (deviceKw) {
+      const hit = [d.deviceName, d.deviceKey, d.gaid ?? '', d.adid ?? '']
+        .some((v) => v.toLowerCase().includes(deviceKw));
+      if (!hit) return false;
+    }
+    if (pkgKw && !d.applicationId.toLowerCase().includes(pkgKw)) return false;
     const day = d.createdAt.slice(0, 10);
     if (filter.from && day < filter.from) return false;
     if (filter.to && day > filter.to) return false;
+    const activeDay = (d.updatedAt ?? d.createdAt).slice(0, 10);
+    if (filter.activeFrom && activeDay < filter.activeFrom) return false;
+    if (filter.activeTo && activeDay > filter.activeTo) return false;
     return true;
   });
 }
@@ -132,6 +153,6 @@ export function devicesByIds(ids: number[]): ChannelDevice[] {
   return devices.filter((d) => set.has(d.id));
 }
 
-export function devicesByFilter(filter: Pick<DeviceFilter, 'applicationId' | 'from' | 'to'>): ChannelDevice[] {
+export function devicesByFilter(filter: MockDeviceFilter): ChannelDevice[] {
   return filterDevices(filter);
 }

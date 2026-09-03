@@ -68,11 +68,19 @@ func (r *Repo) UpsertChannelDevice(ctx context.Context, d *model.ChannelDevice) 
 // channel_device 表按 application_id 维度存储（不是 channel_id），渠道范围在 service 层已被
 // 解析成 ScopeAppIDs（channel id → application_id）后传下来，这里直接按 application_id 过滤。
 type DeviceFilter struct {
-	ApplicationID string
-	From          *time.Time
-	To            *time.Time
-	Page          int
-	PageSize      int
+	// ApplicationIDs 渠道多选：application_id IN 精确匹配；空切片不限。
+	ApplicationIDs []string
+	// DeviceKw 设备关键字：device_name / device_key / gaid / adid 任一模糊命中即算。
+	DeviceKw string
+	// AppIDKw 包名关键字：application_id 模糊匹配（与 ApplicationIDs 的精确多选叠加为 AND）。
+	AppIDKw string
+	From    *time.Time
+	To      *time.Time
+	// ActiveFrom/ActiveTo 最后活跃时间（updated_at，随每次上报刷新）筛选，半开区间同 From/To。
+	ActiveFrom *time.Time
+	ActiveTo   *time.Time
+	Page       int
+	PageSize   int
 
 	ScopeRestricted  bool
 	ScopeAllBrands   bool
@@ -83,14 +91,28 @@ type DeviceFilter struct {
 
 // applyDeviceFilter 把筛选条件应用到查询（不含分页），供列表与导出共用。
 func applyDeviceFilter(q *gorm.DB, f DeviceFilter) *gorm.DB {
-	if f.ApplicationID != "" {
-		q = q.Where("application_id = ?", f.ApplicationID)
+	if len(f.ApplicationIDs) > 0 {
+		q = q.Where("application_id IN ?", f.ApplicationIDs)
+	}
+	if f.DeviceKw != "" {
+		like := "%" + f.DeviceKw + "%"
+		q = q.Where("device_name LIKE ? OR device_key LIKE ? OR gaid LIKE ? OR adid LIKE ?",
+			like, like, like, like)
+	}
+	if f.AppIDKw != "" {
+		q = q.Where("application_id LIKE ?", "%"+f.AppIDKw+"%")
 	}
 	if f.From != nil {
 		q = q.Where("created_at >= ?", *f.From)
 	}
 	if f.To != nil {
 		q = q.Where("created_at < ?", *f.To)
+	}
+	if f.ActiveFrom != nil {
+		q = q.Where("updated_at >= ?", *f.ActiveFrom)
+	}
+	if f.ActiveTo != nil {
+		q = q.Where("updated_at < ?", *f.ActiveTo)
 	}
 	if f.ScopeRestricted {
 		if !f.ScopeAllBrands {
@@ -138,7 +160,7 @@ func (r *Repo) ListChannelDevices(ctx context.Context, f DeviceFilter) ([]model.
 }
 
 // deviceExportColumns 导出 CSV 用的固定选列顺序（与 ExportDeviceRows 的 Scan 顺序一一对应）。
-const deviceExportColumns = "device_name, gaid, adid, oaid, app_name, pal_code, application_id, brand_code, created_at"
+const deviceExportColumns = "device_name, gaid, adid, oaid, app_name, pal_code, application_id, brand_code, created_at, updated_at"
 
 // ExportDeviceRows 按筛选条件返回设备导出游标（*sql.Rows，Order id ASC，不分页），
 // 供 service 层流式生成 CSV，避免整表加载进内存。调用方负责 Close()。

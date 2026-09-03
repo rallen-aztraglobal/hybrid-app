@@ -694,6 +694,8 @@ export interface ChannelDevice {
   brandCode: BrandCode;
   /** ISO 注册时间。 */
   createdAt: string;
+  /** ISO 最后活跃时间（最近一次上报，客户端 5 分钟节流；旧后端可能缺省）。 */
+  updatedAt?: string;
 }
 
 /** 设备列表信封（{items,total}，与 ListResult<T> 同构，单列一个类型便于语义清晰）。 */
@@ -704,9 +706,17 @@ export interface DeviceListResult {
 
 /** 设备列表筛选 + 分页（GET /api/devices 查询参数）。from/to 为 YYYY-MM-DD。 */
 export interface DeviceFilter {
-  applicationId?: string;
+  /** 渠道多选（applicationId 精确匹配，多个之间 OR）；空/缺省不限。请求时逗号拼接。 */
+  applicationIds?: string[];
+  /** 设备关键字：设备名 / deviceKey / GAID / ADID 模糊。 */
+  device?: string;
+  /** 包名关键字：applicationId 模糊。 */
+  packageName?: string;
   from?: string;
   to?: string;
+  /** 最后活跃时间（updatedAt）范围，YYYY-MM-DD，语义同 from/to。 */
+  activeFrom?: string;
+  activeTo?: string;
   page: number;
   pageSize: number;
 }

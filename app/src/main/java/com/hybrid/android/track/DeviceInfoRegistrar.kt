@@ -35,7 +35,8 @@ import kotlin.coroutines.resume
  * 结构与风格完全仿照 [com.hybrid.android.push.TokenRegistrar]：懒加载 OkHttpClient、
  * 短超时、失败静默忽略、suspend + IO 调度器、URL 从 bootstrap 的 configUrl 同源派生。
  *
- * 节流：同一设备/同一标识组合 24 小时内只上报一次（哈希对比），避免每次启动都打后台。
+ * 节流：同一设备/同一标识组合 5 分钟内只上报一次（哈希对比）——服务端用 updated_at 当
+ * 「最后活跃时间」，窗口短才够实时；只挡同一次会话内的反复触发，正常隔天/隔时段启动都会上报。
  * adid 参与哈希计算——首次启动 Adjust 归因未完成时 adid 为空，二次启动归因完成后哈希变化，
  * 会自动触发一次补报，无需额外机制。
  */
@@ -52,8 +53,8 @@ object DeviceInfoRegistrar {
     /** 全零 GAID：用户关闭广告个性化后系统返回的占位值，等价于「无标识」。 */
     private const val ZERO_GAID = "00000000-0000-0000-0000-000000000000"
 
-    /** 节流窗口：24 小时。 */
-    private const val THROTTLE_MS = 24 * 60 * 60 * 1000L
+    /** 节流窗口：5 分钟（updated_at ≈ 最后活跃时间，窗口越短后台看到的活跃越实时）。 */
+    private const val THROTTLE_MS = 5 * 60 * 1000L
 
     /** ADID 回调超时：Adjust SDK 尚未拿到归因结果时不应阻塞启动流程。 */
     private const val ADID_TIMEOUT_MS = 3000L

@@ -56,6 +56,8 @@ type DeviceView struct {
 	PalCode       string    `json:"palCode"`
 	BrandCode     string    `json:"brandCode"`
 	CreatedAt     time.Time `json:"createdAt"`
+	// UpdatedAt 最后活跃时间：随每次上报刷新（客户端启动时上报、5 分钟节流）。
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // DeviceListResult GET /api/devices 返回。
@@ -70,11 +72,19 @@ type DeviceListResult struct {
 // （ScopeRestricted=false，等价不限），兼容不涉及数据权限的既有调用点。handler 层用
 // applyDeviceInputScope 从调用者的 auth.Scope populate 这几个字段。
 type ListDevicesInput struct {
-	ApplicationID string
-	From          string // YYYY-MM-DD，含
-	To            string // YYYY-MM-DD，含（内部转为 [from, to+1d) 半开区间）
-	Page          int
-	PageSize      int
+	// ApplicationIDs 渠道多选（applicationId 精确匹配，多个之间 OR）；空不限。
+	ApplicationIDs []string
+	// DeviceKw 设备关键字：设备名 / deviceKey / GAID / ADID 模糊。
+	DeviceKw string
+	// PackageKw 包名关键字：applicationId 模糊。
+	PackageKw string
+	From      string // YYYY-MM-DD，含
+	To        string // YYYY-MM-DD，含（内部转为 [from, to+1d) 半开区间）
+	// ActiveFrom/ActiveTo 最后活跃时间（updated_at）范围，格式/区间语义同 From/To。
+	ActiveFrom string
+	ActiveTo   string
+	Page       int
+	PageSize   int
 
 	ScopeRestricted  bool
 	ScopeAllBrands   bool
@@ -154,7 +164,7 @@ func truncateRunes(s string, max int) string {
 
 // ListDevices 分页/筛选设备列表。offset 过深（page 翻太远）拒绝，引导使用导出接口。
 func (s *Service) ListDevices(ctx context.Context, in ListDevicesInput) (*DeviceListResult, error) {
-	f, err := buildDeviceFilter(in.ApplicationID, in.From, in.To)
+	f, err := buildDeviceFilter(in)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +213,7 @@ func deviceView(d model.ChannelDevice) DeviceView {
 		PalCode:       d.PalCode,
 		BrandCode:     d.BrandCode,
 		CreatedAt:     d.CreatedAt,
+		UpdatedAt:     d.UpdatedAt,
 	}
 }
 
@@ -227,24 +238,46 @@ func (s *Service) applyListDevicesScope(ctx context.Context, f *repo.DeviceFilte
 	return nil
 }
 
-// buildDeviceFilter 把 API 层的字符串日期参数解析为 repo.DeviceFilter 的半开区间
-// [from 00:00:00, to+1d 00:00:00)。
-func buildDeviceFilter(appID, from, to string) (repo.DeviceFilter, error) {
-	f := repo.DeviceFilter{ApplicationID: strings.TrimSpace(appID)}
-	if from != "" {
-		t, err := time.Parse(deviceDateLayout, from)
-		if err != nil {
-			return f, errBadRequest("from 格式应为 YYYY-MM-DD")
-		}
-		f.From = &t
+// parseDeviceDate 解析 YYYY-MM-DD 日期参数；空串返回 nil（不限）。
+// exclusiveEnd=true 时返回次日零点，作为半开区间 [from, to+1d) 的上界。
+func parseDeviceDate(s, field string, exclusiveEnd bool) (*time.Time, error) {
+	if s == "" {
+		return nil, nil
 	}
-	if to != "" {
-		t, err := time.Parse(deviceDateLayout, to)
-		if err != nil {
-			return f, errBadRequest("to 格式应为 YYYY-MM-DD")
+	t, err := time.Parse(deviceDateLayout, s)
+	if err != nil {
+		return nil, errBadRequest(field + " 格式应为 YYYY-MM-DD")
+	}
+	if exclusiveEnd {
+		t = t.Add(24 * time.Hour)
+	}
+	return &t, nil
+}
+
+// buildDeviceFilter 把 API 层的筛选参数解析为 repo.DeviceFilter：渠道多选去空白、
+// 关键字 trim，注册/活跃两组日期各解析为半开区间 [from 00:00:00, to+1d 00:00:00)。
+func buildDeviceFilter(in ListDevicesInput) (repo.DeviceFilter, error) {
+	f := repo.DeviceFilter{
+		DeviceKw: strings.TrimSpace(in.DeviceKw),
+		AppIDKw:  strings.TrimSpace(in.PackageKw),
+	}
+	for _, id := range in.ApplicationIDs {
+		if v := strings.TrimSpace(id); v != "" {
+			f.ApplicationIDs = append(f.ApplicationIDs, v)
 		}
-		exclusive := t.Add(24 * time.Hour)
-		f.To = &exclusive
+	}
+	var err error
+	if f.From, err = parseDeviceDate(in.From, "from", false); err != nil {
+		return f, err
+	}
+	if f.To, err = parseDeviceDate(in.To, "to", true); err != nil {
+		return f, err
+	}
+	if f.ActiveFrom, err = parseDeviceDate(in.ActiveFrom, "activeFrom", false); err != nil {
+		return f, err
+	}
+	if f.ActiveTo, err = parseDeviceDate(in.ActiveTo, "activeTo", true); err != nil {
+		return f, err
 	}
 	return f, nil
 }
@@ -254,7 +287,7 @@ func buildDeviceFilter(appID, from, to string) (repo.DeviceFilter, error) {
 // deviceCSVHeader 是导出 CSV 的固定列顺序，两个导出端点共用。
 var deviceCSVHeader = []string{
 	"device_name", "gaid", "gaid_sha256", "adid", "oaid",
-	"app_name", "palcode", "application_id", "brand", "created_at",
+	"app_name", "palcode", "application_id", "brand", "created_at", "last_active_at",
 }
 
 // csvBOM 是 UTF-8 BOM，写在 CSV 最前面，确保 Excel 打开时不会把中文渠道名/设备名识别成乱码。
@@ -271,6 +304,7 @@ type deviceCSVRow struct {
 	ApplicationID string
 	BrandCode     string
 	CreatedAt     time.Time
+	UpdatedAt     time.Time // 最后活跃时间（updated_at）
 }
 
 // deviceCSVSource 是导出行游标的最小接口：筛选导出用 sql.Rows 包一层，勾选 id 导出用内存
@@ -284,7 +318,7 @@ type deviceCSVSource interface {
 
 // sqlRowsDeviceSource 包装 repo.ExportDeviceRows 返回的 *sql.Rows（列顺序见
 // repo.deviceExportColumns：device_name, gaid, adid, oaid, app_name, pal_code, application_id,
-// brand_code, created_at）。
+// brand_code, created_at, updated_at）。
 type sqlRowsDeviceSource struct {
 	rows *sql.Rows
 }
@@ -295,11 +329,11 @@ func (s *sqlRowsDeviceSource) Close() error { return s.rows.Close() }
 
 func (s *sqlRowsDeviceSource) Scan() (deviceCSVRow, error) {
 	var row deviceCSVRow
-	var createdRaw any
+	var createdRaw, updatedRaw any
 	if err := s.rows.Scan(
 		&row.DeviceName, &row.GAID, &row.ADID, &row.OAID,
 		&row.AppName, &row.PalCode, &row.ApplicationID, &row.BrandCode,
-		&createdRaw,
+		&createdRaw, &updatedRaw,
 	); err != nil {
 		return row, fmt.Errorf("扫描设备导出行失败: %w", err)
 	}
@@ -308,6 +342,9 @@ func (s *sqlRowsDeviceSource) Scan() (deviceCSVRow, error) {
 		return row, fmt.Errorf("解析 created_at 失败: %w", err)
 	}
 	row.CreatedAt = t
+	if row.UpdatedAt, err = scanAnyTime(updatedRaw); err != nil {
+		return row, fmt.Errorf("解析 updated_at 失败: %w", err)
+	}
 	return row, nil
 }
 
@@ -366,7 +403,7 @@ func (s *sliceDeviceSource) Scan() (deviceCSVRow, error) {
 	return deviceCSVRow{
 		DeviceName: d.DeviceName, GAID: d.GAID, ADID: d.ADID, OAID: d.OAID,
 		AppName: d.AppName, PalCode: d.PalCode, ApplicationID: d.ApplicationID, BrandCode: d.BrandCode,
-		CreatedAt: d.CreatedAt,
+		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
 	}, nil
 }
 
@@ -384,6 +421,7 @@ func writeDeviceCSVRow(w *csv.Writer, row deviceCSVRow) error {
 		row.DeviceName, row.GAID, gaidSha256, row.ADID, row.OAID,
 		row.AppName, row.PalCode, row.ApplicationID, row.BrandCode,
 		row.CreatedAt.Format("2006-01-02 15:04:05"),
+		row.UpdatedAt.Format("2006-01-02 15:04:05"),
 	})
 }
 
@@ -432,7 +470,7 @@ func streamDeviceCSV(w io.Writer, src deviceCSVSource, flush func()) error {
 // w 通常是 HTTP 响应体，flush 由调用方注入用于分批推送（可为 nil）。in.Scope* 见 ListDevicesInput
 // ——导出通道与列表同一套数据权限过滤，不能「列表被过滤、导出却漏了」（docs/admin/10-rbac.md）。
 func (s *Service) ExportDevicesCSV(ctx context.Context, w io.Writer, in ListDevicesInput, flush func()) error {
-	f, err := buildDeviceFilter(in.ApplicationID, in.From, in.To)
+	f, err := buildDeviceFilter(in)
 	if err != nil {
 		return err
 	}

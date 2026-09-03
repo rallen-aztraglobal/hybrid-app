@@ -618,13 +618,13 @@ function csvCell(v: string | number | undefined): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-const DEVICE_CSV_HEADER = ['设备名称', 'GAID', 'ADID', 'OAID', '应用名', 'PAL_CODE', '包名', '品牌', '注册时间'];
+const DEVICE_CSV_HEADER = ['设备名称', 'GAID', 'ADID', 'OAID', '应用名', 'PAL_CODE', '包名', '品牌', '注册时间', '最后活跃时间'];
 
 function devicesToCsv(items: ChannelDevice[]): string {
   const lines = [DEVICE_CSV_HEADER.map(csvCell).join(',')];
   for (const d of items) {
     lines.push(
-      [d.deviceName, d.gaid, d.adid, d.oaid, d.appName, d.palCode, d.applicationId, d.brandCode, d.createdAt]
+      [d.deviceName, d.gaid, d.adid, d.oaid, d.appName, d.palCode, d.applicationId, d.brandCode, d.createdAt, d.updatedAt]
         .map(csvCell)
         .join(','),
     );
@@ -649,12 +649,22 @@ function downloadCsvText(csv: string, filename: string): void {
   triggerBlobDownload(new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' }), filename);
 }
 
-/** 设备筛选参数 → URLSearchParams（空值不带）。 */
-function deviceFilterParams(filter: Pick<DeviceFilter, 'applicationId' | 'from' | 'to'>): URLSearchParams {
+/** 设备导出/列表共用的筛选字段（不含分页）。 */
+export type DeviceExportFilter = Pick<
+  DeviceFilter,
+  'applicationIds' | 'device' | 'packageName' | 'from' | 'to' | 'activeFrom' | 'activeTo'
+>;
+
+/** 设备筛选参数 → URLSearchParams（空值不带；渠道多选逗号拼接）。 */
+function deviceFilterParams(filter: DeviceExportFilter): URLSearchParams {
   const params = new URLSearchParams();
-  if (filter.applicationId) params.set('applicationId', filter.applicationId);
+  if (filter.applicationIds?.length) params.set('applicationId', filter.applicationIds.join(','));
+  if (filter.device) params.set('device', filter.device);
+  if (filter.packageName) params.set('packageName', filter.packageName);
   if (filter.from) params.set('from', filter.from);
   if (filter.to) params.set('to', filter.to);
+  if (filter.activeFrom) params.set('activeFrom', filter.activeFrom);
+  if (filter.activeTo) params.set('activeTo', filter.activeTo);
   return params;
 }
 
@@ -711,7 +721,7 @@ export const deviceApi = {
    * /api/devices/export.xlsx?token=… 原生 <a href> 下载，大文件不过 JS 内存）。
    * 导出为美化 XLSX（中文表头/列宽/冻结首行）；原始 CSV 通道 export.csv 服务端仍保留。
    */
-  async exportDevicesByFilter(filter: Pick<DeviceFilter, 'applicationId' | 'from' | 'to'>): Promise<void> {
+  async exportDevicesByFilter(filter: DeviceExportFilter): Promise<void> {
     if (FORCE_MOCK) {
       downloadCsvText(devicesToCsv(devicesByFilter(filter)), 'devices_export.csv');
       return;

@@ -32,6 +32,7 @@ var deviceXLSXColumns = []deviceXLSXColumn{
 	{Title: "包名（applicationId）", Width: 34},
 	{Title: "品牌", Width: 8},
 	{Title: "注册时间", Width: 20},
+	{Title: "最后活跃时间", Width: 20},
 }
 
 // xlsxSheetMaxRows 是单 sheet 数据行上限：Excel 硬上限 1,048,576 行，留出表头与余量，
@@ -153,6 +154,7 @@ func (w *deviceXLSXWriter) writeRow(row deviceCSVRow) error {
 		excelize.Cell{Value: row.ApplicationID, StyleID: w.cellStyle},
 		excelize.Cell{Value: row.BrandCode, StyleID: w.cellStyle},
 		excelize.Cell{Value: row.CreatedAt.Format("2006-01-02 15:04:05"), StyleID: w.cellStyle},
+		excelize.Cell{Value: row.UpdatedAt.Format("2006-01-02 15:04:05"), StyleID: w.cellStyle},
 	}
 	return w.sw.SetRow(cell, values)
 }
@@ -196,7 +198,7 @@ func streamDeviceXLSX(out io.Writer, src deviceCSVSource) error {
 // ExportDevicesXLSX 按筛选条件导出美化 XLSX（GET /api/devices/export.xlsx）。
 // in.Scope* 见 ListDevicesInput——导出通道与列表同一套数据权限过滤（docs/admin/10-rbac.md）。
 func (s *Service) ExportDevicesXLSX(ctx context.Context, w io.Writer, in ListDevicesInput) error {
-	f, err := buildDeviceFilter(in.ApplicationID, in.From, in.To)
+	f, err := buildDeviceFilter(in)
 	if err != nil {
 		return err
 	}
