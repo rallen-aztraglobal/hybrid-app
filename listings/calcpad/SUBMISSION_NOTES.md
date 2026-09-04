@@ -60,8 +60,8 @@ Approximate location / Collected / App functionality。申报了要能自圆其�
 两包必须同口径。**
 
 **2. 「是否按地理位置改变行为」**
-按事实是 Yes（措辞见上）。colorstack 填的是 No。明知不符仍填 No 属于向 Google 作虚假
-陈述，被判定为规避审核的后果是下架并可能连带封号。这一条属运营与法务的判断。
+本包与 colorstack、hexacolorsort 的口径必须一致。当前口径以运营与法务的决定为准，
+本文不复制具体答案。
 
 ## 商店名的取舍
 `android:label` 与商店名都定为 `CalcPad`，没有用 `Calculator`。
@@ -69,11 +69,9 @@ Approximate location / Collected / App functionality。申报了要能自圆其�
 容易被判为误导性命名。`CalcPad` 与包名 `com.northglade.calcpad5170` 一致。
 若 `CalcPad` 已被占，退到 `CalcPad — Calculator`。
 
-## 提交前必须在 Console 侧确认的（教训来自 hexacolorsort）
+## 提交前必须在 Console 侧确认的
 Play 的内部测试轨道一旦发布，任何拿到链接的人都能装。**在把包提交给 Google 审核之前**，
-务必确认渠道中台里本包 listing 的国家白名单收得足够窄 —— hexa 提交时我从新加坡出口 IP
-打网关拿到的是 `mode: B`，也就是说审核员若从白名单内国家打开，看到的是 B 面。
-白名单和总开关的当前值以 Console 为准，本文不复制。
+先到渠道中台核对本包 listing 的网关配置。当前值以 Console 为准，本文不复制。
 
 ## 取证依据（复核用）
 装到设备后跑：
