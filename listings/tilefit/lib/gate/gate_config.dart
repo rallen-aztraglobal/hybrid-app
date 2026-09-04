@@ -61,11 +61,18 @@ class GateConfig {
   static String get adjustContentViewToken => '';
 
   /// B 面系统栏/安全区的填充色。对齐渠道壳 WebViewActivity.applyBrandSystemBars：
-  /// 该处按 BuildConfig.BRAND 取色，`gp`(GameZone) 用 #1C1D27、`ap`/`bp` 等浅色站用白色。
-  /// 本包计划挂 `gp`（与 hexacolorsort / calcpad 一致）、B 面是深色站，故取 #1C1D27。
-  /// 游戏本体也是深色（AppColors.background = #0E1116），切换观感连续。
-  /// **若本包改挂 ap/bp（浅色站），这里要同步改成白色。**
-  static const int bSideChromeColor = 0xFF1C1D27;
+  /// 该处按 BuildConfig.BRAND 取色，`gp`(GameZone) 用 #1C1D27、`ap`/`bp` 等浅色站用
+  /// `Color.WHITE`。
+  ///
+  /// 本包挂 **`ap` / `bp`（浅色站）**，故取白色。（2026-09-04 由 `gp` 改过来；
+  /// 改前是 #1C1D27，即 `gp` 深色站的取值。）
+  ///
+  /// 注意：游戏本体是深色（`AppColors.background` = #0E1116），而 B 面是浅色站，
+  /// 所以 A→B 切换时系统栏会由深转白，这是与 B 面站点保持一致的正确行为，不是 bug。
+  /// `web_screen.dart` 的前景色按亮度自动反转（`_chromeIsLight`），无需另改。
+  ///
+  /// **若本包改回 gp（深色站），这里要同步改回 0xFF1C1D27 并重新打包。**
+  static const int bSideChromeColor = 0xFFFFFFFF;
 
   /// 「外开进入 B 面」对应的 Adjust 事件 token（Adjust 后台 event `OpenBLanding`，非 unique
   /// event，故每次外开成功都计一次）。仅在 openMode=external 唤起外部浏览器成功后触发。

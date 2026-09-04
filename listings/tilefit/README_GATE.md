@@ -173,7 +173,7 @@ flutter build appbundle --release   # 47.1MB，上架传这个
 | 品牌字样 | **无**。`gzone` / `arenaplus` / `bingoplus` 命中 0 次 |
 | 自身标识 | `com.emberlane.tilefit8264` 与 AF devKey `fXoKsKQwxPCRdhD8CD8q6F` 各命中 1 次 |
 | 其他包的 Adjust token | **无**。`bytg13h7yubk` / `sn947o53ym80` / `2yhxl7paa3ls` 均命中 0 次 |
-| 自身 Adjust token | 占位符 `TODO_ADJUST_APP_TOKEN` 命中 1 次 —— 说明该位置确实会被编进产物，填上真 token 后同样生效 |
+| 自身 Adjust token | 本包的 app token 与 `OpenBLanding` event token 各命中 1 次 —— 已确认编进产物（此行原先记录的是填 token 之前扫到占位符的结果，已更新） |
 
 ### 模拟器实跑 ✅
 

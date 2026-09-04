@@ -22,10 +22,14 @@ return l > 0.6;
 加权和本身就落在 0..1，再除 255 会把结果压到千分位 —— **任何颜色都恒判"深色"**，
 于是永远配浅色图标。
 
-当前填充色是 `#1C1D27`（`gp` 深色站），两种算法都得"深色"，所以这个错误在本包与
-hexacolorsort 上都表现不出来。但只要本包改挂 `ap`/`bp` 这类浅色站、
-`GateConfig.bSideChromeColor` 换成白色，除 255 的版本就会继续给白底配白图标，
-**状态栏图标直接隐形**。
+写这段时填充色还是 `#1C1D27`（`gp` 深色站），两种算法都得"深色"，所以这个错误当时
+在本包与 hexacolorsort 上都表现不出来 —— 但当时就指出：只要改挂 `ap`/`bp` 这类浅色站、
+`bSideChromeColor` 换成白色，除 255 的版本就会继续给白底配白图标，**状态栏图标直接隐形**。
+
+**2026-09-04：本包已改挂 `ap`/`bp`，`bSideChromeColor` 现为 `0xFFFFFFFF`。**
+也就是说上面这个假设场景已经成为现实。因为除 255 早在 `332e968` 修掉了，白色代入
+现行算法得 `0.299+0.587+0.114 = 1.0 > 0.6` → 判为浅色 → 前景取 `black54` 深色图标，
+显示正确。若当初没修，这次换色就会直接踩上白底白图标。
 
 现在是：
 
@@ -174,9 +178,9 @@ flutter build appbundle --release   # 46.5MB，上架传这个
 | 路径 | 包类型 | 结果 |
 | --- | --- | --- |
 | A 面 | **release（R8）** | 判定 → 加载页 → 计算器；`1234 × 56 = 69104`、`45.6 ÷ 8 = 5.7` 均正确，无 ClassNotFound / NoSuchMethod / NoClassDefFound —— 归因与 Firebase 的反射未被 R8 剪坏 |
-| 缺 google-services.json 的降级 | release | Firebase 初始化失败后照常进 A 面、不崩（本包当前状态） |
+| 缺 google-services.json 的降级 | release | Firebase 初始化失败后照常进 A 面、不崩（**这是当时缺配置时验的降级路径；本包现已放入裁剪过的 `google-services.json`，只含 `com.northglade.calcpad5170` 一个 client**） |
 | AOT 产物无 B 面域名 | release AAB | 反解 `base/lib/arm64-v8a/libapp.so` 的字符串，出现的域名只有网关 API `api.fortunegems-jackpot.online` 以及 Flutter/Firebase 自带的文档与插件通道域名（`docs.flutter.dev` · `pub.dev` · `firebase.google.com` · `plugins.flutter.io` 等）—— 无任何品牌站点域名，也无 `example.com` / 临时调试残留 |
-| AF devKey 已编进产物 | release AAB | `fXoKsKQwxPCRdhD8CD8q6F` 与 `com.northglade.calcpad5170` 在 snapshot 里各命中一次；Adjust token 位置目前是 `TODO_ADJUST_APP_TOKEN`（占位符如实编进去了，说明填上真 token 后同样会生效），且**没有**其他包的 token 混进来 |
+| AF devKey 已编进产物 | release AAB | `fXoKsKQwxPCRdhD8CD8q6F` 与 `com.northglade.calcpad5170` 在 snapshot 里各命中一次；本包的 Adjust app token 与 `OpenBLanding` event token 同样各命中一次，且**没有**其他包的 token 混进来（此行原先记录的是填 token 之前扫到占位符的结果，已更新） |
 | 权限清单 | release APK | `dumpsys package` 的 requested permissions 与 hexacolorsort 逐条相同，见 `SUBMISSION_NOTES.md` |
 
 `store/` 下的四张商店截图就是这次 release 实跑截的（1080×2400 原图左右补边到 1200×2400，

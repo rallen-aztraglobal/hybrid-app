@@ -104,13 +104,18 @@ AppsFlyer and Adjust SDKs are used for installation attribution only.
 
 ## 提交前清单
 
-- [ ] Adjust 后台已建本包条目，App Token 与 `OpenBLanding` event token 已填进
-      `lib/gate/gate_config.dart`（当前是 `TODO_ADJUST_APP_TOKEN` + 两个空 event token）
+- [x] Adjust 后台已建本包条目（App name `TileFit`），App Token 与 `OpenBLanding`
+      event token 均已填进 `lib/gate/gate_config.dart`。`adjustContentViewToken` 仍为空
+      —— 内开进 B 面时 Adjust 侧不发事件，与 colorstack / hexacolorsort 现状一致，
+      属已知缺口而非本包遗漏
 - [ ] `android/app/google-services.json` 已放入（且**已裁剪**成只留本包 client）
-- [ ] 已生成正式 keystore 并按 `RELEASE_SIGNING.md` 验签，确认不是 debug 签名
+- [x] 已生成正式 keystore（`android/tilefit8264.jks`，alias `tilefit8264`），已用
+      `keytool -printcert -jarfile` 确认 release AAB 的签名主体是
+      `CN=TileFit, O=Emberlane`，不是 debug 签名
 - [ ] 服务端 listing 条目已建，bundleId = `com.emberlane.tilefit8264`
 - [ ] 隐私政策已托管到公网 URL 并填进 Console（仓库里的 md 不算），**且不与其他上架包共用同一 URL**
-- [ ] `PRIVACY_POLICY.md` 与 `store/privacy-policy.html` 的 `TODO_SUPPORT_EMAIL` 已同步替换为真实可达邮箱
+- [x] 支持邮箱已填为 `tilefit@outlook.com`（`PRIVACY_POLICY.md` 与
+      `store/privacy-policy.html` 两处都已同步，本包专用、不与其他上架包共用）
 - [ ] `PLAY_STORE_LISTING.md` 的商店名已确认在 Play 上可用
 - [ ] Data safety 按 `DATA_SAFETY.md` 逐项填完，其中 Approximate location 的待定口径已定
 - [x] 商店素材已产出（`store/icon-512.png` · `store/feature-graphic.png` · 三张 1200×2400 截图），

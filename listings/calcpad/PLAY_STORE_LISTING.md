@@ -39,8 +39,15 @@ calculator, simple calculator, basic calculator, percentage calculator,
 dark calculator, offline calculator
 
 ## Contact
-- Support email: **TODO —— 必须是真实可达的邮箱**
-- Privacy policy URL: **TODO —— 必须是公网可访问的 URL**
+- Support email: `calcpad2026@outlook.com`（本包专用）
+- Privacy policy URL: `https://eloquent-palmier-a005c9.netlify.app/`
+
+> 两项都已就位，2026-09-03 实测：根路径 HTTP 200、标题 `Privacy Policy — CalcPad`、
+> 生效日期 28 August 2026、页内邮箱为上面这个、无占位符残留。
+> 内容源是 `store/privacy-policy.html`，部署时改名为 `index.html` 上传，所以根路径
+> 直接就是政策页，不需要带路径。
+>
+> 改政策正文后要**重新拖一次 Netlify Drop**，仓库里改了不等于线上改了。
 
 > 这两项是 Play 必填。`store/privacy-policy.html` 是可直接部署的隐私政策页面，
 > 挂到任意静态托管（Netlify / GitHub Pages / 对象存储）拿到 URL 即可。

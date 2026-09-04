@@ -29,9 +29,12 @@
 > `com.google.android.c2dm.permission.RECEIVE`、`POST_NOTIFICATIONS`、`WAKE_LOCK`、
 > `ACCESS_NETWORK_STATE`（均由 SDK 注入，源 manifest 里只写了 `INTERNET`）。
 >
-> **Adjust 目前是占位 token（`TODO_ADJUST_APP_TOKEN`），SDK 全链路 no-op、实际不上报。**
-> 但 SDK 已打进包里，且填上 token 就会开始上报，故 Data safety 按「会收集并共享」申报，
-> 不按当前的休眠状态申报 —— 申报比实现宽是安全的，反过来才是下架风险。
+> **Adjust 已配置完毕并会实际上报**（2026-09-01 起）：`adjustAppToken` 与
+> `adjustOpenBLandingToken` 都已填进 `lib/gate/gate_config.dart`，AppsFlyer 的 devKey
+> 同样已填。也就是说归因链路是活的，不再是休眠状态。
+>
+> 本文原先写着「占位 token、全链路 no-op」，那是填 token 之前的状态，已过时。
+> 结论不变 —— Data safety 本来就按「会收集并共享」申报，与现在的实际行为一致。
 
 ### App activity → App interactions
 | 字段 | 值 |

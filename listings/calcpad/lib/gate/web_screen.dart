@@ -16,8 +16,9 @@ import 'gate_config.dart';
 ///   - 图标明暗按填充色的感知亮度决定（与渠道壳 isLightColor 同一口径：>0.6 视为浅色，
 ///     浅色底配深色图标）。
 ///
-/// 为什么填充色不写死白色：本包挂 `gp`(GameZone)、B 面是深色站，白边在深色游戏切过去时
-/// 非常突兀。渠道壳按品牌取色（gp=#1C1D27、ap/bp=白），这里同口径，见 GateConfig。
+/// 为什么填充色是可配的常量而不是写死：渠道壳按品牌取色（`gp`=#1C1D27、`ap`/`bp`=白），
+/// 这里同口径。本包现挂 `ap`/`bp`（浅色站），故 `bSideChromeColor` 为白色；
+/// 挂 `gp` 时应改回 #1C1D27，否则白边在深色站前会很突兀。见 GateConfig。
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key, required this.url});
 
@@ -52,7 +53,8 @@ class _WebScreenState extends State<WebScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      // 加载期也用填充色，避免 WebView 默认白底在深色站前闪一下白。
+      // 加载期也用填充色，让加载中与站点底色一致、不闪。挂深色站时这一条尤其重要
+      // （WebView 默认白底会在深色站前闪一下白）；现挂浅色站，本来就同色。
       ..setBackgroundColor(_chrome)
       // decktallypro 的 allowsInlineMediaPlayback（视频内联播放、不强制全屏）在 Android 侧
       // 是 WebView 的默认行为，无需对应设置。注意别顺手关掉「播放需用户手势」——

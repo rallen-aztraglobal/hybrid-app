@@ -119,5 +119,12 @@ Cloudflare Pages / Netlify Drop，都自带 HTTPS）即可拿到 Play 必填的 
    - 可行做法：注册一个与本包同名的独立域名 + 免费转发（ImprovMX 之类），或新开一个
      免费邮箱账号。
 
-定好之后同步替换三处的 `TODO_SUPPORT_EMAIL` / TODO URL：
-`PRIVACY_POLICY.md`、`store/privacy-policy.html`、`PLAY_STORE_LISTING.md`。
+**已定（2026-09-03）**：本包支持邮箱为 `tilefit@outlook.com`，为 TileFit 专用、不与
+其他上架包共用。`PRIVACY_POLICY.md` 与 `store/privacy-policy.html` 两处已同步替换。
+
+隐私政策也已托管（2026-09-03）：`https://moonlit-macaron-a9bd2e.netlify.app/`
+—— Netlify Drop，独立站点，与 calcpad（`eloquent-palmier-a005c9`）互不相干。
+URL 已回填到 `PLAY_STORE_LISTING.md`。
+
+部署内容是 `store/privacy-policy.html` 改名为 `index.html`，所以根路径直接就是政策页。
+改正文后必须重新拖一次，仓库里改了不等于线上改了。

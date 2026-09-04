@@ -69,7 +69,4 @@ address below and include the approximate date of installation.
 Material changes will be published here with a new effective date.
 
 ## Contact
-TODO_SUPPORT_EMAIL
-
-> 上架前把 `TODO_SUPPORT_EMAIL` 换成真实可达的邮箱，并同步改 `store/privacy-policy.html`。
-> **不要复用其余上架包已公开的邮箱**，理由见 `STORE_ASSETS.md`。
+tilefit@outlook.com

@@ -91,10 +91,13 @@ sign-in and no paywall, so no demo video is required.
 
 - [ ] Adjust App Token 与 `OpenBLanding` event token 已填进 `lib/gate/gate_config.dart`
 - [ ] `android/app/google-services.json` 已放入（且**已裁剪**成只留本包 client）
-- [ ] 已生成正式 keystore，`apksigner verify --print-certs` 确认不是 debug 签名
+- [x] 已生成正式 keystore（`android/calcpad5170.jks`，alias `calcpad5170`），已用
+      `keytool -printcert -jarfile` 确认 release AAB 的签名主体是
+      `CN=CalcPad, O=Northglade`，不是 debug 签名
 - [ ] Console（渠道中台）已建 listing 条目，bundleId = `com.northglade.calcpad5170`
 - [ ] 隐私政策已托管到公网 URL 并填进 Console（仓库里的 md 不算），**且不与其他上架包共用同一 URL**
-- [ ] `PRIVACY_POLICY.md` 的 `TODO_SUPPORT_EMAIL` 已替换为真实可达邮箱
+- [x] 支持邮箱已填为 `calcpad2026@outlook.com`（`PRIVACY_POLICY.md` 与
+      `store/privacy-policy.html` 两处都已同步，本包专用、不与其他上架包共用）
 - [ ] `PLAY_STORE_LISTING.md` 的商店名已确认在 Play 上可用
 - [ ] Data safety 按 `DATA_SAFETY.md` 逐项填完
 - [ ] `SUBMISSION_NOTES.md` 里标出的待定口径已定
