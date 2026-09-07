@@ -9,12 +9,26 @@ A 面进游戏本体（`MainTabBarController`），B 面按 `openMode` 内开
 接入方式与 [decktallypro](../decktallypro/README_GATE.md) /
 [pocketledger](../pocketledger/README_GATE.md) 同构。
 
-## ⚠️ 本包尚未编译过
+## ✅ 首次编译已通过（2026-09-04）
 
-**这份代码是在 Windows 上写的，那台机器没有 Xcode 也没有 Swift 工具链，
-所以本工程从未被编译、从未运行、也没有任何截图。**
+本节原标题是「本包尚未编译过」。代码是在一台没有 Xcode / 没有 Swift 工具链的 Windows
+机器上写的，**2026-09-04 在 Mac 上完成了首次真实编译与运行**：
 
-**接手第一件事：在 Mac 上跑通编译**（见文末「本地验证」）。
+| 项 | 结果 |
+| --- | --- |
+| 环境 | Xcode 26.5 (17F42) / Swift 6.3.2 / iPhone 17 Pro Max 模拟器 (iOS 26.5) |
+| `xcodebuild` Debug（模拟器） | **BUILD SUCCEEDED，0 error** |
+| `xcodebuild` Release（模拟器） | **BUILD SUCCEEDED，0 error** |
+| 编译警告 | 仅 1 条（`PushService.swift:66` 的 `token(completion:)` 已废弃），不影响功能，本次没动 |
+| 模拟器启动 | 正常起，进 A 面 Play 页，4×4 已打乱盘面渲染正常，Records / Settings 三个标签页齐全，不崩 |
+
+**预期中的「一批编译错误」一个都没有出现。** 三个 SPM 包由 Xcode 自动解析成功，
+实际锁定版本（取自新生成的 `Package.resolved`）：`AppsFlyerFramework` **7.0.2**、
+`AdjustSdk` **5.4.0**（按声明锁死）、`firebase-ios-sdk` **12.18.0**。
+`Package.resolved` 原先不在仓库里，首次构建后由 Xcode 生成，但**它被 `.gitignore`
+刻意排除**（全部上架包同一约定），故不进版本管理、本次也没提交 —— 代价是各机器
+可能解析到不同次版本（AppsFlyer `7.0.0+` / Firebase `12.16.0+`，只有 Adjust 锁死）。
+要改成锁版本，是跨全部上架包的约定变更，本次没动。
 
 ## 但算法层是真的验证过的
 
@@ -40,7 +54,52 @@ A 面进游戏本体（`MainTabBarController`），B 面按 `openMode` 内开
 而不是「随机排列后再修奇偶性」，后者边界多、极易写错。
 
 `SlidePuzzle.swift` 是那份 Dart 实现的逐行转写，字段名与方法名刻意保持一致，便于对照。
-**但要清楚：验证的是算法，不是这段 Swift。** 转写有没有笔误，仍要靠在 Mac 上编译并实跑确认。
+原先这里写着「验证的是算法，不是这段 Swift；转写有没有笔误仍要靠在 Mac 上编译并实跑确认」
+—— **那件事 2026-09-04 做了，转写没有笔误**，见下面「这段 Swift 本身也验过了」。
+
+## 这段 Swift 本身也验过了（2026-09-04，32 项全过）
+
+把 `Core/Models/SlidePuzzle.swift` 用 `swiftc` 单独编成命令行程序跑
+（**驱动的是仓库里的真实实现，不是复刻**）。除了把 Dart 那 19 项在 Swift 上重跑一遍，
+还补了一条 Dart 侧没做的**穷举验证**：
+
+> BFS 展开 3×3 从复原态可达的全部状态，得到 **恰好 181440 个**（= 9!/2，理论值吻合）；
+> 然后 `shuffle` 打乱 **2000 次**，产出局面**全部落在这个集合里**。
+
+这一条**不依赖任何奇偶判据**，是独立于「逆序数奇偶」之外的第二份证据 ——
+奇偶判据自己写错的话，用它验打乱只会自我印证。另外也按奇偶判据验了 3/4/5 三种尺寸
+各 300 次打乱全部可解，两套判据结论一致。
+
+覆盖的点（32 项，全过）：
+
+- 三种尺寸的复原态构造与判定；`size = 2` 被钳到 3。
+- `canMove`：空格自身、越界（`-1` / `99`）、斜向、同行、同列。
+- 相邻一格滑动、同行整排滑动（一次挪 3 格）、同列整排滑动、5×5 整排一次挪 5 格。
+- 非法点击返回空数组**且不改动棋盘**。
+- 一进一退回到原状（可逆性 —— 打乱必定可解的前提）。
+- `isTileInPlace`：复原态下前 n−1 格全部归位、空格不算归位、挪走后不再归位。
+- `reset` 回到复原态；打乱后不是复原态（三种尺寸各 200 次）；打乱后仍是合法排列。
+- 打乱可解性：奇偶判据 ×300 ×3 尺寸 + 3×3 穷举 ×2000。
+- **完成一局**：见下。
+
+## 完成一局（走真实 `move()` API 打通）
+
+不是只验「`isSolved` 这个属性算得对」，而是**真的把一局从打乱走到复原**：
+
+- **3×3**：打乱后用 BFS 求最短解（实测 20 步），然后把解里每一步都通过真实的
+  `puzzle.move(index)` 走一遍 —— 每步都返回非空（合法），走完 `isSolved == true`、
+  前 8 格全部归位、空格回到最后一格。
+- **4×4 / 5×5**：BFS 状态空间太大，改用反向回放 —— 从复原态随机走 120 步并记下每步之前
+  空格的位置，再逆序把每一步撤回去（撤 `move(i)` 就是 `move(撤销前的空格位置)`，
+  因为同行/同列所以必然合法）。两种尺寸都走完即复原。
+
+以及成绩提交（`RecordStore`）：首次通关步数与用时都记新纪录、更差的成绩不刷新纪录
+但 `completions` 仍 +1、**步数与用时各自独立记纪录**（只刷新步数时用时纪录不被拖累）、
+不同棋盘尺寸的纪录互不干扰、`reset` 清空全部。`TimeDisplay.clock` 的 0 / 65 / 3599 / 负数
+四个边界也验了（负数被钳到 `00:00`）。
+
+`SettingsStore`：默认棋盘 4×4、可切 5、不支持的尺寸（7）被拒且保持原值、
+**震动默认开**（这条专门验那个「没存过时 `bool(forKey:)` 返回 false 会让默认变成关」的坑）。
 
 ## A 面是什么
 
@@ -158,8 +217,16 @@ Xcode 打开工程会自动解析，**不需要手工 Add Package**：
 
 > **别被代码里的 `#if canImport(...)` 误导。** 那层守卫的本意是「没加包也能编译」，
 > 但本工程**已经把包接上了**，所以第一次构建时三个 `canImport` 全部为真、SDK 调用
-> 会真的参与编译。当前不上报靠的是**另一层**：`appsFlyerAppleAppID` 与 `adjustAppToken`
-> 仍是 `TODO_` 占位符，`GateConfig.isConfigured()` 把 SDK 拦在初始化之前。
+> 会真的参与编译。（这一点在 2026-09-04 的首次真实构建里已确认：产物里
+> `AppsFlyerLib.framework` / `AdjustSigSdk.framework` 都在，Firebase 那条
+> `token(completion:)` 废弃警告本身就证明 FirebaseMessaging 分支参与了类型检查。）
+>
+> 至于「加了包会不会上报」——**两个 SDK 的处境已经不一样了**（这段原先写「两个都是
+> `TODO_` 占位符、都被拦在初始化之前」，`adjustAppToken` 回填真值后那句话就不成立了，
+> 按现状改写）：`adjustAppToken` = `4w8yd18jd0qo` 是**真值**，故 **Adjust 会初始化、
+> 会上报**，环境按构建类型切换（Debug → sandbox / Release → production）；
+> `appsFlyerAppleAppID` 仍是 `TODO_APPSTORE_APP_ID`，故 **AppsFlyer 仍全链路 no-op**，
+> `GateConfig.isConfigured()` 把它拦在初始化之前。
 >
 > 实际影响：**第一次 `xcodebuild` 必须能联网解析这三个包**，否则会卡在 package
 > resolution 上。那不是代码问题，但报错看起来像编译失败，别被带偏。
@@ -200,7 +267,10 @@ Xcode 打开工程会自动解析，**不需要手工 Add Package**：
 图案是深色渐变底 + 3×3 网格，**右下角空一格**（滑块拼图之所以能玩全靠那个空格），
 空格左边那块用强调色，读起来就是「它正要滑进空位」。纯几何、不依赖字体。
 
-## 本地验证（**必须在 Mac 上做，尚未执行过**）
+## 本地验证
+
+**编译与启动已在 2026-09-04 执行过（结论见开头）；规则内核与成绩存储的逻辑
+已由宿主端 harness 覆盖（见上面两节）。下面的手验路径仍未在真实界面上点过。**
 
 ```bash
 cd listings/gridslide
@@ -235,13 +305,52 @@ xcodebuild -scheme GridSlide -project GridSlide.xcodeproj \
 11. Settings → 关掉 Haptics → 走一步不应再震。
 12. Settings → Reset all records → Records 页全部回到破折号。
 
+## adjustEnvironment 按构建类型切换（2026-09-04 改）
+
+与 pocketledger 同一处改动、同一个理由，细节见
+[pocketledger/README_GATE.md](../pocketledger/README_GATE.md) 的同名小节。这里只记要点：
+
+- 原先 `GateConfig.adjustEnvironment` 硬写 `"production"`，导致**每次本地 Debug 跑
+  （含模拟器）都往 Adjust 生产环境报一次真实 install**，污染上线前的归因数据。
+  现改为 Debug → `sandbox` / Release → `production`。
+- **同时补了 `SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG`**（项目级 Debug 配置）。
+  本工程的 pbxproj 是手写的，原先只有 C/ObjC 的 `GCC_PREPROCESSOR_DEFINITIONS = DEBUG=1`，
+  缺 Swift 侧这一项 —— 缺了的话 `#if DEBUG` 恒为假，上面那个切换会**静默失效**，
+  而且不报任何错。这是本次改动里最容易漏的一点。
+- 两个方向都实测过，看的是 Adjust 自己打的环境横幅：
+
+  | 构建配置 | 日志 | 结论 |
+  | --- | --- | --- |
+  | Debug | `[Adjust]w: SANDBOX: Adjust is running in Sandbox mode.` | ✅ |
+  | Release | `[Adjust]w: PRODUCTION: Adjust is running in Production mode.` | ✅ 生产归因没改坏 |
+
+  只验「Debug 下 PRODUCTION 消失」不够 —— Adjust 没初始化时那条横幅同样不出现。
+  要的是正向证据：Debug 下必须能看到 `SANDBOX`。
+
+> 另外五个上架包（decktallypro / colorstack / hexacolorsort / calcpad / tilefit）
+> 仍硬写 `"production"`，属已知待统一项，本次按约束不动。
+> **decktallypro 同样缺 `SWIFT_ACTIVE_COMPILATION_CONDITIONS`**，目前它没用到
+> `#if DEBUG` 所以没症状，但哪天用了就会踩同样的坑。
+
 ## 仍未验证
 
-- **这段 Swift 代码本身**。算法验过（见上），转写没验过；UI 层完全没验过。
+- **UI 交互层没有逐个点过**。规则内核与成绩存储的逻辑已由宿主端 harness 覆盖
+  （包括真的把 3×3 / 4×4 / 5×5 各打完一局），但「手指滑动手势是否正确接到 `move()`、
+  盘面动画、完成时的弹窗与震动、约束在各尺寸下是否打断」这类只有点界面才能暴露的问题，
+  本次**没有**覆盖。
+  当时的 Mac 上模拟器的点击/滑动注入用不了（`xcode-select` 未显式选定，
+  且 `osascript` 没有辅助功能权限），两条注入路径都缺一个需要本机用户授权的开关。
+  已知的间接证据只有：App 能起、Play 页 4×4 打乱盘面渲染正常、三个标签页齐全。
+  **接手时请照下面「本地验证」的路径实际滑一局。**
 - B 面两条路径（内开 / 外开）—— 服务端尚未建本包 listing 条目，正常判定恒为 A。
 - 服务端真实判 B、推送、Adjust/AF 上报 —— 都还缺后台条目与配置。
-- 真机（连模拟器都还没跑过）。
-- 商店素材：截图与预览图**一张都没有**（要先能跑起来才能截）。
+  （Adjust 现在**会**初始化了，Debug 走 sandbox；真实上报仍待 listing 条目。）
+- 真机：`DEVELOPMENT_TEAM` 仍是空串，没有 Apple 开发者账号，**真机与签名包都出不了**。
+  本次全部验证都在模拟器上做。
+- 商店素材：截图与预览图**一张都没有**。
+- `SettingsStore.privacyPolicyURLString` 与 `supportEmail` 仍是
+  `TODO_PRIVACY_POLICY_URL` / `TODO_SUPPORT_EMAIL`。
+  （同批的 calcpad / tilefit 已在 commit `913f7b1` 里补齐，本包与 pocketledger 还没。）
 
 ## 接入红线（已落实）
 

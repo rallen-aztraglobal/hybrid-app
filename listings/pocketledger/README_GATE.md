@@ -9,12 +9,56 @@ A 面进记账本体（`MainTabBarController`），B 面按 `openMode` 内开 `W
 接入方式与 [decktallypro](../decktallypro/README_GATE.md) 同构，仅 A 面入口不同
 （本包是记账主界面，decktallypro 是游戏主界面），另有一处刻意的加固见下。
 
-## ⚠️ 本包尚未编译过
+## ✅ 首次编译已通过（2026-09-04）
 
-**这份代码是在 Windows 上写的，那台机器没有 Xcode 也没有 Swift 工具链，
-所以本工程从未被编译、从未运行、也没有任何截图。**
+本节原标题是「本包尚未编译过」。**2026-09-04 在 Mac 上完成了首次真实编译与运行**，
+结论记在这里，下面「已做的静态保证」保留原文备查。
 
-已做的静态保证：
+| 项 | 结果 |
+| --- | --- |
+| 环境 | Xcode 26.5 (17F42) / Swift 6.3.2 / iPhone 17 Pro Max 模拟器 (iOS 26.5) |
+| `xcodebuild` Debug（模拟器） | **BUILD SUCCEEDED，0 error**，102 个 Swift 编译单元 |
+| `xcodebuild` Release（模拟器） | **BUILD SUCCEEDED，0 error** |
+| 编译警告 | 仅 1 条，见下 |
+| 模拟器启动 | 正常起，进 A 面（Overview），网关按预期 fail-closed 回落 A，不崩 |
+
+**预期中的「一批编译错误」一个都没有出现。** 交付前那轮静态审查（下面表里的 6 个问题）
+显然是有效的：从 Windows 上盲写到 Mac 上零错误通过，这在没有编译器兜底的情况下不常见。
+
+唯一的警告（两个包同一处）：
+
+```
+PocketLedger/Push/PushService.swift:66:31: warning:
+  'token(completion:)' is deprecated: Use register(completion:) instead.
+```
+
+`Messaging.token(completion:)` 在当前 FirebaseMessaging 里已废弃，建议改用
+`register(completion:)`。**不影响功能，本次没动** —— 换 API 会改到推送注册路径，
+而推送整条链路（APNs key、capability）还没配齐、没法端到端验，留给配推送那次一起做。
+
+### 顺带确认了一件容易假通过的事
+
+`TrackingService` 与 `PushService` 的 SDK 调用全被 `#if canImport(...)` 包着。
+**如果 SPM 产品没真正链上，那些代码会被整段跳过 —— 编译通过就是个假象。**
+所以专门核了一遍，三个分支都确实参与了编译：
+
+- 产物 `PocketLedger.app/Frameworks/` 里有 `AppsFlyerLib.framework` 与 `AdjustSigSdk.framework`
+- 链接阶段可见 `-framework AppsFlyerLib` / `-framework AdjustSigSdk`
+- 上面那条 FirebaseMessaging 的废弃警告，本身就证明 `#if canImport(FirebaseMessaging)`
+  分支被类型检查过了
+- `GoogleService-Info.plist` 已正确进入 bundle（文件系统同步组按预期工作，pbxproj 无需改动）
+
+三个 SPM 包由 Xcode 自动解析成功，实际锁定版本（取自新生成的 `Package.resolved`）：
+`AppsFlyerFramework` **7.0.2**、`AdjustSdk` **5.4.0**（按声明锁死）、
+`firebase-ios-sdk` **12.18.0**。仓库里原先没有 `Package.resolved`，首次构建后由 Xcode 生成。
+
+> 注意 `Package.resolved` **被 `.gitignore` 刻意排除**（本包与 decktallypro / 其余上架包
+> 的 `.gitignore` 里都有这条），所以它不进版本管理，本次也没提交。
+> 代价是**每台机器各自解析、可能拿到不同的次版本** —— AppsFlyer 声明的是 `7.0.0+`、
+> Firebase 是 `12.16.0+`，只有 Adjust 锁死 5.4.0。要让各机器完全一致，得改这条
+> `.gitignore` 约定；那是跨全部上架包的决定，本次没动。
+
+已做的静态保证（原文保留）：
 
 - 工程文件逐项对照 decktallypro 那份**已知可用**的 `project.pbxproj` 改写，
   26 个对象 id 的定义集与引用集完全重合，无悬空引用。
@@ -28,9 +72,7 @@ A 面进记账本体（`MainTabBarController`），B 面按 `openMode` 内开 `W
 - 26 个 SF Symbol 逐个核对可用性，全部是 iOS 13–14 时代的符号，没有 16+ 的。
 - 40 个类型各定义一次；18 个 `#selector` 目标全部存在且带 `@objc`。
 
-这些都替代不了一次真实编译。
-
-**接手第一件事：在 Mac 上跑通编译**（见文末「本地验证」），把冒出来的问题修掉再谈其他。
+这些都替代不了一次真实编译 —— 那次编译现在做过了，结论见本节开头。
 
 ### 交付前的静态审查已做过一轮，修掉了 6 个问题
 
@@ -145,8 +187,16 @@ Console → 上架包，新建一条：platform=`ios`、bundleId=`com.stillwater
 - Adjust：`https://github.com/adjust/ios_sdk`（产品 `AdjustSdk`，锁 5.4.0）
 - Firebase：`https://github.com/firebase/firebase-ios-sdk`（产品 `FirebaseMessaging`，12.16.0+）
 
-注意：**即便加了包，本包当前也不会有任何上报** —— `appsFlyerAppleAppID` 与 `adjustAppToken`
-都还是占位符，`isConfigured()` 会把两个 SDK 都拦在初始化之前。这是预期行为。
+注意：**两个 SDK 的处境已经不一样了**（这段原先写「两个都是占位符、都不会初始化」，
+`adjustAppToken` 回填真值后那句话就不成立了，2026-09-04 按现状改写）：
+
+| SDK | key 状态 | 加了包之后 |
+| --- | --- | --- |
+| Adjust | `adjustAppToken` = `zoavz0rdks1s`，**真值** | **会初始化、会上报**。环境按构建类型切换（Debug → sandbox / Release → production） |
+| AppsFlyer | `appsFlyerAppleAppID` = `TODO_APPSTORE_APP_ID`，占位 | 仍然全链路 no-op，`isConfigured()` 拦在初始化之前 |
+
+也就是说：**本地 Debug 跑模拟器现在会往 Adjust 的 sandbox 环境报数据**（不是生产，
+见下面「adjustEnvironment 按构建类型切换」一节）。AppsFlyer 要等 ASC 条目建好才会动。
 
 > **启用归因之前必须先补 ATT。** `Info.plist` 里已经放了
 > `NSUserTrackingUsageDescription`（ATT 弹窗文案），但工程里**没有**调用
@@ -198,7 +248,11 @@ Console → 上架包，新建一条：platform=`ios`、bundleId=`com.stillwater
 生成脚本没有进仓库（那是个一次性的 Dart 脚本，而本包是纯 Swift 工程，塞个 Dart 包进来不合适），
 设计参数记在 `STORE_ASSETS.md` 里，需要改时照着重画即可。
 
-## 本地验证（**必须在 Mac 上做，尚未执行过**）
+## 本地验证
+
+**编译与启动这两步已在 2026-09-04 执行过（结论见开头）；下面 12 步的手验路径
+仍未在真实界面上点过**，其中第 2–8、11 步的**逻辑**已由宿主端 harness 覆盖（见「已验证」），
+但按钮接线与界面表现仍待实点。
 
 ```bash
 cd listings/pocketledger
@@ -208,11 +262,27 @@ xcodebuild -scheme PocketLedger -project PocketLedger.xcodeproj \
   -sdk iphonesimulator -configuration Debug \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 
-# 2. 跑起来看 A 面
-open -a Simulator
+# 2. Release 也编一遍（adjustEnvironment 的 #else 分支只有这里才会走到）
 xcodebuild -scheme PocketLedger -project PocketLedger.xcodeproj \
-  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' build
+  -sdk iphonesimulator -configuration Release \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+# 3. 装到模拟器上跑起来看 A 面
+#    （机型按 `xcrun simctl list devices available` 里实际有的填；
+#      2026-09-04 用的是 iPhone 17 Pro Max / iOS 26.5）
+open -a Simulator
+xcrun simctl install booted \
+  ~/Library/Developer/Xcode/DerivedData/PocketLedger-*/Build/Products/Debug-iphonesimulator/PocketLedger.app
+xcrun simctl launch booted com.stillwater.pocketledger
+
+# 4. 确认 Adjust 落在 sandbox（Debug 应打 SANDBOX，Release 应打 PRODUCTION）
+xcrun simctl spawn booted log show --last 30s --style compact \
+  | grep -oE '\[Adjust\]w: (SANDBOX|PRODUCTION)'
 ```
+
+> 注意 `xcodebuild` 的 `-destination` 别写不存在的机型（原文写的 `iPhone 16` 在
+> Xcode 26.5 的默认 runtime 里已经没有了），否则报的是 destination 找不到，
+> 看起来像编译失败。用 `generic/platform=iOS Simulator` 编译最稳。
 
 跑通后按这条路径手验一遍（覆盖了本包全部关键路径）：
 
@@ -228,20 +298,125 @@ xcodebuild -scheme PocketLedger -project PocketLedger.xcodeproj \
 9. 杀掉进程重进 → 数据仍在（落盘生效）。
 10. **删掉 App 重装再冷启动一次**。这一步专门验上面表里那条「只在全新安装的第一次冷启动
     出现」的崩溃已经修好 —— 装着旧数据跑是验不出来的。
-11. **一次金额精度往返**：记一笔 `0.10`、再记一笔 `0.20`，看账户余额是不是**正好** `0.30`；
-    然后杀进程重进再看一次。账本用 `Decimal` 存，但要经 `JSONEncoder`/`JSONDecoder` 落盘，
-    这条往返在本包上没有验证过。若发现有一分钱的偏差，把 `LedgerStore.Snapshot` 里的金额
-    改成以字符串编码即可根治。
+11. ~~**一次金额精度往返**~~ —— **已验证，可跳过。** 2026-09-04 在宿主端 harness 里
+    直接驱动真实的 `LedgerStore` 验过：`0.10 + 0.20` 正好 `0.30`、100 × `0.07` 正好 `7.00`，
+    且经 `JSONEncoder`/`JSONDecoder` 往返后仍精确相等。**`Decimal` 落盘没有精度损失，
+    不需要把 `LedgerStore.Snapshot` 改成字符串编码。**
 12. **换一个以 `.` 作分组分隔符的地区**（模拟器 Settings → General → Language & Region
     改成 Germany 或 Indonesia），打开一笔已有记录再直接保存，确认金额没变 ——
     这是上面表里那条「放大一百倍」的回归验证点。
 
+## adjustEnvironment 按构建类型切换（2026-09-04 改）
+
+原先 `GateConfig.adjustEnvironment` 硬写 `"production"`。后果是**每次本地 Debug 跑
+（含模拟器）都会往 Adjust 生产环境报一次真实 install 与 session**，在还没上架、正被
+高频构建的阶段，这会持续污染上线前的归因数据。首次编译当天的模拟器日志里就有：
+
+```
+[Adjust]w: PRODUCTION: Adjust is running in Production mode.
+```
+
+现在改成按构建类型切换：Debug → `sandbox`，Release → `production`。
+
+### 改这个时踩到的一个坑：`#if DEBUG` 在本工程里原本恒为假
+
+本工程的 `project.pbxproj` 是手写的（对照 decktallypro 改写），Debug 配置里只有
+C/ObjC 用的 `GCC_PREPROCESSOR_DEFINITIONS = ("DEBUG=1", "$(inherited)")`，
+**缺了 Swift 侧的 `SWIFT_ACTIVE_COMPILATION_CONDITIONS`** —— Xcode 自己生成的工程模板
+这两项是一起给的，手写时漏了一半。
+
+漏了的后果很隐蔽：`#if DEBUG` 在 Swift 里恒为假，上面那个切换会**静默失效**，
+Debug 照旧走 production，而且编译不报任何错、日志也不会提示。
+
+所以同时在**项目级 Debug 配置**（`ACC1...010`，不是目标级那两个）补上：
+
+```
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+```
+
+> **decktallypro 同样缺这一项**（也是同一份手写 pbxproj 的来源）。它目前没有用到
+> `#if DEBUG`，所以暂时没有症状 —— 但哪天在那个包里写了 `#if DEBUG` 就会踩同样的坑。
+> 本次按「只动 pocketledger / gridslide」的约束没有去改它，记在这里。
+
+### 验证（两个方向都实测过，不是只看代码）
+
+装到模拟器上跑，读模拟器系统日志里 Adjust 自己打的环境横幅：
+
+| 构建配置 | 日志 | 结论 |
+| --- | --- | --- |
+| Debug | `[Adjust]w: SANDBOX: Adjust is running in Sandbox mode.` | ✅ 已切到 sandbox |
+| Release | `[Adjust]w: PRODUCTION: Adjust is running in Production mode.` | ✅ 生产归因没被改坏 |
+
+只验「Debug 下 PRODUCTION 消失」是不够的 —— Adjust 没初始化时那条横幅同样不会出现，
+两者看起来一样。所以这里要的是**正向证据**：Debug 下必须能看到 `SANDBOX` 那条。
+
+> 本仓库另外五个上架包（decktallypro / colorstack / hexacolorsort / calcpad / tilefit）
+> 目前仍硬写 `"production"`，属**已知的待统一项**。那五个要么已上架、要么刚出过待提交的
+> 产物，改一行就要走一轮重新构建或发版，成本不对等，故本次不动 —— 各自下次需要重新构建时
+> 再一并处理。
+
+## 已验证（2026-09-04）
+
+### 编译与启动
+
+- Debug / Release 两个配置都 **BUILD SUCCEEDED，0 error**（模拟器 target，`CODE_SIGNING_ALLOWED=NO`）。
+- 模拟器冷启动正常进 A 面（Overview），不崩；网关判定失败按预期 fail-closed 回落 A 面。
+- 三个 SDK 的 `#if canImport` 分支确认真的参与了编译（见本文开头）。
+
+### 逻辑层：用宿主端 harness 直接驱动真实代码，51 项全过
+
+把 `LedgerModels` / `LedgerMath` / `LedgerStore` / `MoneyFormatter` / `UserSettingsStore`
+用 `swiftc` 单独编成一个命令行程序跑。**驱动的是仓库里的真实实现，不是复刻**，
+比点界面更严格也更可复现（界面只是这些函数的一层壳）。覆盖：
+
+- **首启种子状态**：只有 1 个 Cash 账户、14 个默认分类、无流水、净资产 0
+  —— 等价于「删掉 App 重装再冷启动」那步。
+- **建账户**：Card（期初 `-500`，欠款为负）、E-wallet；账户数递增、余额正确。
+- **记流水**：支出从账户扣（`-500` → `-620.50`）、收入加回（→ `1379.50`）。
+- **账户间转账**：Card → E-wallet 300，转出方 `1079.50` / 转入方 `300`，
+  **净资产前后不变**，且这笔**不计入**本月支出与本月收入。
+- **换币种**：切 PHP → `₱1,234.50`；切 JPY → `JP¥1,234`（零小数位币种不出现小数，
+  即静态审查里那条「硬写 2 位小数」的回归点）；不支持的币种被拒且保持原值。
+- **CSV 导出**：表头正确、行数 = 表头 + 流水数、转账行带转入账户、
+  **备注里的逗号被正确转义成 `"Lunch, with tip"`**（不转义会把一列冲成两列）。
+- **落盘往返**：直接把磁盘上的 `pocketledger.json` 解码回来，账户数 / 流水数 / 余额
+  与内存一致 —— 即「杀进程重进数据仍在」。
+- **删流水 / 删账户 / 清空**：删流水余额回补、删账户连带删其上流水、清空回到初始单 Cash 账户。
+- **金额精度**：`0.10 + 0.20` 正好 `0.30`；100 × `0.07` 正好 `7.00`；
+  两者经 `JSONEncoder`/`JSONDecoder` 往返后仍精确相等。
+  **这条销掉了原「仍未验证」里的第 11 项待办** —— `Decimal` 落盘没有精度损失，
+  不需要改成字符串编码。
+- **「放大一百倍」回归点**：de_DE / id_ID / es_ES / it_IT / pt_BR 五个以 `.` 作分组符的
+  地区，`12,50` 都正确解析回 `12.50`；`editableText` 产出不含分组符。
+- **解析边界**：空串 / 纯小数点 / `0` / 负数被 `parse` 拒（流水金额须为正）；
+  而 `parseSigned` 接受 `0` 与负数（期初余额可为 0、信用卡可欠款）。
+
+### 规则内核的等价物在 GridSlide 那边也做了
+
+见 [gridslide/README_GATE.md](../gridslide/README_GATE.md) 的同名小节。
+
 ## 仍未验证
 
-- **一切**。本包从未编译、从未运行。上面「本地验证」整节都是待做。
+- **UI 交互层没有逐个点过**。上面全部逻辑验证走的是宿主端 harness；
+  「按钮接线是否正确、`#selector` 是否真被触发、约束在真机尺寸下是否打断」
+  这类只有点界面才能暴露的问题，本次**没有**覆盖。
+  当时的 Mac 上模拟器的点击/滑动注入用不了（`xcode-select` 未显式选定，
+  且 `osascript` 没有辅助功能权限），两条注入路径都缺一个需要本机用户授权的开关。
+  已知的间接证据只有：App 能起、A 面能渲染、18 个 `#selector` 目标静态核对过存在且带 `@objc`。
+  **接手时请照下面「本地验证」那条手验路径实际点一遍**，特别是第 3–8 步。
+- 上面「本地验证」里第 12 步（把模拟器地区切成 Germany / Indonesia 后，
+  打开一笔已有记录再直接保存）**没有在真实界面上走过** —— 只在 harness 里验了
+  `parseSigned` 对这些地区的解析。真实路径还多一层 `editableText` 用 `.current` 回填，
+  换地区后的端到端行为仍建议实点一次。
 - B 面两条路径（内开 / 外开）—— 服务端尚未建本包 listing 条目，正常判定恒为 A。
 - 服务端真实判 B、推送、Adjust/AF 上报 —— 都还缺后台条目与配置。
-- 商店素材：截图与预览图**一张都没有**（要先能跑起来才能截），见 `STORE_ASSETS.md`。
+  （Adjust 现在**会**初始化了，Debug 走 sandbox；但要看到真实上报还得等 listing 条目。）
+- 真机：`DEVELOPMENT_TEAM` 仍是空串，没有 Apple 开发者账号，**真机与签名包都出不了**。
+  本次全部验证都在模拟器上做。
+- 商店素材：截图与预览图**一张都没有**，见 `STORE_ASSETS.md`。
+- `UserSettingsStore.privacyPolicyURLString` 与 `supportEmail` 仍是
+  `TODO_PRIVACY_POLICY_URL` / `TODO_SUPPORT_EMAIL`。
+  （同批的 calcpad / tilefit 已在 commit `913f7b1` 里补齐，本包与 gridslide 还没。）
 
 ## 接入红线（已落实）
 

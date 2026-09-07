@@ -40,7 +40,23 @@ enum GateConfig {
     /// reporting currency PHP、no_eea_users=true。
     static let adjustAppToken = "zoavz0rdks1s"
     /// 生产 "production"，联调 "sandbox"。
+    ///
+    /// 按构建类型自动切换：Debug 走 sandbox，Release 走 production。
+    /// 原先硬写 "production"，导致每次本地跑（含模拟器）都往 Adjust 生产环境
+    /// 报一次真实 install，会污染上线前的归因数据。
+    ///
+    /// 依赖 `SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG`（本工程的 Debug 配置里）。
+    /// 那份 pbxproj 是手写的，原先只有 C/ObjC 的 `GCC_PREPROCESSOR_DEFINITIONS = DEBUG=1`，
+    /// 缺 Swift 侧这个条件 —— 缺了的话下面的 `#if DEBUG` 恒为假，本切换会静默失效。
+    ///
+    /// 注意：本仓库另外五个上架包（decktallypro / colorstack / hexacolorsort /
+    /// calcpad / tilefit）目前仍是硬写 "production"，属已知的待统一项 ——
+    /// 各自下次需要重新构建时再一并处理。改这里时不要顺手去改它们。
+    #if DEBUG
+    static let adjustEnvironment = "sandbox"
+    #else
     static let adjustEnvironment = "production"
+    #endif
     /// 「进入 B 面」的 Adjust 事件 token（可留空，只发 AF 标准事件也可）。
     static let adjustContentViewToken = ""
     /// 「外开进入 B 面」的 Adjust 事件 token（Adjust 后台 event `OpenBLanding`）。

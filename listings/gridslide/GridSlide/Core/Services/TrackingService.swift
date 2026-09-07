@@ -16,8 +16,12 @@ import AdjustSdk
 /// **未添加 SPM 包时本文件仍能编译（全部走 no-op 分支）**，添加后自动启用真实上报。
 /// 一次性 SPM 添加步骤见 listings/gridslide/README_GATE.md。
 ///
-/// 本包当前 `appsFlyerAppleAppID` 与 `adjustAppToken` 都还是占位符，故即便加了 SPM 包，
-/// 两个 SDK 也都不会初始化 —— 要等 App Store Connect 与 Adjust 后台建好条目再填。
+/// 当前状态 —— 两个 SDK 的处境**已经不一样了**，不要再当成一件事说：
+/// - `adjustAppToken` **已回填真值**，故加了 SPM 包后 **Adjust 会真的初始化并上报**。
+///   环境按构建类型切换（Debug → sandbox / Release → production），见
+///   `GateConfig.adjustEnvironment`。
+/// - `appsFlyerAppleAppID` 仍是 `TODO_APPSTORE_APP_ID` 占位符，故 **AppsFlyer 全链路仍 no-op**
+///   —— 要等 App Store Connect 建好条目拿到那串数字 id 再填。
 final class TrackingService {
     static let shared = TrackingService()
     private init() {}
