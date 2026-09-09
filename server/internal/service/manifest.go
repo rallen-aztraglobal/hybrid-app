@@ -44,6 +44,12 @@ type ManifestChannel struct {
 	// SigningKey 签名 key 注册表 ID（空 = 默认 key）：构建机 runner 打包后据此用 apksigner 重签
 	// （见 model.SigningKeyInfo）。CSVLine 不带出——Gradle 读的四列格式不变。
 	SigningKey string `json:"signingKey,omitempty"`
+	// HMSEnabled 该渠道是否集成华为 HMS/OAID，**已解析成有效值**（显式配置优先，未配置回落
+	// 「品牌整体开 HMS 或 _hw 华为商店包」的默认规则，见 model.Channel.EffectiveHMSEnabled）。
+	// CLI 据此渲染 app/hms-channels.json，供 build.gradle 的旁路块按 applicationId 查表决定
+	// 是否注入 OAID 依赖。用指针只为兼容老 CLI/老后端组合：字段缺失（null）时 CLI 自行回落
+	// 同一套默认规则，不会把 bp/_hw 包的 HMS 误关成 false。CSVLine 不带出——CSV 四列格式不变。
+	HMSEnabled *bool `json:"hmsEnabled,omitempty"`
 }
 
 // CSVLine 渲染成与现有 channels/*.csv 字节级兼容的一行：flavor|applicationId|palCode|appName。
@@ -117,6 +123,7 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, scope auth.Scope, b
 			AppName:           ch.AppName,
 			Status:            ch.Status,
 			EffectiveDomains:  eff,
+			HMSEnabled:        boolPtr(ch.EffectiveHMSEnabled(brand.HMSEnabled)),
 			ResZipURL:         ch.IconSetURL,
 			SplashURL:         ch.SplashURL,
 			ConfigSnapshotURL: s.SnapshotURL(ch.ApplicationID),
@@ -127,3 +134,6 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, scope auth.Scope, b
 	}
 	return out, nil
 }
+
+// boolPtr 返回指向 v 的指针（manifest 里用指针区分「未下发」与「显式 false」）。
+func boolPtr(v bool) *bool { return &v }

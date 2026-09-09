@@ -3,6 +3,7 @@
 //	channels/<brand>.csv                                  ← 字节级兼容重写
 //	app/src/channels/<brand>/<flavor>/res/...             ← 解压 res.zip
 //	app/src/channels/<brand>/<flavor>/assets/bootstrap.json ← 域名兜底 + 配置端点
+//	app/hms-channels.json                                 ← 各渠道是否集成华为 HMS/OAID
 //
 // 绝不修改 app/build.gradle 的任何机制；本包只生产它已经会读取的文件。
 package render
@@ -49,6 +50,7 @@ type Result struct {
 	ResSkipped       int // 无资源地址 / 跳过的 flavor 数
 	BootstrapCount   int
 	AdjustBoundCount int // 已绑定 Adjust App Token 并写入 adjust-tokens.json 的渠道数（ADR-0013）
+	HMSEnabledCount  int // 集成华为 HMS/OAID（hms-channels.json 中值为 true）的渠道数
 	Conflicts        []csvio.Conflict
 }
 
@@ -158,6 +160,14 @@ func RenderManifest(ctx context.Context, r *repo.Repo, src api.ManifestSource, m
 		return res, err
 	}
 	res.AdjustBoundCount = boundCount
+
+	// 5) 渲染 app/hms-channels.json：本品牌全部渠道的「是否集成华为 HMS/OAID」权威表，
+	//    键=applicationId（ADR-0009 派生值）。缺失时 Gradle 回落旧默认规则，见 hms.go。
+	hmsCount, err := renderHMSChannels(r, m.Brand, m.HMSEnabled, m.Channels, opt)
+	if err != nil {
+		return res, err
+	}
+	res.HMSEnabledCount = hmsCount
 
 	return res, nil
 }

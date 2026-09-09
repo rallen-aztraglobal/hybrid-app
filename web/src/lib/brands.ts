@@ -79,6 +79,19 @@ export function deriveApplicationId(brand: BrandCode, flavor: string, prefix?: s
   return f ? `${base}.${f}` : '';
 }
 
+/** 华为商店包的 flavor 后缀（store.code = hw），与 app/build.gradle、后端 model 保持一致。 */
+export const HUAWEI_STORE_FLAVOR_SUFFIX = '_hw';
+
+/**
+ * 「渠道未显式配置 HMS 开关」时的默认取值，与 app/build.gradle 的回落规则一字不差：
+ * 品牌整体集成 HMS（bp），或该渠道是华为商店包（flavor 以 `_hw` 结尾）。
+ * 用于抽屉里给存量渠道回显开关初值。
+ */
+export function defaultHmsEnabled(brand: BrandCode, flavor: string, brandHms?: boolean): boolean {
+  const byBrand = brandHms ?? BRAND_META[brand].hmsEnabled;
+  return byBrand || flavor.trim().endsWith(HUAWEI_STORE_FLAVOR_SUFFIX);
+}
+
 /** 由应用名提炼 2 字母图标占位（与原型一致：取字母、大写、截 2 位）。 */
 export function iconInitials(name: string, brand: BrandCode): string {
   const letters = name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase();

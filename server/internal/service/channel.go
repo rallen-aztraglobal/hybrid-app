@@ -26,6 +26,9 @@ type CreateChannelInput struct {
 	StoreID        *uint64           `json:"storeId"`
 	AdjustAppToken string            `json:"adjustAppToken"`
 	AdjustEvents   map[string]string `json:"adjustEvents"`
+	// HMSEnabled 是否集成华为 HMS/OAID：不传（null）= 跟随默认规则（品牌整体开 HMS 或 _hw 华为商店包），
+	// 传 true/false = 该渠道显式指定（见 model.Channel.HMSEnabled）。
+	HMSEnabled *bool `json:"hmsEnabled"`
 }
 
 // UpdateChannelInput 修改渠道入参（指针字段表示可选更新）。
@@ -50,6 +53,9 @@ type UpdateChannelInput struct {
 	SigningKey     *string            `json:"signingKey"`
 	AdjustAppToken *string            `json:"adjustAppToken"`
 	AdjustEvents   *map[string]string `json:"adjustEvents"`
+	// HMSEnabled 是否集成华为 HMS/OAID：未传 = 不改动（含保持「跟随默认规则」的 NULL 状态）；
+	// 传 true/false = 显式固化该渠道的取值。
+	HMSEnabled *bool `json:"hmsEnabled"`
 }
 
 // ListChannels 列表查询，并为每条渠道填充 latestApkUrl（按 flavor 取最近成功构建产物，ADR-0008）。
@@ -146,6 +152,7 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 		StoreID:         in.StoreID,
 		AdjustAppToken:  adjustToken,
 		AdjustEvents:    model.AdjustEvents(in.AdjustEvents),
+		HMSEnabled:      in.HMSEnabled,
 	}
 	if err := s.repo.CreateChannel(ctx, ch); err != nil {
 		return nil, err
@@ -240,6 +247,10 @@ func (s *Service) UpdateChannel(ctx context.Context, id uint64, in UpdateChannel
 			return nil, err
 		}
 		ch.SigningKey = v
+	}
+	// HMSEnabled：未传 = 不改动（保持 NULL 的「跟随默认」语义）；传了就固化成显式值。
+	if in.HMSEnabled != nil {
+		ch.HMSEnabled = in.HMSEnabled
 	}
 	if in.Status != nil {
 		st := *in.Status

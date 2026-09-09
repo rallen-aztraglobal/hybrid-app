@@ -162,6 +162,13 @@ export interface Channel {
    */
   signingKey?: string;
   /**
+   * 是否集成华为 HMS/OAID（AppsFlyer oaid + hms-ads-identifier 依赖）。
+   * 三态：undefined = 未显式配置，打包时按默认规则推断（品牌整体开 HMS，或 flavor 以 `_hw`
+   * 结尾的华为商店包，见 defaultHmsEnabled）；true/false = 该渠道显式指定，优先于默认规则。
+   * 华为设备无 GMS 拿不到 GAID，缺 OAID 会导致 AppsFlyer 归因丢事件——上架华为商店的包必须开。
+   */
+  hmsEnabled?: boolean;
+  /**
    * Adjust App Token（08-adjust.md / ADR-0013）。空/未设置 = 该渠道未绑定 Adjust，
    * 打包时不集成、不发任何 Adjust 事件。非机密，随 APK 分发。
    */
@@ -206,6 +213,8 @@ export interface ChannelInput {
    * 不传（undefined）= 不改动。语义与 liveVersion 一致。
    */
   signingKey?: string;
+  /** 是否集成华为 HMS/OAID（见 Channel.hmsEnabled 注释）；表单总是提交显式布尔值。 */
+  hmsEnabled?: boolean;
   /** Adjust App Token；空字符串 = 不启用（见 Channel.adjustAppToken 注释）。 */
   adjustAppToken?: string;
   /** Adjust 事件映射 `{ name: token }`（见 Channel.adjustEvents 注释）。 */

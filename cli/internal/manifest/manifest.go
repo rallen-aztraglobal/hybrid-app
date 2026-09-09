@@ -7,6 +7,8 @@
 // 在 server 落地之前，CLI 先在此独立维护一份；server 建成后可将本包提升为共享包。
 package manifest
 
+import "strings"
+
 // Manifest 是 `GET /api/build/manifest?brand=ap` 的响应主体（data 字段）。
 //
 // 一次拉全某品牌的全部启用渠道 + 域名 + PAL_CODE + 资源 zip 地址，
@@ -21,6 +23,9 @@ type Manifest struct {
 	ConfigURL string `json:"configUrl"`
 	// BrandDomains 品牌级默认域名清单 [主, 备用1..3]，作为继承渠道的兜底来源。
 	BrandDomains []string `json:"brandDomains"`
+	// HMSEnabled 该品牌是否整体集成华为 HMS/OAID（bp=true，ap/gp=false）。
+	// 仅作渠道级 HMSEnabled 缺失（老后端不下发）时的回落依据，见 Channel.EffectiveHMS。
+	HMSEnabled bool `json:"hmsEnabled"`
 	// Channels 该品牌下全部启用的小渠道。
 	Channels []Channel `json:"channels"`
 	// ConfigVersion 后台配置版本号，便于漂移检测与日志。
@@ -62,6 +67,11 @@ type Channel struct {
 	// assemble 成功后、投递产物前，用 apksigner 按此 ID 对该渠道的 APK 重签（v1+v2）。
 	// 密钥材料本身（keystore/口令）不随 manifest 下发，只在构建机注册表里，绝不上传/回传。
 	SigningKey string `json:"signingKey,omitempty"`
+	// HMSEnabled 该渠道是否集成华为 HMS/OAID（AppsFlyer oaid + hms-ads-identifier）。
+	// 后端下发的是已解析的有效值（Console 显式配置优先，否则回落默认规则）。
+	// 指针：null = 老后端未下发该字段，此时 CLI 用 EffectiveHMS 回落同一套默认规则，
+	// 绝不把它当 false——否则 bp/_hw 包会静默丢掉 OAID 采集。
+	HMSEnabled *bool `json:"hmsEnabled,omitempty"`
 }
 
 // AdjustTokenEntry 是 app/adjust-tokens.json 中单个 applicationId 对应的 Adjust 配置
@@ -73,6 +83,19 @@ type Channel struct {
 type AdjustTokenEntry struct {
 	AppToken string            `json:"appToken"`
 	Events   map[string]string `json:"events"`
+}
+
+// HuaweiStoreFlavorSuffix 华为商店包的 flavor 后缀（store.code = hw）。
+const HuaweiStoreFlavorSuffix = "_hw"
+
+// EffectiveHMS 返回该渠道是否集成华为 HMS/OAID。
+// 后端已下发有效值时直接采用；未下发（老后端）则回落到与 app/build.gradle 加渠道级开关之前
+// 完全一致的默认规则：品牌整体开 HMS（bp），或该渠道是华为商店包（flavor 以 _hw 结尾）。
+func (c Channel) EffectiveHMS(brandHMS bool) bool {
+	if c.HMSEnabled != nil {
+		return *c.HMSEnabled
+	}
+	return brandHMS || strings.HasSuffix(c.Flavor, HuaweiStoreFlavorSuffix)
 }
 
 // EffectiveDomains 返回该渠道实际生效的域名清单：

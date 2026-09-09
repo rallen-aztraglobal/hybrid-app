@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { Brand, Channel, DomainEntry } from '@/lib/types';
-import { iconInitials } from '@/lib/brands';
+import { defaultHmsEnabled, iconInitials } from '@/lib/brands';
 import { friendlyNotFoundMessage } from '@/lib/api';
 import { useSaveChannelLiveVersion, useSigningKeys } from '@/hooks/queries';
 import { apkFileName } from '@/lib/text';
@@ -34,6 +34,8 @@ export function ChannelCard({
   const effective: DomainEntry[] = channel.useBrandDomains
     ? brand.domains
     : channel.domains ?? [];
+  // 是否集成华为 HMS/OAID：显式配置优先，未配置回落默认规则（与 build.gradle 一致）。
+  const hms = channel.hmsEnabled ?? defaultHmsEnabled(channel.brandCode, channel.flavorName, brand.hmsEnabled);
 
   return (
     <div
@@ -83,6 +85,18 @@ export function ChannelCard({
               </span>
             )}
             <SigningKeyBadge signingKey={channel.signingKey} keys={signingKeys} />
+            {hms && (
+              <span
+                className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md text-[#166534] bg-[#dcfce7]"
+                title={
+                  channel.hmsEnabled === undefined
+                    ? '集成华为 HMS/OAID（按默认规则推断：品牌整体开启或 _hw 华为商店包）'
+                    : '集成华为 HMS/OAID（后台按渠道显式开启）'
+                }
+              >
+                HMS
+              </span>
+            )}
           </div>
         </div>
       </div>

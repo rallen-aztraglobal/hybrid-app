@@ -9,7 +9,7 @@
  * 这正是用来拦住 ap01035 / gzmarket062 这类脏数据的闸门。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { deriveApplicationId, type BrandMeta } from '@/lib/brands';
+import { BRAND_META, defaultHmsEnabled, deriveApplicationId, type BrandMeta } from '@/lib/brands';
 import type { Channel, ChannelInput, DomainEntry } from '@/lib/types';
 import { useBrands, useChannels, useSaveChannel, useSigningKeys, useStores } from '@/hooks/queries';
 import { useUiStore } from '@/store/uiStore';
@@ -70,6 +70,9 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   // ADR-0009：品牌包前缀（优先后端下发，回落 BRAND_META）。applicationId 据此派生。
   const packagePrefix = brandView?.packagePrefix ?? brandMeta.packagePrefix;
 
+  // 该品牌是否整体集成 HMS（优先后端下发，回落 BRAND_META）：渠道级开关未显式配置时的默认依据。
+  const brandHms = brandView?.hmsEnabled ?? brandMeta.hmsEnabled;
+
   // 继承大渠道时展示的域名：优先后端**真实**配置；后端未加载到才回落静态兜底常量。
   // （修复：原先恒用 brandMeta.fallbackDomains，导致后台只配 1 个也固定显示兜底的 2 个。）
   const inheritedDomains = useMemo<DomainEntry[]>(() => {
@@ -92,6 +95,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   const [form, setForm] = useState<ChannelInput>(blankForm(brandMeta.code));
   // 用户在表单里实际填写的「基础 flavor」（不含商店后缀）；form.flavorName 是合成值。
   const [baseFlavor, setBaseFlavor] = useState('');
+  // 「集成华为 HMS」开关是否被人工拨过：新增态未拨动时让它跟随所选商店的默认规则自动变化。
+  const [hmsTouched, setHmsTouched] = useState(false);
   // 选中的商店 code（''  = 无/默认）。提交时据此在 stores 中查回 storeId。
   const [storeCode, setStoreCode] = useState('');
   const [icon, setIcon] = useState<IconState>(emptyIconState());
@@ -107,6 +112,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
   useEffect(() => {
     if (!target) return;
     setTouched(false);
+    setHmsTouched(false);
     setCopiedFrom(null);
     setCopyingAssets(false);
     setSubmitError(null);
@@ -129,6 +135,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
         liveVersion: editChannel.liveVersion ?? '',
         storeId: editChannel.storeId ?? null,
         signingKey: editChannel.signingKey ?? '',
+        // 存量渠道多半没显式配过（undefined）→ 用与 build.gradle 一致的默认规则回显当前实际行为。
+        hmsEnabled: editChannel.hmsEnabled ?? defaultHmsEnabled(editChannel.brandCode, editChannel.flavorName, brandHms),
         adjustAppToken: editChannel.adjustAppToken ?? '',
         adjustEvents: editChannel.adjustEvents ?? {},
       });
@@ -137,11 +145,11 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
     } else {
       setBaseFlavor('');
       setStoreCode('');
-      setForm(blankForm(brandMeta.code));
+      setForm({ ...blankForm(brandMeta.code), hmsEnabled: defaultHmsEnabled(brandMeta.code, '', brandHms) });
       setIcon(emptyIconState());
       setSplash(null);
     }
-  }, [target, editChannel, brandMeta.code]);
+  }, [target, editChannel, brandMeta.code, brandHms]);
 
   const open = target !== null;
 
@@ -195,6 +203,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       flavorName: composed,
       applicationId: deriveApplicationId(f.brandCode, composed, packagePrefix),
       storeId: store ? store.id : null,
+      // 选中华为商店即自动打开 HMS（默认规则），除非运营已手动拨过这个开关。
+      hmsEnabled: hmsTouched ? f.hmsEnabled : defaultHmsEnabled(f.brandCode, composed, brandHms),
     }));
   }
 
@@ -220,8 +230,12 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       remark: src.remark,
       liveVersion: '',
       storeId: null,
+      // 复制不带商店（storeId 置空、flavor 清空），故 HMS 回到「本品牌默认规则」而不是照搬源渠道——
+      // 漏了这行会让 submit 的 `?? false` 把新包显式存成不集成，bp 包会静默丢掉 OAID。
+      hmsEnabled: defaultHmsEnabled(brandMeta.code, '', brandHms),
     });
     setTouched(false);
+    setHmsTouched(false);
     setCopiedFrom(`${src.flavorName}（${src.appName}）`);
 
     const iconUrl = src.iconMasterUrl;
@@ -276,6 +290,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       adjustEvents: form.adjustEvents ?? {},
       liveVersion: form.liveVersion?.trim() ?? '',
       signingKey: form.signingKey?.trim() ?? '',
+      // 开关总有确定值：保存即把该渠道固化为显式配置，之后不再随默认规则漂移。
+      hmsEnabled: form.hmsEnabled ?? false,
     };
     try {
       await save.mutateAsync({ id: editing ?? undefined, input: payload });
@@ -450,6 +466,28 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               />
               <div className="mt-1 text-[11.5px] text-muted">
                 已上架商店的渠道必须与商店登记的证书一致；选错会导致商店拒收或用户无法覆盖安装。
+              </div>
+            </Field>
+            {/* 华为 HMS/OAID：华为设备无 GMS 拿不到 GAID，缺 OAID 会让 AppsFlyer 归因丢事件。
+                默认按「品牌整体开 HMS 或 _hw 华为商店包」推断，这里可对单个渠道单独覆盖——
+                典型场景：已上架华为商店、但 flavor 不带 _hw 后缀的老渠道。 */}
+            <Field label="集成华为 HMS" hint="上架华为应用市场的包必须开启，否则华为设备无广告标识、AppsFlyer 归因会丢事件">
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={form.hmsEnabled ?? false}
+                  onChange={(v) => {
+                    setHmsTouched(true);
+                    set('hmsEnabled', v);
+                  }}
+                />
+                <span className="text-[12.5px] text-ink-2">
+                  {form.hmsEnabled ? '集成 HMS / OAID 采集' : '不集成'}
+                  <span className="text-muted">
+                    {form.hmsEnabled === defaultHmsEnabled(form.brandCode, form.flavorName, brandHms)
+                      ? `（与默认规则一致：${brandHms ? '本品牌整体开启' : form.flavorName.endsWith('_hw') ? '华为商店包' : '非华为商店包'}）`
+                      : '（已覆盖默认规则）'}
+                  </span>
+                </span>
               </div>
             </Field>
           </div>
@@ -629,6 +667,7 @@ function blankForm(brandCode: BrandMeta['code']): ChannelInput {
     status: 'enabled',
     storeId: null,
     signingKey: '',
+    hmsEnabled: BRAND_META[brandCode].hmsEnabled,
     adjustAppToken: '',
     adjustEvents: {},
     liveVersion: '',

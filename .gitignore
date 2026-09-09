@@ -23,6 +23,8 @@
 # 逻辑（App Token 非机密、随 APK 分发，但属渲染产物不进 git）。google-services.json 的忽略规则
 # 在 app/.gitignore（归 app/ 目录代理维护），此文件同属 app/ 但按多代理目录边界改在此处归口忽略。
 /app/adjust-tokens.json
+# app/hms-channels.json 同为 CLI pull/build 的渲染产物（各渠道是否集成华为 HMS/OAID）。
+/app/hms-channels.json
 
 # 编辑器 / 工具临时产物
 /.vscode/

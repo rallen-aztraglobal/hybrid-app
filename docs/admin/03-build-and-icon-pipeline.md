@@ -31,7 +31,8 @@ CLI 的本质是把后台数据**渲染成现有 Gradle 构建已经认识的输
 渲染产物（与现状格式 100% 兼容）：
    ├── channels/ap.csv  channels/bp.csv  channels/gp.csv      ← 重写
    ├── app/src/channels/<brand>/<flavor>/res/...              ← 解压图标资源
-   └── app/src/channels/<brand>/<flavor>/assets/bootstrap.json ← 域名兜底+配置端点
+   ├── app/src/channels/<brand>/<flavor>/assets/bootstrap.json ← 域名兜底+配置端点
+   └── app/hms-channels.json                                  ← 各渠道是否集成华为 HMS/OAID
    │  hybrid-pack build
    ▼
 ./gradlew assemble<Flavor>Release   ← 原样调用，行为不变
@@ -71,6 +72,13 @@ hybrid-pack doctor                    # 检查 JDK/Android SDK/keystore/网络
     "palcode": "1053259232660520961",
     "defaultDomains": ["https://arenaplus.ph", "https://ap-backup.net"] }
   ```
+- **hms-channels.json**（写入 `app/`，供 `build.gradle` 旁路块按 applicationId 查表决定是否注入 `appsflyer-oaid` / `hms-ads-identifier`）：
+  ```json
+  { "com.arenaplus.ap01018": true, "com.arenaplus.ap01036": false }
+  ```
+  写**全量**渠道（含 `false`）：Gradle 侧「键缺失」的语义是回落默认规则（品牌整体开 HMS 或 `_hw` 华为商店包），不是关闭。
+  渠道级开关的存在是因为有「已上架华为商店、flavor 却不带 `_hw` 后缀」的老渠道（如 ap01018），按名字推断会漏集成 OAID
+  → 华为设备无 GAID、AppsFlyer 归因丢事件。开关在 Console 的渠道表单里。
 - **调用 Gradle**：用 `os/exec` 跨平台执行；Windows 调 `gradlew.bat`，macOS/Linux 调 `./gradlew`，task 名 `assemble<Cap(flavor)>Release`（复刻 package.sh 的 `cap` 逻辑）。
 - **产物收集**：扫描 `app/build/outputs/apk/<flavor>/release/*.apk`，可选重命名（沿用 build.sh 的 `应用名_release_版本.apk`）、上传后台、写 `build_record`。
 - **健壮性**：`doctor` 预检 JDK 版本、`ANDROID_HOME`、keystore（`local.properties`）、与后台连通性；`pull` 做漂移检测，提示「本地 CSV 与后台不一致」。

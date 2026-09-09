@@ -119,3 +119,12 @@ func (r *Repo) AppGoogleServicesJSON() string {
 func (r *Repo) AppAdjustTokensJSON() string {
 	return filepath.Join(r.Root, "app", "adjust-tokens.json")
 }
+
+// AppHMSChannelsJSON 返回 app/hms-channels.json 路径。
+// 该文件由 CLI pull/build 渲染：{ "<applicationId>": true|false }，是「本次品牌全部渠道
+// 是否集成华为 HMS/OAID」的权威表，供 app/build.gradle 的旁路块按 applicationId 查表决定
+// 是否给该 flavor 注入 appsflyer-oaid / hms-ads-identifier 依赖。渲染产物，不进 git；
+// 文件缺失时 Gradle 回落到「品牌整体开 HMS 或 _hw 华为商店包」的默认规则。
+func (r *Repo) AppHMSChannelsJSON() string {
+	return filepath.Join(r.Root, "app", "hms-channels.json")
+}

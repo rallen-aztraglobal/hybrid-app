@@ -62,8 +62,9 @@ if (localFile.exists()) {
 // 大渠道（品牌）配置：所有小渠道按所属品牌共享 域名 / deeplink scheme / 策略。
 //   - domain          首页加载域名
 //   - scheme          deeplink scheme（写入 manifest 占位符 + BuildConfig）
-//   - hms             该品牌是否整体集成 HMS / AppsFlyer OAID（仅 BP）。注意这不是唯一开关：
-//                     华为商店包（flavor 以 _hw 结尾）无论品牌都会注入，见下方 dependencies 块。
+//   - hms             该品牌是否整体集成 HMS / AppsFlyer OAID（仅 BP）。注意这只是**默认规则**的一半：
+//                     华为商店包（flavor 以 _hw 结尾）无论品牌都会注入；且后台可按渠道单独开关
+//                     （app/hms-channels.json 覆盖默认规则），见下方 dependencies 块。
 // 小渠道清单（包名 / PAL_CODE / 应用名）在 channels/<brand>.csv 中，一行一个。
 // 新增小渠道 = CSV 加一行 + 在 app/src/<flavor>/ 放置 icon 与 splash 资源。
 // ============================================================================
@@ -89,6 +90,23 @@ def loadChannels = { String brand ->
 }
 
 def allChannels = brandConfig.keySet().collectMany { loadChannels(it) }
+
+// ============================================================================
+// 华为 HMS / OAID 按渠道开关（自包含旁路块，不动 loadChannels/productFlavors 一行，护栏 ADR-0004）：
+//   app/hms-channels.json = { "<applicationId>": true|false }，由 CLI pull/build 从后台渲染
+//   （Console 的渠道配置里有「集成华为 HMS」开关）。存在该键 → 以其值为准；
+//   不存在（含文件缺失，如本地手工构建）→ 回落默认规则「品牌整体开 HMS 或 flavor 以 _hw 结尾」。
+// 为什么要按渠道：有「已上架华为商店但 flavor 不带 _hw 后缀」的老渠道（如 ap01018），
+// 光看名字推断不出来，会漏集成 OAID → 华为设备拿不到广告标识、AppsFlyer 归因丢事件。
+// ============================================================================
+def hmsOverrides = file("hms-channels.json").exists()
+        ? new groovy.json.JsonSlurper().parse(file("hms-channels.json"))
+        : [:]
+def needsHms = { ch ->
+    def override = hmsOverrides[ch.appId]
+    // toString().toBoolean()：JSON 里既容忍布尔 true 也容忍字符串 "true"（Boolean 本身没有 toBoolean()）。
+    override != null ? override.toString().toBoolean() : (brandConfig[ch.brand].hms || ch.name.endsWith("_hw"))
+}
 
 // 测试事件开关：打包时传 -PtestEvents=true 开启（默认关闭）。
 def enableTestEvents = (project.findProperty("testEvents") ?: "false").toString().toBoolean()
@@ -264,12 +282,13 @@ dependencies {
 
     // OAID 采集（AppsFlyer）：华为设备无 GMS → 拿不到 GAID，AppsFlyer 将没有任何广告标识，
     // 事件即使发出去也无法归因（表现为后台「事件丢了」）。两类包需要：
-    //   1) 品牌本身要（BP，存量语义不变）；
-    //   2) 华为商店包（flavor 以 _hw 结尾 → applicationId 以 .hw 结尾）。商店维度是跨品牌的
-    //      （ADR-0009 商店后缀），AP/GP 同样会有华为包，故不能只按品牌开关。
+    //   1) 后台按渠道显式打开的（hms-channels.json，如上架华为商店却不带 _hw 后缀的老渠道）；
+    //   2) 未显式配置时的默认规则：品牌本身要（BP，存量语义不变），或华为商店包（flavor 以 _hw
+    //      结尾 → applicationId 以 .hw 结尾）。商店维度是跨品牌的（ADR-0009 商店后缀），
+    //      AP/GP 同样会有华为包，故不能只按品牌开关。判定见上方 needsHms 闭包。
     // com.appsflyer:oaid 体积较大（内含 MSA 移动安全联盟 SDK），仍按 flavor 注入、不全量铺开；
     // 对应的 keep 规则见 proguard-rules.pro 的 OAID 段。
-    allChannels.findAll { brandConfig[it.brand].hms || it.name.endsWith("_hw") }.each { ch ->
+    allChannels.findAll { needsHms(it) }.each { ch ->
         add("${ch.name}Implementation", libs.af.oaid)
         add("${ch.name}Implementation", libs.hms.ads.identifier)
     }

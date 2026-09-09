@@ -276,6 +276,8 @@ interface ChannelDTO {
   store?: { id: number; code: string; name: string } | null;
   /** 签名 key ID（空/缺省 = 默认 key）。见 types.ts Channel.signingKey 注释。 */
   signingKey?: string | null;
+  /** 是否集成华为 HMS/OAID；null/缺省 = 未显式配置，按默认规则推断。见 types.ts Channel.hmsEnabled。 */
+  hmsEnabled?: boolean | null;
   /**
    * Adjust 归因（08-adjust.md / ADR-0013）。**待办**：server 的 Create/UpdateChannelInput
    * OpenAPI 契约尚未收录这两个字段，此处先行手写对接，后端补齐并重新生成 OpenAPI 后需对齐/替换。
@@ -306,6 +308,8 @@ function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
     storeId: c.storeId ?? null,
     store: c.store ?? null,
     signingKey: c.signingKey || undefined,
+    // null/缺省（未显式配置）保持 undefined，交给 defaultHmsEnabled 推断，不要塌成 false。
+    hmsEnabled: c.hmsEnabled ?? undefined,
     adjustAppToken: c.adjustAppToken || undefined,
     adjustEvents: c.adjustEvents && Object.keys(c.adjustEvents).length ? c.adjustEvents : undefined,
   };
@@ -545,6 +549,7 @@ export const channelApi = {
             liveVersion: input.liveVersion?.trim() ?? '',
             storeId: input.storeId ?? null,
             signingKey: input.signingKey?.trim() ?? '',
+            hmsEnabled: input.hmsEnabled ?? null,
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
           }),
@@ -572,6 +577,8 @@ export const channelApi = {
             liveVersion: input.liveVersion?.trim() ?? '',
             // signingKey：语义同 liveVersion——传空串恢复默认 key，不传（undefined）不改动。
             signingKey: input.signingKey?.trim() ?? '',
+            // hmsEnabled：表单开关总有确定值，保存即把该渠道固化为显式配置（不再随默认规则漂移）。
+            hmsEnabled: input.hmsEnabled ?? null,
             // adjustAppToken/adjustEvents：08-adjust.md §6 跨层契约，随保存接口一起提交。
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
@@ -1595,6 +1602,7 @@ function inputToChannel(input: ChannelInput): Channel {
     liveVersion: input.liveVersion?.trim() || undefined,
     storeId: input.storeId ?? null,
     signingKey: input.signingKey?.trim() || undefined,
+    hmsEnabled: input.hmsEnabled,
     adjustAppToken: input.adjustAppToken?.trim() || undefined,
     adjustEvents: input.adjustEvents && Object.keys(input.adjustEvents).length ? input.adjustEvents : undefined,
   };

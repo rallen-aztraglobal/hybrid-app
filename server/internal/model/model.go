@@ -102,6 +102,13 @@ type Channel struct {
 	// 重签（如历史上架渠道的 CN=empty-app）。构建机 runner 打包后据此用 apksigner 重签。
 	// DB 只存 ID，不存任何密钥材料（CLAUDE.md 护栏 4）。
 	SigningKey string `gorm:"column:signing_key;type:varchar(32);not null;default:''" json:"signingKey,omitempty"`
+	// HMSEnabled 该渠道是否集成华为 HMS/OAID（AppsFlyer oaid + hms-ads-identifier 依赖）。
+	// 三态指针，因为「渠道粒度」是后加的，而存量语义是品牌/商店粒度（见 DefaultHMSEnabled）：
+	//   nil   = 未显式配置 → 构建时回落默认规则（品牌整体开 HMS，或华为商店包 flavor 以 _hw 结尾）；
+	//   true  = 显式集成（如上架华为商店但 flavor 不带 _hw 后缀的老渠道，本次需求的由来）；
+	//   false = 显式不集成（即使品牌整体开着 HMS）。
+	// 指针保证 AutoMigrate 补列后存量行为 NULL，行为与加列前完全一致（不误关任何包的 HMS）。
+	HMSEnabled *bool  `gorm:"column:hms_enabled" json:"hmsEnabled,omitempty"`
 	CreatedBy  uint64 `gorm:"column:created_by" json:"createdBy"`
 
 	// StoreID 可选：渠道所属应用商店（华为/小米/Oppo 等）。非空时 flavor 形如 <base>_<store.Code>，
@@ -128,6 +135,24 @@ type Channel struct {
 }
 
 func (Channel) TableName() string { return "channel" }
+
+// HuaweiStoreFlavorSuffix 华为商店包的 flavor 后缀（store.code = hw，见 ADR-0009 商店后缀）。
+const HuaweiStoreFlavorSuffix = "_hw"
+
+// DefaultHMSEnabled 是「渠道没有显式配置 HMS 时」的默认规则，与 app/build.gradle 加渠道级开关
+// 之前的存量判据完全一致：品牌整体开 HMS（bp），或该渠道是华为商店包（flavor 以 _hw 结尾）。
+func DefaultHMSEnabled(brandHMS bool, flavor string) bool {
+	return brandHMS || strings.HasSuffix(flavor, HuaweiStoreFlavorSuffix)
+}
+
+// EffectiveHMSEnabled 返回该渠道最终是否集成 HMS：显式配置优先，未配置则回落默认规则。
+// 这是下发给构建侧（manifest → app/hms-channels.json → build.gradle）的唯一权威值。
+func (c *Channel) EffectiveHMSEnabled(brandHMS bool) bool {
+	if c.HMSEnabled != nil {
+		return *c.HMSEnabled
+	}
+	return DefaultHMSEnabled(brandHMS, c.FlavorName)
+}
 
 // ChannelDomain 小渠道级域名覆盖（use_brand_domains=false 时生效）。
 type ChannelDomain struct {
