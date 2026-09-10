@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 lib/theme/app_colors.dart 的 AppColors.background 保持一致。
+         启动窗口的底色如果还是白的，冷启动会先闪一下白屏再切到深色界面。 -->
+    <color name="launch_background">#FF101418</color>
+</resources>

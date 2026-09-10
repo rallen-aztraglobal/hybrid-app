@@ -1,0 +1,49 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'gate/gate_screen.dart';
+import 'push/push_service.dart';
+import 'theme/app_colors.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 竖屏锁定：雷区按竖屏比例设计（列少行多），横屏下格子会被压到点不准。
+  // ignore: discarded_futures
+  SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // 触发 Firebase 初始化但**不等待**：启动路径上不放任何可能卡住的原生调用，
+  // 否则 runApp 之前一挂就是纯黑屏、游戏完全打不开。判定完成要用 token 时，
+  // PushService 内部会带超时地等它收尾。
+  PushService.instance.initFirebase();
+
+  runApp(const MineGridApp());
+}
+
+class MineGridApp extends StatelessWidget {
+  const MineGridApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'MineGrid',
+      debugShowCheckedModeBanner: false,
+      // 深色主题。这里必须是 dark 而不是「light 改个底色」——
+      // 后者会让所有没显式指定颜色的内置控件（对话框、文本选择手柄、
+      // 滚动条）继续按浅色算，深底上一出现就是白底黑字的补丁。
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: AppColors.background,
+        colorScheme: ThemeData.dark().colorScheme.copyWith(
+          surface: AppColors.background,
+          primary: AppColors.accent,
+        ),
+      ),
+      // 入口是启动闸：先做 AB 面判定，再决定进 A 面（GameScreen）还是 B 面（WebScreen）。
+      // 游戏本体（lib/logic · lib/models · lib/screens · lib/widgets）对网关无感知。
+      home: const GateScreen(),
+    );
+  }
+}
