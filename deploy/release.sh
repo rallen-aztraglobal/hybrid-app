@@ -131,17 +131,37 @@ ssh_box "cd '$REMOTE_DIR' && docker build -f deploy/Dockerfile.builder \
   docker compose -f deploy/docker-compose.allinone.yml --env-file deploy/.env build go-api web nginx >/dev/null && echo '  go-api/web/nginx ok'"
 
 log "6/6 启动/更新 + 验证 healthz"
-ssh_box "cd '$REMOTE_DIR/deploy' && docker compose -f docker-compose.allinone.yml -f allinone.override.box.yml --env-file .env up -d"
+# 共存 override（本机可能还跑着别的系统）：这台机上 AdSystem 的发版脚本会生成
+# deploy/adsystem-edge.override.yml（内容是 nginx `ports: !reset []`），把宿主 80 让给共享边缘
+# 容器 adsystem-edge，由它按 Host 分流回 hybrid-nginx-1:80。本脚本**必须带上**该文件，
+# 否则 up 时又会去发布 80、与 edge 撞端口，hybrid-nginx 起不来 → 线上 Console 直接 503。
+# 文件由对方脚本维护、不在本仓库；存在才带，不存在时行为与以前完全一致（自己发布 80）。
+EXTRA_F=""
+if ssh_box "[ -f '$REMOTE_DIR/deploy/adsystem-edge.override.yml' ]"; then
+  EXTRA_F="-f adsystem-edge.override.yml"
+  echo "  检测到 adsystem-edge.override.yml → 宿主 80 让给共享边缘，hybrid-nginx 不发布端口"
+fi
+ssh_box "cd '$REMOTE_DIR/deploy' && docker compose -f docker-compose.allinone.yml -f allinone.override.box.yml $EXTRA_F --env-file .env up -d"
+
+# healthz 在【服务器内部】探测，不从本机走公网：
+#   1) 让宿主 80 给共享边缘后，hybrid-nginx 不再发布端口，本机根本连不到它；
+#   2) 发版机常挂着 VPN/代理（本机 curl 会被代理拦下返回 503，响应头带 Proxy-Connection），
+#      那是代理的错误页、与生产无关，却会让发版误报失败。
+# 故直接在 nginx 容器里自测 127.0.0.1/healthz——只验证「本次部署的服务是否起来了」，
+# 公网可达性由边缘/DNS/CDN 负责，不在本脚本职责内。
 CODE=000
 for i in $(seq 1 40); do
-  CODE=$(curl -s -m 8 -o /dev/null -w '%{http_code}' "http://${BOX_HOST}/healthz" || echo 000)
+  CODE=$(ssh_box "docker exec hybrid-nginx-1 sh -c 'wget -q -O /dev/null -T 5 http://127.0.0.1/healthz' >/dev/null 2>&1 && echo 200 || echo 000" 2>/dev/null || echo 000)
   [ "$CODE" = "200" ] && break
   sleep 3
 done
+# 展示用的访问地址：服务器 .env 的 DOMAIN 可能已从「本机 IP」改成真实域名（多个取第一个）。
+HEALTH_HOST=$(ssh_box "grep -E '^DOMAIN=' '$REMOTE_DIR/deploy/.env' | head -1 | cut -d= -f2- | tr -d '\"' | awk '{print \$1}'" 2>/dev/null || true)
+[ -n "$HEALTH_HOST" ] || HEALTH_HOST="$BOX_HOST"
 if [ "$CODE" = "200" ]; then
-  printf '\n\033[1;32m✓ 发版完成 → http://%s/\033[0m  (admin 首登请改密；HTTP 明文，建议尽快上 TLS)\n' "$BOX_HOST"
+  printf '\n\033[1;32m✓ 发版完成 → http://%s/\033[0m  (admin 首登请改密；HTTP 明文，建议尽快上 TLS)\n' "$HEALTH_HOST"
 else
-  printf '\n\033[1;31m✗ healthz=%s，未就绪。诊断：\033[0m\n' "$CODE"
-  ssh_box "cd '$REMOTE_DIR/deploy' && docker compose -f docker-compose.allinone.yml --env-file .env ps; echo '--- go-api 日志 ---'; docker logs --tail 25 hybrid-go-api-1 2>&1"
+  printf '\n\033[1;31m✗ healthz=%s（容器内自测 http://127.0.0.1/healthz），未就绪。诊断：\033[0m\n' "$CODE"
+  ssh_box "cd '$REMOTE_DIR/deploy' && docker compose -f docker-compose.allinone.yml --env-file .env ps; echo '--- go-api 日志 ---'; docker logs --tail 25 hybrid-go-api-1 2>&1; echo '--- nginx 状态 ---'; docker inspect hybrid-nginx-1 --format '{{.State.Status}} / {{.State.Error}}' 2>&1"
   exit 1
 fi

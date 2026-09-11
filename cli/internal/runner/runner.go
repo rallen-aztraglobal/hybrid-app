@@ -72,6 +72,9 @@ type Options struct {
 	// Apksigner apksigner 可执行文件路径；空则用 signing.FindApksigner()（环境变量
 	// HYBRID_PACK_APKSIGNER 或按 ANDROID_HOME/build-tools 自动探测最高版本）。
 	Apksigner string
+	// GradleExtraArgs 透传给 gradlew 的附加参数（构建机专用，不影响本地交互式打包）。
+	// 为 nil 时用 defaultGradleExtraArgs()：控制并发与跳过 lintVital，压低内存峰值。
+	GradleExtraArgs []string
 	// buildFn 执行实际打包；为 nil 时用 build.Run（生产路径）。仅测试会注入桩。
 	buildFn func(ctx context.Context, r *repo.Repo, opt build.Options) (*build.Result, error)
 	// Logf 进度回调（可为 nil）。
@@ -121,6 +124,38 @@ func (o Options) pollInterval() time.Duration {
 		return 5 * time.Second
 	}
 	return o.PollInterval
+}
+
+// defaultGradleExtraArgs 是构建机打包的默认 gradlew 附加参数。
+//
+// 背景：单机同时跑着 Console/MySQL（还可能有别的系统），留给 Gradle 的内存只剩 2~3G；
+// 一次任务勾选多个渠道时 gradlew 会拿到多个 assemble task，R8 与 lintVital 交错并发，
+// 峰值直接把 daemon 顶到 2.8G 被内核 OOM killer 杀掉（表现为「daemon disappeared」，
+// 退出码 1、任务失败）。故构建机侧压低并发峰值：
+//
+//	--max-workers=2                            worker 并发上限（默认 = CPU 核数）
+//	-Pandroid.lint.checkReleaseBuilds=false    跳过 release 前的 lintVital 分析（内存大户，
+//	                                           且对产物无影响——它只做代码检查，不改 APK）
+//
+// 本地交互式 hybrid-pack build 不走这里，开发机内存充足时行为不变（护栏：不动 Gradle 构建逻辑，
+// 这些只是命令行参数）。可用 HYBRID_PACK_GRADLE_ARGS 覆盖（空格分隔；设为 "-" 表示不加任何参数）。
+func defaultGradleExtraArgs() []string {
+	if v, ok := os.LookupEnv("HYBRID_PACK_GRADLE_ARGS"); ok {
+		if strings.TrimSpace(v) == "-" {
+			return nil
+		}
+		if f := strings.Fields(v); len(f) > 0 {
+			return f
+		}
+	}
+	return []string{"--max-workers=2", "-Pandroid.lint.checkReleaseBuilds=false"}
+}
+
+func (o Options) gradleExtraArgs() []string {
+	if o.GradleExtraArgs != nil {
+		return o.GradleExtraArgs
+	}
+	return defaultGradleExtraArgs()
 }
 
 func (o Options) tailLines() int {
@@ -258,6 +293,7 @@ func processJob(ctx context.Context, r *repo.Repo, be Backend, job *manifest.Bui
 		TestEvents:       job.TestEvents,
 		VersionName:      job.VersionName, // runner 用 job.versionName
 		CaptureTailLines: opt.tailLines(),
+		ExtraArgs:        opt.gradleExtraArgs(),
 		Stdout:           io.MultiWriter(os.Stdout, ls), // 控制台 + 前端终端
 		Stderr:           io.MultiWriter(os.Stderr, ls),
 	})
