@@ -152,8 +152,15 @@ services:
       dockerfile: deploy/Dockerfile.web
       target: nginx-allinone
     restart: unless-stopped
-    ports:
-      - "${HTTP_PORT:-80}:80"
+    # 【2026-09-03 变更】宿主 80 已交由共享边缘 adsystem-edge 独占（AdSystem 项目）。
+    #   edge 按 Host 分流：ad.* → 广告系统；本站域名 → 本容器（内网 hybrid-nginx-1:80）。
+    #   因此这里【不再发布宿主端口】，只在 compose 网络内暴露 80。
+    #   ⚠️ 若要恢复由本容器直接占用宿主 80（回滚场景），把下面的 expose 换回：
+    #        ports:
+    #          - "${HTTP_PORT:-80}:80"
+    #      并先停掉 adsystem-edge，否则端口冲突会导致本服务起不来。
+    expose:
+      - "80"
     environment:
       DOMAIN: "${DOMAIN:?set DOMAIN to this box public IP, e.g. 47.80.75.106}"
     volumes:
