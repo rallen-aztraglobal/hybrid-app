@@ -18,7 +18,7 @@ hybrid-app：3 个品牌（大渠道）的 **Android WebView 壳应用**，每�
 
 ### 上架包（listing）+ AB 面网关
 
-除渠道 APK 外，另有两个已上架商店的独立 App（`listings/colorstack`=Flutter 双端 / `listings/decktallypro`=原生 iOS）纳入 Console 管理，带「AB 面网关」：开启后**服务端**按请求真实 IP 的国家 + 时区判定，命中才放行 B 面（web，与品牌同一套域名），否则展示 App 本体（A 面）。判定客户端零内置 B 面地址、fail-closed、**CN/US 硬编码强制 A 面**。方案见 [ADR-0014](docs/adr/0014-listing-ab-gate.md) 与 [docs/admin/09-listing.md](docs/admin/09-listing.md)。
+除渠道 APK 外，另有三个已上架/待上架商店的独立 App（`listings/colorstack`=Flutter 双端 / `listings/decktallypro`=原生 iOS / `listings/hexacolorsort`=Flutter 仅 Android）纳入 Console 管理，带「AB 面网关」：开启后**服务端**按请求真实 IP 的国家 + 时区判定，命中才放行 B 面（web，与品牌同一套域名），否则展示 App 本体（A 面）。判定客户端零内置 B 面地址、fail-closed、**CN/US 硬编码强制 A 面**。方案见 [ADR-0014](docs/adr/0014-listing-ab-gate.md) 与 [docs/admin/09-listing.md](docs/admin/09-listing.md)。
 
 ## 技术栈（已定）
 
@@ -28,7 +28,7 @@ hybrid-app：3 个品牌（大渠道）的 **Android WebView 壳应用**，每�
 | 前端 | React 18 + TS + Vite + shadcn/ui + Tailwind；API 客户端由 Go 的 OpenAPI 生成 |
 | 存储 | MySQL（元数据）+ MinIO/OSS（图标/资源/APK） |
 | Android | Kotlin（现有工程：AGP 8.12 / Kotlin 2.0.21 / compileSdk 36 / minSdk 29 / JDK 17） |
-| 仓库布局 | `server/`(Go) · `cli/`(Go) · `web/`(React) · `app/`(现有 Android) · `listings/`(上架包：colorstack=Flutter / decktallypro=iOS)；`go.work` 串 server+cli |
+| 仓库布局 | `server/`(Go) · `cli/`(Go) · `web/`(React) · `app/`(现有 Android) · `listings/`(上架包：colorstack=Flutter / decktallypro=iOS / hexacolorsort=Flutter)；`go.work` 串 server+cli |
 
 本机已具备：Go 1.25、Node 22 + pnpm 9、JDK 17、Android SDK（`/Users/allen/Library/Android/sdk`）。
 
