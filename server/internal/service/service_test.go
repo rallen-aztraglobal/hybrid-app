@@ -811,3 +811,57 @@ func flavorNames(list []model.Channel) []string {
 	}
 	return out
 }
+
+// TestListingOnlyBrandRejectsChannel 验证只做上架包的品牌（wp）建不出渠道（ADR-0017）。
+// 这条护栏的意义：wp 不在 app/build.gradle 的 brandConfig 里，渠道若真被建出来并由 CLI
+// 渲染进 channels/wp.csv，Gradle 配置阶段会因 brandConfig[wp] 为 null 直接失败。
+func TestListingOnlyBrandRejectsChannel(t *testing.T) {
+	svc, r := newTestService(t)
+	ctx := context.Background()
+
+	brand, err := r.GetBrandByCode(ctx, "wp")
+	if err != nil {
+		t.Fatalf("seed 应建出 wp 品牌: %v", err)
+	}
+	if brand.SupportsChannels {
+		t.Fatalf("wp 应为只做上架包的品牌（supports_channels=false）")
+	}
+
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "wp", FlavorName: "wp001", PalCode: "PAL1", AppName: "WavePlay",
+	}); err == nil {
+		t.Fatal("给 wp 建渠道应被拒绝")
+	}
+
+	// 对照组：渠道品牌不受影响。
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap09001", PalCode: "PAL2", AppName: "ArenaPlus",
+	}); err != nil {
+		t.Fatalf("渠道品牌仍应能建渠道: %v", err)
+	}
+}
+
+// TestListBrandsIncludesListingOnlyBrand 验证 /brands 仍下发 wp（域名配置页与上架包
+// 「归属品牌」需要它），并带上 supportsChannels=false 供前端过滤渠道相关页面。
+func TestListBrandsIncludesListingOnlyBrand(t *testing.T) {
+	svc, _ := newTestService(t)
+	views, err := svc.ListBrands(context.Background(), auth.Scope{AllBrands: true, AllChannels: true})
+	if err != nil {
+		t.Fatalf("ListBrands 失败: %v", err)
+	}
+	var wp *BrandView
+	for i := range views {
+		if views[i].Code == "wp" {
+			wp = &views[i]
+		}
+	}
+	if wp == nil {
+		t.Fatal("ListBrands 应包含 wp")
+	}
+	if wp.SupportsChannels {
+		t.Error("wp 的 supportsChannels 应为 false")
+	}
+	if len(wp.Domains) == 0 || wp.Domains[0] != "https://www.waveplay.co" {
+		t.Errorf("wp 主域名应为 https://www.waveplay.co，实际 %v", wp.Domains)
+	}
+}

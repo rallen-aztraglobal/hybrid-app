@@ -59,8 +59,8 @@ func ResolveSeedResRoot(seedDir string) string {
 	}
 	candidates := []string{filepath.Join(seedDir, "res"), seedDir}
 	for _, c := range candidates {
-		// 命中条件：c/<brand>/<flavor>/res 至少有一个存在（用三个品牌探测）。
-		for _, b := range []string{"ap", "bp", "gp"} {
+		// 命中条件：c/<brand>/<flavor>/res 至少有一个存在（用预置品牌逐个探测）。
+		for _, b := range ChannelBrandCodes() {
 			brandDir := filepath.Join(c, b)
 			st, err := os.Stat(brandDir)
 			if err != nil || !st.IsDir() {
@@ -82,7 +82,7 @@ func ResolveSeedResRoot(seedDir string) string {
 	return ""
 }
 
-// ResolveSeedCSVDir 在候选位置定位含 ap/bp/gp.csv 的目录，兼容多种部署/开发布局：
+// ResolveSeedCSVDir 在候选位置定位含 <brand>.csv 的目录，兼容多种部署/开发布局：
 //
 //	① <seedDir>/channels         （镜像精简布局，Dockerfile.api COPY channels/*.csv 进来）
 //	② <seedDir>                   （csv 直接平铺在 seedDir）
@@ -97,7 +97,7 @@ func ResolveSeedCSVDir(seedDir string) string {
 	candidates = append(candidates, "../channels", "channels", "./channels")
 	for _, c := range candidates {
 		hit := false
-		for _, b := range []string{"ap", "bp", "gp"} {
+		for _, b := range ChannelBrandCodes() {
 			if fileExists(filepath.Join(c, b+".csv")) {
 				hit = true
 				break
@@ -110,11 +110,11 @@ func ResolveSeedCSVDir(seedDir string) string {
 	return ""
 }
 
-// ImportAllFromDir 把 csvDir 下的 ap/bp/gp.csv 全部导入（每个品牌一次 ImportCSV）。
+// ImportAllFromDir 把 csvDir 下各品牌的 <brand>.csv 全部导入（每个品牌一次 ImportCSV）。
 // 返回各品牌报告；缺某个 csv 只跳过该品牌、不报错（与 main.runImport 行为一致）。
 func ImportAllFromDir(ctx context.Context, r *repo.Repo, csvDir string) ([]*ImportReport, error) {
 	var reports []*ImportReport
-	for _, brand := range []string{"ap", "bp", "gp"} {
+	for _, brand := range ChannelBrandCodes() {
 		path := filepath.Join(csvDir, brand+".csv")
 		f, err := os.Open(path)
 		if err != nil {

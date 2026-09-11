@@ -4,7 +4,8 @@ import { useUiStore } from '@/store/uiStore';
 import { useBrands } from './queries';
 
 /**
- * 品牌 Tab 的数据源 + 「当前品牌必须落在可见品牌内」的自愈。
+ * 渠道产线页面（渠道管理 / 打包中心 / 推送）的品牌 Tab 数据源 +
+ * 「当前品牌必须落在可见品牌内」的自愈。
  *
  * 背景（10-rbac.md 数据权限）：`GET /brands` 是**按调用者数据范围过滤**的，一个只被授权
  * bp 的角色登录后 brands 只有 bp，而 uiStore.currentBrand 默认是 'ap'——三个用 BrandTabs
@@ -13,7 +14,10 @@ import { useBrands } from './queries';
  * 里没有当前品牌时，自动切到第一个可见品牌。
  */
 export function useScopedBrands(): { brands: Brand[] | undefined; brand: Brand | undefined } {
-  const { data: brands } = useBrands();
+  const { data: allBrands } = useBrands();
+  // 只做上架包的品牌（wp）不进渠道 Tab（ADR-0017）：它没有渠道、不能建渠道，也没有品牌级
+  // FCM 项目（上架包推送走独立项目）。域名配置页与上架包抽屉用未过滤的 useBrands()/BRAND_ORDER。
+  const brands = allBrands?.filter((b) => b.supportsChannels !== false);
   const currentBrand = useUiStore((s) => s.currentBrand);
   const setCurrentBrand = useUiStore((s) => s.setCurrentBrand);
 

@@ -234,6 +234,7 @@ interface BrandViewDTO {
   name: string;
   scheme: string;
   hmsEnabled: boolean;
+  supportsChannels?: boolean;
   accentColor: string;
   channelCount: number;
   domains: string[];
@@ -246,6 +247,8 @@ function adaptBrand(b: BrandViewDTO): Brand {
     name: b.name,
     scheme: b.scheme,
     hmsEnabled: b.hmsEnabled,
+    // 老后端不下发 supportsChannels → 视为渠道品牌（行为与加字段前一致），见 ADR-0017。
+    supportsChannels: b.supportsChannels ?? BRAND_META[b.code]?.supportsChannels ?? true,
     // 后端 accentColor 与原型略有出入；UI 配色以 BRAND_META 为权威（与 docs/admin/ui 一致）。
     accentColor: BRAND_META[b.code]?.accentColor ?? b.accentColor,
     channelCount: b.channelCount,

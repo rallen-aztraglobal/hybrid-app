@@ -14,7 +14,11 @@
 > 共 **2 个上架包**（Console 里建 2 条 listing）。ColorStack 只发 Android、DeckTallyPro 只发 iOS，
 > 故不存在 ColorStack 的 iOS 上架。推送 Firebase 项目 **`hybrid-listings-51660`**（旧 `hybrid-listings` 已删）。
 
-每个上架包本体是干净小游戏（**A 面**）。开启「AB 面」后，命中放行规则的设备才访问配置的 web 链接（**B 面**，与品牌 ap/bp/gp 同一套域名）。
+每个上架包本体是干净小游戏（**A 面**）。开启「AB 面」后，命中放行规则的设备才访问配置的 web 链接（**B 面**，与品牌同一套域名）。
+
+> 归属品牌可以是渠道品牌（ap/bp/gp），也可以是**只做上架包的品牌**——当前是 `wp`/WavePlay
+> （`https://www.waveplay.co`，ADR-0017）：它在品牌表与域名配置里存在、供上架包挂靠继承 B 面域名，
+> 但不能建小渠道包（后端拒绝），Console 渠道页与打包中心也不展示它。
 
 ## 2. AB 面判定（核心）
 

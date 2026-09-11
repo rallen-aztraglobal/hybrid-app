@@ -4,9 +4,9 @@
 
 ## 项目是什么
 
-hybrid-app：3 个品牌（大渠道）的 **Android WebView 壳应用**，每个品牌下有大量小渠道包（小渠道 = 一个 Gradle product flavor）。
+hybrid-app：3 个渠道品牌（大渠道）的 **Android WebView 壳应用**，每个品牌下有大量小渠道包（小渠道 = 一个 Gradle product flavor）。
 
-- 品牌：`ap`=ArenaPlus / `bp`=BingoPlus（带 HMS/OAID）/ `gp`=GameZone。
+- 品牌：`ap`=ArenaPlus / `bp`=BingoPlus（带 HMS/OAID）/ `gp`=GameZone。另有 `wp`=WavePlay（`https://www.waveplay.co`）**只做上架包、不做小渠道包**，只存在于后台的品牌/域名与上架包归属里，不进 `channels/*.csv` 与 `brandConfig`（ADR-0017）。
 - 小渠道清单：`channels/<brand>.csv`，字段 `flavor|applicationId|palCode|appName`，`app/build.gradle` 据此**动态生成 flavor**。
 - 每渠道资源：`app/src/channels/<brand>/<flavor>/res`（5 档 `mipmap-*/ic_launcher.png` + `drawable/splash_fullscreen.png`）。
 - 启动加载：`${BuildConfig.DOMAIN}/?palcode=${BuildConfig.PAL_CODE}`，见 [WebViewActivity.kt](app/src/main/java/com/hybrid/android/WebViewActivity.kt)。

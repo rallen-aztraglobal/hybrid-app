@@ -19,6 +19,11 @@ export interface BrandMeta {
   /** 仅作展示兜底的默认域名（真实清单由后端下发） */
   fallbackDomains: string[];
   /**
+   * 是否走渠道 APK 产线（ADR-0017）。false = 只做上架包（wp）：不进 channels/*.csv、
+   * 不在 app/build.gradle 的 brandConfig 里，后端也拒绝给它建渠道。
+   */
+  supportsChannels: boolean;
+  /**
    * 品牌包前缀（ADR-0009）：applicationId = packagePrefix + '.' + flavor。
    * ap→com.arenaplus / bp→com.bingoplus / gp→com.gamezone（与 app/build.gradle 一致）。
    * 后端 BrandView 未下发 packagePrefix 时用此兜底。
@@ -36,6 +41,7 @@ export const BRAND_META: Record<BrandCode, BrandMeta> = {
     accentVar: 'var(--ap)',
     fallbackDomains: ['https://arenaplus.ph', 'https://ap-mirror.net', 'https://ap-cdn.app'],
     packagePrefix: 'com.arenaplus',
+    supportsChannels: true,
   },
   bp: {
     code: 'bp',
@@ -46,6 +52,7 @@ export const BRAND_META: Record<BrandCode, BrandMeta> = {
     accentVar: 'var(--bp)',
     fallbackDomains: ['https://www.bingoplus.com', 'https://bingo-mirror.net'],
     packagePrefix: 'com.bingoplus',
+    supportsChannels: true,
   },
   gp: {
     code: 'gp',
@@ -56,13 +63,36 @@ export const BRAND_META: Record<BrandCode, BrandMeta> = {
     accentVar: 'var(--gp)',
     fallbackDomains: ['https://gzone.ph', 'https://gz-backup.app'],
     packagePrefix: 'com.gamezone',
+    supportsChannels: true,
+  },
+  // wp 只做上架包（ADR-0017）：scheme / packagePrefix / hms 对它无意义，仅为类型完整而填；
+  // 它的用处是给上架包挂靠（归属品牌）并提供 B 面域名。
+  wp: {
+    code: 'wp',
+    name: 'WavePlay',
+    scheme: 'waveplay',
+    hmsEnabled: false,
+    accentColor: '#0891b2',
+    accentVar: 'var(--wp)',
+    fallbackDomains: ['https://www.waveplay.co'],
+    packagePrefix: 'com.waveplay',
+    supportsChannels: false,
   },
 };
 
-export const BRAND_ORDER: BrandCode[] = ['ap', 'bp', 'gp'];
+/** 全部品牌（含只做上架包的）。域名配置、上架包归属品牌、角色数据范围用这个。 */
+export const BRAND_ORDER: BrandCode[] = ['ap', 'bp', 'gp', 'wp'];
+
+/**
+ * 走渠道 APK 产线的品牌（ADR-0017）。渠道页、打包中心、构建记录、推送用这个——
+ * 静态兜底口径；能拿到后端 Brand 列表时一律按 `brand.supportsChannels !== false` 过滤。
+ */
+export const CHANNEL_BRAND_ORDER: BrandCode[] = BRAND_ORDER.filter(
+  (c) => BRAND_META[c].supportsChannels,
+);
 
 export function isBrandCode(s: string): s is BrandCode {
-  return s === 'ap' || s === 'bp' || s === 'gp';
+  return (BRAND_ORDER as string[]).includes(s);
 }
 
 /**

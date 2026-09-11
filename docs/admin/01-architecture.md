@@ -11,7 +11,7 @@
 
 | 维度 | 现状 | 位置 |
 | --- | --- | --- |
-| 大渠道 | `ap` / `bp` / `gp` 三个品牌，各自的 `domain / scheme / hms` | `app/build.gradle` 的 `brandConfig` |
+| 大渠道 | `ap` / `bp` / `gp` 三个渠道品牌，各自的 `domain / scheme / hms` | `app/build.gradle` 的 `brandConfig` |
 | 小渠道 | 一行一个，`flavor\|包名\|PAL_CODE\|应用名` | `channels/<brand>.csv` |
 | 资源 | 每渠道一套 `mipmap-*/ic_launcher.png` + `splash_fullscreen.png` | `app/src/channels/<brand>/<flavor>/res` |
 | 打包 | 交互式 Bash 脚本 | `package.sh` |
@@ -260,7 +260,7 @@ CREATE TABLE audit_log (
 ### 5.2 大渠道
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/brands` | 三个大渠道列表（含渠道计数、accent 色） |
+| GET | `/api/brands` | 大渠道列表（含渠道计数、accent 色、`supportsChannels`） |
 | GET | `/api/brands/:code/domains` | 品牌默认域名清单 |
 | PUT | `/api/brands/:code/domains` | 更新品牌默认域名（主+最多3备用，**校验**见下） |
 

@@ -37,7 +37,7 @@ React 18 后台  ──→  Go(Echo) + MySQL + imaging + 对象存储（单静�
 
 | # | 你的需求 | 落地 |
 | --- | --- | --- |
-| ① | 三大渠道分 Tab | 后台顶部品牌 Tab（ArenaPlus/BingoPlus/GameZone），各带渠道计数与品牌色 |
+| ① | 三大渠道分 Tab | 后台顶部品牌 Tab（ArenaPlus/BingoPlus/GameZone），各带渠道计数与品牌色；只做上架包的 WavePlay 不在渠道 Tab 里（ADR-0017）|
 | ② | 子渠道增删改 + 名字/icon/包名/PAL_CODE + Xcode 式图标 | 渠道 CRUD + 唯一性校验；图标传 1 张主图，前端方形裁剪、后端 imaging（纯 Go）生成 5 档×方形/圆形/自适应共 15 张，九宫格展示各尺寸位置、可单槽覆盖 |
 | ③ | 本地打包拉后台配置 + 跨平台 | `hybrid-pack` Go CLI：`pull` 渲染出现有 Gradle 认识的 CSV/res，`build` 跨平台调 gradlew；交叉编译成 Win/macOS/Linux ~5–15MB 单文件二进制 |
 | ④ | 主域名+3备用、容灾、不乱换 | DomainResolver 状态机：本机网络闸门 + 中立连通性探针双保险，只在确认域名故障时切换，本机断网只提示不乱换；实时拉取+自更新缓存使域名可热更 |

@@ -28,7 +28,8 @@ import { GP_CSV } from './channels.gp.csv';
  * 真实部署时由 Go 后端 + MySQL 取代；API 客户端在 fetch 失败时回退到此。
  */
 
-const CSV_BY_BRAND: Record<BrandCode, string> = { ap: AP_CSV, bp: BP_CSV, gp: GP_CSV };
+// wp 只做上架包（ADR-0017）：没有 channels/wp.csv，故为空串——mock 下它不产出任何渠道。
+const CSV_BY_BRAND: Record<BrandCode, string> = { ap: AP_CSV, bp: BP_CSV, gp: GP_CSV, wp: '' };
 
 // 演示用：把每个品牌靠后的少数渠道标记为停用，让筛选器有内容可筛。
 const DISABLED_FLAVORS = new Set([
@@ -76,6 +77,7 @@ const HEALTH_PRESET: Record<BrandCode, DomainHealth[]> = {
   ap: ['ok', 'ok', 'warn'],
   bp: ['ok', 'down'],
   gp: ['ok', 'ok'],
+  wp: ['ok'],
 };
 
 function brandDomains(brand: BrandCode): DomainEntry[] {
@@ -92,6 +94,7 @@ const brandDomainStore: Record<BrandCode, DomainEntry[]> = {
   ap: brandDomains('ap'),
   bp: brandDomains('bp'),
   gp: brandDomains('gp'),
+  wp: brandDomains('wp'),
 };
 
 /** 模拟 nginx 静态产物地址（ADR-0008：/apks/<brand>/<flavor>/<versionName>/...）。 */
@@ -244,6 +247,7 @@ export const mockDb = {
         name: meta.name,
         scheme: meta.scheme,
         hmsEnabled: meta.hmsEnabled,
+        supportsChannels: meta.supportsChannels,
         accentColor: meta.accentColor,
         channelCount: countChannels(channels, code),
         domains: brandDomainStore[code].map((d) => ({ ...d })),
@@ -320,14 +324,20 @@ export const mockDb = {
 
   /** 推送功能门控（前端 feature gate）：mock 默认 enabled=false 模拟「未配置」态。 */
   getPushStatus(): PushStatus {
-    return { enabled: false, brands: { ap: false, bp: false, gp: false } };
+    // wp 无渠道设备（只做上架包），品牌级推送对它恒为未配置。
+    return { enabled: false, brands: { ap: false, bp: false, gp: false, wp: false } };
   },
 
   listPushCampaigns(brand?: string): PushCampaign[] {
     let list = pushCampaigns.map(({ records: _r, ...c }) => c as PushCampaign);
     if (brand) {
       // 按 targetAppIds 的 applicationId 前缀过滤（com.<brand>）
-      const prefixMap: Record<string, string> = { ap: 'com.arenaplus.', bp: 'com.bingoplus.', gp: 'com.gamezone.' };
+      const prefixMap: Record<string, string> = {
+        ap: 'com.arenaplus.',
+        bp: 'com.bingoplus.',
+        gp: 'com.gamezone.',
+        wp: 'com.waveplay.',
+      };
       const prefix = prefixMap[brand];
       if (prefix) {
         list = list.filter((c) => c.targetAppIds.some((id) => id.startsWith(prefix)));

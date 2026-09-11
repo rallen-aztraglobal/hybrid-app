@@ -103,6 +103,11 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 	if err != nil {
 		return nil, errBadRequest(fmt.Sprintf("品牌 %q 不存在", in.BrandCode))
 	}
+	// 只做上架包的品牌不能建渠道（ADR-0017）：它不在 app/build.gradle 的 brandConfig 里，
+	// 渠道真被建出来并由 CLI 渲染进 channels/<brand>.csv 的话，Gradle 配置阶段会直接报错。
+	if !brand.SupportsChannels {
+		return nil, errBadRequest(fmt.Sprintf("品牌 %q 只支持上架包，不能建小渠道包", brand.Name))
+	}
 
 	// 若指定了应用商店，校验其存在且已启用；并要求 flavor 以 "_"+store.Code 结尾，
 	// 保证派生出的 applicationId 分段与所选商店一致。

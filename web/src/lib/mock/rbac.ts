@@ -18,7 +18,7 @@ import { ALL_PERM_CODES, PERM, PERM_CATALOG } from '../permissions';
  * 反解出 username 再查回用户（仅 mock 场景；真实后端用 JWT 内的 sub）。
  */
 
-const VALID_BRAND_CODES: BrandCode[] = ['ap', 'bp', 'gp'];
+const VALID_BRAND_CODES: BrandCode[] = ['ap', 'bp', 'gp', 'wp'];
 
 interface MockRole {
   id: string;

@@ -37,6 +37,7 @@ type Service struct {
 func New(cfg *config.Config, r *repo.Repo, st storage.Storage) *Service {
 	// gp 超 Firebase 每项目 30 App 上限被拆成 hybrid-gp + hybrid-gp2，故 FCM 客户端按
 	// 「路由键」而非纯品牌组织：ap/bp/gp 同名，外加 gp2 溢出项目。gp2 未配置则其包跳过不发。
+	// 注：只做上架包的品牌（wp）不在此列——其推送走上架包独立项目 fcmRouteKeyListings。
 	fcmMgr := NewFCMManager(
 		map[string]string{
 			"ap":  cfg.FirebaseSAAP,

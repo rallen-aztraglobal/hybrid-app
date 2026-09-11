@@ -59,9 +59,10 @@ const DEVICE_COUNT = 200;
 /** 从各品牌真实 mock 渠道清单里各挑若干个作为设备归属渠道（不必覆盖全部渠道）。 */
 function pickTargetChannels() {
   const all = mockDb.listChannels().filter((c) => c.status !== 'archived');
-  const byBrand: Record<BrandCode, typeof all> = { ap: [], bp: [], gp: [] };
+  const byBrand: Record<BrandCode, typeof all> = { ap: [], bp: [], gp: [], wp: [] };
   for (const c of all) byBrand[c.brandCode].push(c);
   const take = (list: typeof all, n: number) => list.slice(0, Math.min(n, list.length));
+  // wp 不在其中：只做上架包，没有渠道 APK，也就没有渠道设备。
   return [...take(byBrand.ap, 6), ...take(byBrand.bp, 5), ...take(byBrand.gp, 5)];
 }
 

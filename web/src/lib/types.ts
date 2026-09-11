@@ -16,7 +16,7 @@
  * 生成 `src/lib/api/schema.d.ts` 替换本文件；当前手写以保证编译期类型安全。
  */
 
-export type BrandCode = 'ap' | 'bp' | 'gp';
+export type BrandCode = 'ap' | 'bp' | 'gp' | 'wp';
 
 export type ChannelStatus = 'enabled' | 'disabled' | 'archived';
 
@@ -37,6 +37,12 @@ export interface Brand {
   scheme: string;
   /** 是否集成 HMS/OAID（仅 bp） */
   hmsEnabled: boolean;
+  /**
+   * 是否走渠道 APK 产线（ADR-0017）。false = 只做上架包（wp）：渠道页、打包中心、
+   * 推送（品牌 FCM 只服务渠道设备）都不展示它；域名配置与上架包归属品牌仍包含它。
+   * 后端未下发时按 true 兜底（老后端行为不变）。
+   */
+  supportsChannels?: boolean;
   /** 后台 Tab 主题色（十六进制） */
   accentColor: string;
   /** 该品牌启用 + 停用的渠道总数（不含 archived） */

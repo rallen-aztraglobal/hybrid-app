@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { useBuildJobs } from '@/hooks/queries';
-import { BRAND_META, BRAND_ORDER, isBrandCode } from '@/lib/brands';
+import { BRAND_META, CHANNEL_BRAND_ORDER, isBrandCode } from '@/lib/brands';
 import type { BrandCode, BuildArtifact, BuildJob } from '@/lib/types';
 import { apkFileName, formatBytes, timeAgo } from '@/lib/text';
 import { ApkDownloadButton } from '@/components/ui';
@@ -54,7 +54,7 @@ export function BuildsPage() {
         <button className={cn('chip', brand === 'all' && 'chip-on')} onClick={() => setBrand('all')}>
           全部
         </button>
-        {BRAND_ORDER.map((code) => (
+        {CHANNEL_BRAND_ORDER.map((code) => (
           <button
             key={code}
             className={cn('chip', brand === code && 'chip-on')}

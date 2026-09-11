@@ -10,19 +10,24 @@ import (
 // BrandView 是 GET /api/brands 的单条返回，含渠道计数与域名。
 // PackagePrefix 供前端「新增渠道」时自动派生 applicationId（ADR-0009）。
 type BrandView struct {
-	ID            uint64   `json:"id"`
-	Code          string   `json:"code"`
-	Name          string   `json:"name"`
-	PackagePrefix string   `json:"packagePrefix"`
-	Scheme        string   `json:"scheme"`
-	HMSEnabled    bool     `json:"hmsEnabled"`
-	AccentColor   string   `json:"accentColor"`
-	Sort          int      `json:"sort"`
-	ChannelCount  int64    `json:"channelCount"`
-	Domains       []string `json:"domains"`
+	ID            uint64 `json:"id"`
+	Code          string `json:"code"`
+	Name          string `json:"name"`
+	PackagePrefix string `json:"packagePrefix"`
+	Scheme        string `json:"scheme"`
+	HMSEnabled    bool   `json:"hmsEnabled"`
+	// SupportsChannels=false 的品牌只做上架包（ADR-0017）：Console 渠道页/打包中心不展示它，
+	// 上架包抽屉的「归属品牌」仍可选它。
+	SupportsChannels bool     `json:"supportsChannels"`
+	AccentColor      string   `json:"accentColor"`
+	Sort             int      `json:"sort"`
+	ChannelCount     int64    `json:"channelCount"`
+	Domains          []string `json:"domains"`
 }
 
-// ListBrands 返回三个大渠道（含渠道计数与默认域名），供前端顶部 Tab。
+// ListBrands 返回全部大渠道（含渠道计数与默认域名），供前端顶部 Tab。
+// 含只做上架包的品牌（SupportsChannels=false）——域名配置页与上架包抽屉需要它们，
+// 渠道相关页面由前端按该字段过滤（ADR-0017）。
 // scope 是调用者的数据范围（数据权限强制点：GET /brands 列表类查询层过滤，见
 // docs/admin/10-rbac.md）：非全量范围时只返回 scope 内的品牌。
 func (s *Service) ListBrands(ctx context.Context, scope auth.Scope) ([]BrandView, error) {
@@ -47,16 +52,17 @@ func (s *Service) ListBrands(ctx context.Context, scope auth.Scope) ([]BrandView
 			}
 		}
 		out = append(out, BrandView{
-			ID:            b.ID,
-			Code:          b.Code,
-			Name:          b.Name,
-			PackagePrefix: b.PackagePrefix,
-			Scheme:        b.Scheme,
-			HMSEnabled:    b.HMSEnabled,
-			AccentColor:   b.AccentColor,
-			Sort:          b.Sort,
-			ChannelCount:  counts[b.ID],
-			Domains:       domains,
+			ID:               b.ID,
+			Code:             b.Code,
+			Name:             b.Name,
+			PackagePrefix:    b.PackagePrefix,
+			Scheme:           b.Scheme,
+			HMSEnabled:       b.HMSEnabled,
+			SupportsChannels: b.SupportsChannels,
+			AccentColor:      b.AccentColor,
+			Sort:             b.Sort,
+			ChannelCount:     counts[b.ID],
+			Domains:          domains,
 		})
 	}
 	return out, nil

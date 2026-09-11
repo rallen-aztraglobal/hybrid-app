@@ -20,3 +20,4 @@
 | [0014](./0014-listing-ab-gate.md) | 上架包 AB 面网关：服务端按 IP 国家+时区判定、fail-closed | 已采纳 |
 | [0015](./0015-device-registry.md) | 设备登记：安装 UUID 唯一键、受众哈希导出时算不落库 | 已采纳 |
 | [0016](./0016-multi-signing-key.md) | 多签名 key：Console 只存 ID、构建机打包后按渠道 apksigner 重签、fail-closed | 已采纳 |
+| [0017](./0017-listing-only-brand.md) | 品牌分两条产线：渠道 APK 品牌 vs 只做上架包的品牌（wp），后端 fail-closed | 已采纳 |

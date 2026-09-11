@@ -1,4 +1,4 @@
-// Package seed 负责初始化基础数据：三个大渠道（品牌）+ 品牌默认域名 + bootstrap admin，
+// Package seed 负责初始化基础数据：各大渠道（品牌）+ 品牌默认域名 + bootstrap admin，
 // 以及把现有 channels/*.csv 一次性导入并清洗脏数据（包名重复 ap01035、gzmarket062）。
 package seed
 
@@ -29,21 +29,50 @@ type brandSeed struct {
 	Accent        string
 	Sort          int
 	Domain        string // position 0 主域名
+	// Channels 是否走渠道 APK 产线（ADR-0017）。false = 只做上架包（wp），
+	// 其 Scheme/PackagePrefix/HMS 对它无意义，仅为满足非空列而填。
+	Channels bool
 }
 
 var brands = []brandSeed{
-	{Code: "ap", Name: "ArenaPlus", PackagePrefix: "com.arenaplus", Scheme: "gzone", HMS: false, Accent: "#2563eb", Sort: 0, Domain: "https://arenaplus.ph"},
-	{Code: "bp", Name: "BingoPlus", PackagePrefix: "com.bingoplus", Scheme: "bingo", HMS: true, Accent: "#dc2626", Sort: 1, Domain: "https://www.bingoplus.com"},
-	{Code: "gp", Name: "GameZone", PackagePrefix: "com.gamezone", Scheme: "gzone", HMS: false, Accent: "#16a34a", Sort: 2, Domain: "https://gzone.ph"},
+	{Code: "ap", Name: "ArenaPlus", PackagePrefix: "com.arenaplus", Scheme: "gzone", HMS: false, Accent: "#2563eb", Sort: 0, Domain: "https://arenaplus.ph", Channels: true},
+	{Code: "bp", Name: "BingoPlus", PackagePrefix: "com.bingoplus", Scheme: "bingo", HMS: true, Accent: "#dc2626", Sort: 1, Domain: "https://www.bingoplus.com", Channels: true},
+	{Code: "gp", Name: "GameZone", PackagePrefix: "com.gamezone", Scheme: "gzone", HMS: false, Accent: "#16a34a", Sort: 2, Domain: "https://gzone.ph", Channels: true},
+	// wp 只做上架包（ADR-0017）：不进 channels/*.csv、不在 app/build.gradle 的 brandConfig 里，
+	// 建它是为了让上架包挂靠（listing_app.brand_id）并继承这份品牌域名作 B 面。
+	{Code: "wp", Name: "WavePlay", PackagePrefix: "com.waveplay", Scheme: "waveplay", HMS: false, Accent: "#0891b2", Sort: 3, Domain: "https://www.waveplay.co", Channels: false},
 }
 
-// EnsureBrands 幂等地建好三个品牌与各自的主域名；已存在的品牌回填 package_prefix（首次升级到 ADR-0009 时）。
+// ChannelBrandCodes 返回「走渠道 APK 产线」的品牌代码（按 brands 声明顺序）。
+// 供 assets.go 的 csv/res 目录探测与批量导入用，避免多处硬编码品牌清单——
+// 新增大渠道时只改上面的 brands 一处。
+// 只做上架包的品牌（Channels=false，如 wp）没有 channels/<brand>.csv 与渠道 res，故排除在外。
+func ChannelBrandCodes() []string {
+	out := make([]string, 0, len(brands))
+	for _, b := range brands {
+		if b.Channels {
+			out = append(out, b.Code)
+		}
+	}
+	return out
+}
+
+// EnsureBrands 幂等地建好各品牌与各自的主域名；已存在的品牌回填 package_prefix（首次升级到 ADR-0009 时）。
 func EnsureBrands(ctx context.Context, db *gorm.DB) error {
 	for _, b := range brands {
 		var existing model.Brand
 		err := db.WithContext(ctx).Where("code = ?", b.Code).First(&existing).Error
 		if err == nil {
-			// 已存在：若旧库 package_prefix 为空（升级前建的），回填之，保证 appId 派生可用。
+			// 已存在：把 supports_channels 对齐到 seed（本字段的唯一事实来源是上面的 brands，
+			// Console 不提供修改入口）。老库 AutoMigrate 加列后存量品牌为默认 true，与声明一致不触发写。
+			if existing.SupportsChannels != b.Channels {
+				if err := db.WithContext(ctx).Model(&existing).
+					Update("supports_channels", b.Channels).Error; err != nil {
+					return fmt.Errorf("同步品牌 %s supports_channels 失败: %w", b.Code, err)
+				}
+				log.Printf("[seed] 已同步品牌 %s supports_channels=%v", b.Code, b.Channels)
+			}
+			// 若旧库 package_prefix 为空（升级前建的），回填之，保证 appId 派生可用。
 			if existing.PackagePrefix == "" {
 				if err := db.WithContext(ctx).Model(&existing).
 					Update("package_prefix", b.PackagePrefix).Error; err != nil {
@@ -58,10 +87,19 @@ func EnsureBrands(ctx context.Context, db *gorm.DB) error {
 		}
 		brand := model.Brand{
 			Code: b.Code, Name: b.Name, PackagePrefix: b.PackagePrefix, Scheme: b.Scheme,
-			HMSEnabled: b.HMS, AccentColor: b.Accent, Sort: b.Sort,
+			HMSEnabled: b.HMS, AccentColor: b.Accent, Sort: b.Sort, SupportsChannels: b.Channels,
 		}
 		if err := db.WithContext(ctx).Create(&brand).Error; err != nil {
 			return fmt.Errorf("创建品牌 %s 失败: %w", b.Code, err)
+		}
+		// GORM 对带 `default:` 标签的字段会跳过零值（false 不进 INSERT，落库为列默认值 true），
+		// 故只做上架包的品牌要补一次显式 UPDATE 把 supports_channels 置回 false。
+		// 列默认值不能去掉——老库 AutoMigrate 加列时正靠它让存量品牌自动为 true。
+		if !b.Channels {
+			if err := db.WithContext(ctx).Model(&brand).
+				Update("supports_channels", false).Error; err != nil {
+				return fmt.Errorf("置品牌 %s supports_channels=false 失败: %w", b.Code, err)
+			}
 		}
 		bd := model.BrandDomain{BrandID: brand.ID, Position: 0, URL: b.Domain, Enabled: true}
 		if err := db.WithContext(ctx).Create(&bd).Error; err != nil {
@@ -313,6 +351,10 @@ func ImportCSV(ctx context.Context, r *repo.Repo, brandCode string, csv io.Reade
 	}
 	if brand.PackagePrefix == "" {
 		return nil, fmt.Errorf("品牌 %s 缺少 package_prefix（无法派生 applicationId）", brandCode)
+	}
+	// 只做上架包的品牌没有渠道产线（ADR-0017），不该有 <brand>.csv 可导。
+	if !brand.SupportsChannels {
+		return nil, fmt.Errorf("品牌 %s 只支持上架包，不能导入渠道 CSV", brandCode)
 	}
 	rep := &ImportReport{Brand: brandCode}
 

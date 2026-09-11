@@ -11,7 +11,7 @@
 
 ```bash
 cd server
-go run ./cmd/server            # 启动，默认 :8080，自动建表 + seed 三个品牌 + 初始 admin
+go run ./cmd/server            # 启动，默认 :8080，自动建表 + seed 各品牌 + 初始 admin
 ```
 
 首启会创建管理员 `admin / admin12345`（可用 `BOOTSTRAP_ADMIN=user:pass` 覆盖）。

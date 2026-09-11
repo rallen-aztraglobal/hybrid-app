@@ -37,20 +37,31 @@ const (
 	HealthUnknown  = "unknown"
 )
 
-// Brand 大渠道（品牌）。code 全局唯一：ap/bp/gp。
+// Brand 大渠道（品牌）。code 全局唯一：ap/bp/gp/wp。
 // PackagePrefix 是 applicationId 的包前缀（ap→com.arenaplus / bp→com.bingoplus / gp→com.gamezone），
 // 渠道 applicationId 由 PackagePrefix + "." + flavor 派生（ADR-0009），不手填。
+//
+// SupportsChannels 区分品牌走哪条产线（ADR-0017）：
+//   - true（ap/bp/gp）：渠道 APK 产线，可建小渠道包（channels/*.csv + Gradle flavor）；
+//   - false（wp）：只做上架包（listing_app.brand_id 指向它、继承其品牌域名作 B 面），
+//     后端拒绝给它建渠道，Console 渠道页/打包中心也不展示它。
+//
+// 之所以要显式标记而非「看有没有渠道」：app/build.gradle 的 brandConfig 只登记了渠道产线的品牌，
+// 一旦有人给 wp 建了渠道、CLI 拉下来渲染进 channels/wp.csv，Gradle 会在 brandConfig[wp] 为 null 时报错。
 type Brand struct {
-	ID            uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	Code          string    `gorm:"column:code;type:varchar(16);not null;uniqueIndex" json:"code"`
-	Name          string    `gorm:"column:name;type:varchar(64);not null" json:"name"`
-	PackagePrefix string    `gorm:"column:package_prefix;type:varchar(128);not null;default:''" json:"packagePrefix"`
-	Scheme        string    `gorm:"column:scheme;type:varchar(32);not null" json:"scheme"`
-	HMSEnabled    bool      `gorm:"column:hms_enabled;not null;default:false" json:"hmsEnabled"`
-	AccentColor   string    `gorm:"column:accent_color;type:varchar(16)" json:"accentColor"`
-	Sort          int       `gorm:"column:sort;not null;default:0" json:"sort"`
-	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
-	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+	ID            uint64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	Code          string `gorm:"column:code;type:varchar(16);not null;uniqueIndex" json:"code"`
+	Name          string `gorm:"column:name;type:varchar(64);not null" json:"name"`
+	PackagePrefix string `gorm:"column:package_prefix;type:varchar(128);not null;default:''" json:"packagePrefix"`
+	Scheme        string `gorm:"column:scheme;type:varchar(32);not null" json:"scheme"`
+	HMSEnabled    bool   `gorm:"column:hms_enabled;not null;default:false" json:"hmsEnabled"`
+	// SupportsChannels 是否走渠道 APK 产线。默认 true：老库 AutoMigrate 加列后存量品牌自动为 true，
+	// 与升级前行为一致；只做上架包的品牌由 seed 置 false。
+	SupportsChannels bool      `gorm:"column:supports_channels;not null;default:true" json:"supportsChannels"`
+	AccentColor      string    `gorm:"column:accent_color;type:varchar(16)" json:"accentColor"`
+	Sort             int       `gorm:"column:sort;not null;default:0" json:"sort"`
+	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 
 	Domains  []BrandDomain `gorm:"foreignKey:BrandID;constraint:OnDelete:CASCADE" json:"domains,omitempty"`
 	Channels []Channel     `gorm:"foreignKey:BrandID" json:"-"`

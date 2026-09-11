@@ -5,7 +5,7 @@
 # 数据源 = 线上后端 GET /api/channels（不读本地 channels/*.csv，避免与线上不一致）。
 #
 # 前置：
-#   - 已建好 3 个 Firebase 项目（PROJECTS 映射对上真实 Project ID）
+#   - 已建好 3 个 Firebase 项目（project_of 映射对上真实 Project ID）
 #   - 已装 firebase-tools，且有 FIREBASE_TOKEN（firebase login:ci 拿到）
 #   - 后端可达，有一个 viewer+ 账号（拉 /api/channels 需 JWT）
 #
