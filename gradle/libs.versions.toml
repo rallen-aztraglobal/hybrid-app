@@ -26,7 +26,7 @@ robolectric = "4.16.1"
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
 # Adjust 归因（ADR-0013）：依赖恒在 classpath，按 flavor 是否绑定 App Token 决定运行时是否真正集成。
-adjustAndroid = "5.4.1"
+adjustAndroid = "5.8.0"
 installReferrer = "2.2"
 
 [libraries]
