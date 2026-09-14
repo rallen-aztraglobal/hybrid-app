@@ -17,9 +17,14 @@ import (
 // CLI 不解析事件 CSV——manifest.Channel.AdjustEvents 已由后端从上传的 CSV（token,name,unique）
 // 解析成 {name: token}，这里原样透传，不感知 App 内部事件命名（见 08-adjust.md §4.5）。
 //
+// 「BP 原始事件」旁支（ADR-0018 / 08-adjust.md §11）：渠道 AdjustBpRawEvents=true 时才写出 bpRawEvents；
+// 且仅在此基础上、品牌级 brandDeepLinkHost 非空时才写出 deepLinkHost——非 bpRaw 渠道即使
+// 品牌配了 host 也不写，两键都用 omitempty，false/空值不落盘。
+//
 // 返回写入的已绑定渠道数（供调用方在 Result 汇报）。
-func renderAdjustTokens(r *repo.Repo, brand string, channels []manifest.Channel, opt Options) (int, error) {
+func renderAdjustTokens(r *repo.Repo, brand string, brandDeepLinkHost string, channels []manifest.Channel, opt Options) (int, error) {
 	tokens := make(map[string]manifest.AdjustTokenEntry)
+	bpRawCount := 0
 	for _, ch := range channels {
 		token := strings.TrimSpace(ch.AdjustAppToken)
 		if token == "" {
@@ -37,7 +42,15 @@ func renderAdjustTokens(r *repo.Repo, brand string, channels []manifest.Channel,
 		if events == nil {
 			events = map[string]string{} // 兜底 nil → 空对象，避免序列化成 JSON null
 		}
-		tokens[appID] = manifest.AdjustTokenEntry{AppToken: token, Events: events}
+		entry := manifest.AdjustTokenEntry{AppToken: token, Events: events}
+		if ch.AdjustBpRawEvents {
+			entry.BpRawEvents = true
+			bpRawCount++
+			if host := strings.TrimSpace(brandDeepLinkHost); host != "" {
+				entry.DeepLinkHost = host
+			}
+		}
+		tokens[appID] = entry
 	}
 
 	dest := r.AppAdjustTokensJSON()
@@ -69,7 +82,7 @@ func renderAdjustTokens(r *repo.Repo, brand string, channels []manifest.Channel,
 	data = append(data, '\n')
 
 	if opt.DryRun {
-		opt.logf("  [dry-run] 将写 %s（%d 个已绑定 Adjust 的渠道）", rel(r, dest), len(tokens))
+		opt.logf("  [dry-run] 将写 %s（%d 个已绑定 Adjust 的渠道，其中 %d 个开启 BP 原始事件）", rel(r, dest), len(tokens), bpRawCount)
 		return len(tokens), nil
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
@@ -78,6 +91,6 @@ func renderAdjustTokens(r *repo.Repo, brand string, channels []manifest.Channel,
 	if err := os.WriteFile(dest, data, 0o644); err != nil {
 		return 0, fmt.Errorf("写 %s 失败: %w", dest, err)
 	}
-	opt.logf("  adjust-tokens.json 已落地 → %s（%d 个已绑定 Adjust 的渠道）", rel(r, dest), len(tokens))
+	opt.logf("  adjust-tokens.json 已落地 → %s（%d 个已绑定 Adjust 的渠道，其中 %d 个开启 BP 原始事件）", rel(r, dest), len(tokens), bpRawCount)
 	return len(tokens), nil
 }

@@ -47,6 +47,8 @@ def main():
         if not ch:
             fail.append((r.get("flavor") or r.get("channelId"), "渠道未匹配"))
             continue
+        # adjustBpRawEvents 不带：后端 Update 未传 = 不改动，开关只在 Console 表单里切，脚本不碰。
+        # adjustEvents 覆盖式写入：bpRaw 渠道回填的是 14 个新事件，旧 6 个被替换（App 在该模式下不发它们）。
         body = {"palCode": ch.get("palCode"), "appName": ch.get("appName"),
                 "adjustAppToken": r["adjustAppToken"], "adjustEvents": r["adjustEvents"]}
         curl(f"{base}/api/channels/{ch['id']}", token=tok, method="PUT", body=body)

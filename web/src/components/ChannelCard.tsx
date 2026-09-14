@@ -97,6 +97,14 @@ export function ChannelCard({
                 HMS
               </span>
             )}
+            {channel.adjustBpRawEvents && channel.adjustAppToken && (
+              <span
+                className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md text-[#1d4ed8] bg-[#dbeafe]"
+                title="已开启 BP 原始事件：H5 通过 adjusth5event:// 触发、原生统一上报 14 个事件"
+              >
+                BP 原始事件
+              </span>
+            )}
           </div>
         </div>
       </div>

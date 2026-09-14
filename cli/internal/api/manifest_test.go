@@ -57,3 +57,48 @@ func TestManifestMapsSigningKey(t *testing.T) {
 		t.Errorf("ap02000 未设置 signingKey 时应为空串（默认 key），实得 %+v", m.Channels[1])
 	}
 }
+
+// TestManifestMapsHMSAndBpRaw 验证 hmsEnabled（品牌级 + 渠道级三态）与 ADR-0018 的
+// adjustDeepLinkHost / adjustBpRawEvents 被透传进 manifest。hmsEnabled 此前在适配层漏拷，
+// 导致 bp 非 _hw 渠道在 hms-channels.json 里一律被写成 false、丢 OAID，这里锁住不再回归。
+func TestManifestMapsHMSAndBpRaw(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(envelopeJSON(t, map[string]any{
+			"brand":              "bp",
+			"hmsEnabled":         true,
+			"adjustDeepLinkHost": "link.bingoplus.com",
+			"channels": []map[string]any{
+				{
+					"flavorName": "bpom3410", "applicationId": "com.bingoplus.bpom3410",
+					"palCode": "1", "appName": "A", "effectiveDomains": []string{"https://b.ph"},
+					"hmsEnabled": false, "adjustBpRawEvents": true,
+				},
+				{
+					"flavorName": "bpom3409", "applicationId": "com.bingoplus.bpom3409",
+					"palCode": "2", "appName": "B", "effectiveDomains": []string{"https://b.ph"},
+					// hmsEnabled / adjustBpRawEvents 缺省：老后端不下发 → nil / false
+				},
+			},
+		}))
+	}))
+	defer srv.Close()
+
+	m, err := New(srv.URL, "tok").Manifest(context.Background(), "bp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.HMSEnabled || m.AdjustDeepLinkHost != "link.bingoplus.com" {
+		t.Errorf("品牌级 hmsEnabled/adjustDeepLinkHost 未透传: %+v", m)
+	}
+	c0, c1 := m.Channels[0], m.Channels[1]
+	if c0.HMSEnabled == nil || *c0.HMSEnabled || !c0.AdjustBpRawEvents {
+		t.Errorf("bpom3410 应 hmsEnabled=false(显式) 且 bpRaw=true，实得 %+v", c0)
+	}
+	if c1.HMSEnabled != nil || c1.AdjustBpRawEvents {
+		t.Errorf("bpom3409 缺省字段应为 nil/false，实得 %+v", c1)
+	}
+	if c0.EffectiveHMS(m.HMSEnabled) || !c1.EffectiveHMS(m.HMSEnabled) {
+		t.Errorf("EffectiveHMS：显式 false 应为 false，缺省应回落品牌 true")
+	}
+}

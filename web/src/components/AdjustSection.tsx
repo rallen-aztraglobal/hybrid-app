@@ -8,24 +8,45 @@
  *     覆盖式保存进 adjust_events（重新上传即覆盖旧解析结果）。
  *
  * CSV 解析函数见 @/lib/adjustCsv（parseAdjustEventsCsv，含单测）。
+ *
+ * BP 原始事件开关（仅 bp 品牌）：关闭 = 沿用现有逻辑（拦截站点接口响应后上报 6 个事件）；
+ * 开启 = 走 BP 原始事件逻辑（H5 通过 `adjusth5event://` 自定义 scheme 触发、原生统一上报，
+ * 事件集为 14 个）。仅切换开关本身不阻断保存，但会给出提示（App Token 未填 / 事件表缺关键项）。
  */
 import { useRef, useState } from 'react';
+import type { BrandCode } from '@/lib/types';
 import { parseAdjustEventsCsv } from '@/lib/adjustCsv';
 import { cn } from '@/lib/cn';
 import { InfoIcon, TrashIcon, UploadIcon } from './icons';
-import { Note } from './ui';
+import { Note, Switch } from './ui';
 import { Field } from './FormField';
 
+/**
+ * BP 原始事件集里 App 必发的三个事件（ad_app_opened 冷启动、ad_registration 注册、ad_deposit 充值）——
+ * 开启开关且已上传事件表时，缺其中任一都黄字提示（不阻断保存，后台可先存草稿再补传）。
+ */
+const BP_RAW_REQUIRED_EVENTS = ['ad_app_opened', 'ad_registration', 'ad_deposit'];
+
 export function AdjustSection({
+  brandCode,
   appToken,
   onAppTokenChange,
   events,
   onEventsChange,
+  bpRawEvents = false,
+  onBpRawEventsChange,
 }: {
+  /**
+   * 归属品牌：BP 原始事件开关仅 brandCode==='bp' 时渲染。上架包（ListingDrawer）复用本组件时
+   * 不涉及该开关，不传即可（brandCode 留空、开关区块不渲染）。
+   */
+  brandCode?: BrandCode;
   appToken: string;
   onAppTokenChange: (v: string) => void;
   events: Record<string, string>;
   onEventsChange: (v: Record<string, string>) => void;
+  bpRawEvents?: boolean;
+  onBpRawEventsChange?: (v: boolean) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -63,6 +84,36 @@ export function AdjustSection({
           onChange={(e) => onAppTokenChange(e.target.value)}
         />
       </Field>
+
+      {brandCode === 'bp' && (
+        <div className="flex items-center gap-[10px] p-[11px_13px] bg-panel-2 border border-line rounded-[10px] mb-[14px]">
+          <Switch checked={bpRawEvents} onChange={(v) => onBpRawEventsChange?.(v)} />
+          <div className="flex-1">
+            <div className="text-[13px] font-semibold">BP 原始事件</div>
+            <div className="text-[11.5px] text-muted mt-0.5 leading-[1.6]">
+              关闭 = 沿用现有逻辑，拦截站点接口响应后上报 6 个事件；开启 = 走 BP 原始事件逻辑，H5 通过{' '}
+              <span className="mono">adjusth5event://</span> 自定义 scheme 触发、原生统一上报，事件集为 14 个（
+              ad_app_opened / ad_deeplink_opened / ad_game_open / ad_registration / ad_deposit / ad_web_deposit /
+              ad_web_login / ad_web_pageview / ad_web_reg 等），需重新上传对应的事件 CSV 并重新打包才生效。
+            </div>
+            {bpRawEvents && !appToken.trim() && (
+              <div className="mt-2 text-[12px] text-[#92681a] bg-[#fef3c7] rounded-lg px-3 py-2">
+                未填 App Token，开关不会生效。
+              </div>
+            )}
+            {bpRawEvents &&
+              rows.length > 0 &&
+              (() => {
+                const missing = BP_RAW_REQUIRED_EVENTS.filter((name) => !(name in events));
+                return missing.length > 0 ? (
+                  <div className="mt-2 text-[12px] text-[#92681a] bg-[#fef3c7] rounded-lg px-3 py-2">
+                    已上传事件表缺少关键事件：{missing.join('、')}。
+                  </div>
+                ) : null;
+              })()}
+          </div>
+        </div>
+      )}
 
       <div className="mb-[6px] text-[12.5px] font-semibold text-ink-2">
         事件列表{' '}

@@ -171,7 +171,14 @@ type serverManifest struct {
 	Brand         string   `json:"brand"`
 	BrandDomains  []string `json:"brandDomains"`
 	ConfigBaseURL string   `json:"configBaseUrl"`
-	Channels      []struct {
+	// AdjustDeepLinkHost 品牌级 Adjust 深度链接域名（ADR-0018「BP 原始事件」旁支）。
+	// 老后端不下发时为空串，CLI 侧零值即可，不报错。
+	AdjustDeepLinkHost string `json:"adjustDeepLinkHost"`
+	// HMSEnabled 品牌整体是否集成华为 HMS/OAID（bp=true）。此前适配层漏读了它与渠道级
+	// hmsEnabled，导致 renderHMSChannels 对 bp 非 _hw 渠道一律按 false 写入 hms-channels.json，
+	// Gradle 按该覆盖值跳过 OAID 依赖——BP 包在华为设备上因此丢广告标识。补于 2026-09-11。
+	HMSEnabled bool `json:"hmsEnabled"`
+	Channels   []struct {
 		FlavorName       string   `json:"flavorName"`
 		ApplicationID    string   `json:"applicationId"`
 		PalCode          string   `json:"palCode"`
@@ -186,6 +193,12 @@ type serverManifest struct {
 		// 用 apksigner 重签。同样必须拷进 manifest.Channel，否则 runner 侧永远读到空值，
 		// 商店渠道会被当默认签名投递（严重问题：同包名双证书，商店拒收或用户无法覆盖升级）。
 		SigningKey string `json:"signingKey"`
+		// AdjustBpRawEvents 渠道级「BP 原始事件」开关（ADR-0018）。同样必须拷进
+		// manifest.Channel，否则 renderAdjustTokens 永远按 false 处理，Console 开了也不生效。
+		AdjustBpRawEvents bool `json:"adjustBpRawEvents"`
+		// HMSEnabled 渠道级 HMS 开关，后端已解析成有效值；指针保留「老后端未下发」的 nil 语义，
+		// 由 manifest.Channel.EffectiveHMS 回落默认规则（见上方 HMSEnabled 注释的由来）。
+		HMSEnabled *bool `json:"hmsEnabled"`
 	} `json:"channels"`
 }
 
@@ -201,22 +214,26 @@ func (c *Client) Manifest(ctx context.Context, brand string) (*manifest.Manifest
 		sm.Brand = brand
 	}
 	m := &manifest.Manifest{
-		Brand:        sm.Brand,
-		ConfigURL:    sm.ConfigBaseURL,
-		BrandDomains: sm.BrandDomains,
+		Brand:              sm.Brand,
+		ConfigURL:          sm.ConfigBaseURL,
+		BrandDomains:       sm.BrandDomains,
+		AdjustDeepLinkHost: sm.AdjustDeepLinkHost,
+		HMSEnabled:         sm.HMSEnabled,
 	}
 	for _, ch := range sm.Channels {
 		m.Channels = append(m.Channels, manifest.Channel{
-			Flavor:          ch.FlavorName,
-			ApplicationId:   ch.ApplicationID,
-			PalCode:         ch.PalCode,
-			AppName:         ch.AppName,
-			UseBrandDomains: false, // 后端已给出合并后的 effectiveDomains
-			Domains:         ch.EffectiveDomains,
-			ResZipURL:       ch.ResZipURL,
-			AdjustAppToken:  ch.AdjustAppToken,
-			AdjustEvents:    ch.AdjustEvents,
-			SigningKey:      ch.SigningKey,
+			Flavor:            ch.FlavorName,
+			ApplicationId:     ch.ApplicationID,
+			PalCode:           ch.PalCode,
+			AppName:           ch.AppName,
+			UseBrandDomains:   false, // 后端已给出合并后的 effectiveDomains
+			Domains:           ch.EffectiveDomains,
+			ResZipURL:         ch.ResZipURL,
+			AdjustAppToken:    ch.AdjustAppToken,
+			AdjustEvents:      ch.AdjustEvents,
+			SigningKey:        ch.SigningKey,
+			AdjustBpRawEvents: ch.AdjustBpRawEvents,
+			HMSEnabled:        ch.HMSEnabled,
 		})
 	}
 	return m, nil

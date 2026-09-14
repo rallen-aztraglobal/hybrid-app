@@ -865,3 +865,247 @@ func TestListBrandsIncludesListingOnlyBrand(t *testing.T) {
 		t.Errorf("wp 主域名应为 https://www.waveplay.co，实际 %v", wp.Domains)
 	}
 }
+
+// TestCreateChannelAdjustBpRawEventsNonBpRejected 验证非 bp 品牌传 adjustBpRawEvents=true 应被拒绝（400）。
+func TestCreateChannelAdjustBpRawEventsNonBpRejected(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	yes := true
+	_, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01018", PalCode: "PAL1", AppName: "A",
+		AdjustBpRawEvents: &yes,
+	})
+	if err == nil {
+		t.Fatal("非 bp 品牌传 adjustBpRawEvents=true 应被拒绝")
+	}
+	if !strings.Contains(err.Error(), "BP 原始事件仅 BP 品牌可用") {
+		t.Errorf("错误文案应提示「BP 原始事件仅 BP 品牌可用」，实际: %v", err)
+	}
+}
+
+// TestCreateChannelAdjustBpRawEventsBpAllowed 验证 bp 品牌传 true 能正常创建并落库。
+func TestCreateChannelAdjustBpRawEventsBpAllowed(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	yes := true
+	ch, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bp001", PalCode: "PAL1", AppName: "B",
+		AdjustBpRawEvents: &yes,
+	})
+	if err != nil {
+		t.Fatalf("bp 品牌传 adjustBpRawEvents=true 应通过: %v", err)
+	}
+	if !ch.AdjustBpRawEvents {
+		t.Error("创建后 adjustBpRawEvents 应为 true")
+	}
+
+	got, err := svc.GetChannel(ctx, ch.ID)
+	if err != nil {
+		t.Fatalf("取详情失败: %v", err)
+	}
+	if !got.AdjustBpRawEvents {
+		t.Error("详情 adjustBpRawEvents 应为 true（落库应保持）")
+	}
+}
+
+// TestCreateChannelAdjustBpRawEventsUnspecifiedDefaultsFalse 验证未传该字段时默认为 false。
+func TestCreateChannelAdjustBpRawEventsUnspecifiedDefaultsFalse(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	ch, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01019", PalCode: "PAL1", AppName: "A",
+	})
+	if err != nil {
+		t.Fatalf("创建渠道失败: %v", err)
+	}
+	if ch.AdjustBpRawEvents {
+		t.Error("未传 adjustBpRawEvents 时应默认为 false")
+	}
+}
+
+// TestUpdateChannelAdjustBpRawEvents 验证更新语义：未传不改动；bp 品牌可显式置 true/false；
+// 非 bp 品牌显式传 true 应被拒绝。
+func TestUpdateChannelAdjustBpRawEvents(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	bpCh, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bp002", PalCode: "PAL1", AppName: "B",
+	})
+	if err != nil {
+		t.Fatalf("创建 bp 渠道失败: %v", err)
+	}
+
+	// 未传：不改动（默认 false 保持不变）。
+	remark := "备注"
+	untouched, err := svc.UpdateChannel(ctx, bpCh.ID, UpdateChannelInput{Remark: &remark})
+	if err != nil {
+		t.Fatalf("更新备注失败: %v", err)
+	}
+	if untouched.AdjustBpRawEvents {
+		t.Error("未传 adjustBpRawEvents 不应被改动")
+	}
+
+	// bp 品牌显式置 true。
+	yes := true
+	updated, err := svc.UpdateChannel(ctx, bpCh.ID, UpdateChannelInput{AdjustBpRawEvents: &yes})
+	if err != nil {
+		t.Fatalf("bp 品牌置 true 应通过: %v", err)
+	}
+	if !updated.AdjustBpRawEvents {
+		t.Error("更新后 adjustBpRawEvents 应为 true")
+	}
+
+	// bp 品牌显式置回 false。
+	no := false
+	reverted, err := svc.UpdateChannel(ctx, bpCh.ID, UpdateChannelInput{AdjustBpRawEvents: &no})
+	if err != nil {
+		t.Fatalf("bp 品牌置 false 应通过: %v", err)
+	}
+	if reverted.AdjustBpRawEvents {
+		t.Error("更新后 adjustBpRawEvents 应为 false")
+	}
+
+	// 非 bp 品牌显式传 true 应被拒绝。
+	apCh, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01020", PalCode: "PAL2", AppName: "A",
+	})
+	if err != nil {
+		t.Fatalf("创建 ap 渠道失败: %v", err)
+	}
+	if _, err := svc.UpdateChannel(ctx, apCh.ID, UpdateChannelInput{AdjustBpRawEvents: &yes}); err == nil {
+		t.Fatal("非 bp 品牌显式传 true 应被拒绝")
+	}
+}
+
+// TestNormalizeAdjustDeepLinkHost 表驱动校验 Adjust 品牌短链 host 的规范化与合法性判断。
+func TestNormalizeAdjustDeepLinkHost(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr bool
+	}{
+		{name: "空串合法_未配置", raw: "", want: ""},
+		{name: "空白trim后为空_合法", raw: "   ", want: ""},
+		{name: "合法host", raw: "link.bingoplus.com", want: "link.bingoplus.com"},
+		{name: "合法host转小写", raw: "Link.BingoPlus.COM", want: "link.bingoplus.com"},
+		{name: "首尾空白trim", raw: "  link.bingoplus.com  ", want: "link.bingoplus.com"},
+		{name: "带scheme拒绝", raw: "https://link.bingoplus.com", wantErr: true},
+		{name: "带路径拒绝", raw: "link.bingoplus.com/abc", wantErr: true},
+		{name: "带端口拒绝", raw: "link.bingoplus.com:443", wantErr: true},
+		{name: "含空白拒绝", raw: "link bingoplus com", wantErr: true},
+		{name: "超长拒绝", raw: strings.Repeat("a", 129), wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := normalizeAdjustDeepLinkHost(tc.raw)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("raw=%q 应报错，实际未报错，got=%q", tc.raw, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("raw=%q 不应报错: %v", tc.raw, err)
+			}
+			if got != tc.want {
+				t.Errorf("raw=%q 应规范化为 %q，实际 %q", tc.raw, tc.want, got)
+			}
+		})
+	}
+}
+
+// TestSetBrandAdjustHost 验证品牌 Adjust 短链 host 的读写往返，及非法值被拒绝。
+func TestSetBrandAdjustHost(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	view, err := svc.SetBrandAdjustHost(ctx, "bp", "link.bingoplus.com")
+	if err != nil {
+		t.Fatalf("设置 Adjust host 失败: %v", err)
+	}
+	if view.AdjustDeepLinkHost != "link.bingoplus.com" {
+		t.Errorf("返回的 adjustDeepLinkHost 应为 link.bingoplus.com，实际 %q", view.AdjustDeepLinkHost)
+	}
+
+	// 往返：ListBrands 也应带出。
+	views, err := svc.ListBrands(ctx, auth.FullScope())
+	if err != nil {
+		t.Fatalf("ListBrands 失败: %v", err)
+	}
+	var bp *BrandView
+	for i := range views {
+		if views[i].Code == "bp" {
+			bp = &views[i]
+		}
+	}
+	if bp == nil || bp.AdjustDeepLinkHost != "link.bingoplus.com" {
+		t.Fatalf("ListBrands 应带出 bp 的 adjustDeepLinkHost，实际 %+v", bp)
+	}
+
+	// 非法值应被拒绝。
+	if _, err := svc.SetBrandAdjustHost(ctx, "bp", "https://link.bingoplus.com"); err == nil {
+		t.Error("带 scheme 的 host 应被拒绝")
+	}
+
+	// 清空为空串应合法。
+	cleared, err := svc.SetBrandAdjustHost(ctx, "bp", "")
+	if err != nil {
+		t.Fatalf("清空 Adjust host 应合法: %v", err)
+	}
+	if cleared.AdjustDeepLinkHost != "" {
+		t.Errorf("清空后 adjustDeepLinkHost 应为空串，实际 %q", cleared.AdjustDeepLinkHost)
+	}
+}
+
+// TestBuildManifestIncludesAdjustDeepLinkHostAndBpRawEvents 验证 manifest 原样带出品牌级
+// adjustDeepLinkHost 与渠道级 adjustBpRawEvents。
+func TestBuildManifestIncludesAdjustDeepLinkHostAndBpRawEvents(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	if _, err := svc.SetBrandAdjustHost(ctx, "bp", "link.bingoplus.com"); err != nil {
+		t.Fatalf("设置 Adjust host 失败: %v", err)
+	}
+	yes := true
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bp003", PalCode: "PAL1", AppName: "B",
+		AdjustBpRawEvents: &yes,
+	}); err != nil {
+		t.Fatalf("创建渠道失败: %v", err)
+	}
+	// 对照：同品牌下不开启该开关的渠道，manifest 应为 false。
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "bp", FlavorName: "bp004", PalCode: "PAL2", AppName: "B2",
+	}); err != nil {
+		t.Fatalf("创建对照渠道失败: %v", err)
+	}
+
+	m, err := svc.BuildManifestForBrand(ctx, auth.FullScope(), "bp")
+	if err != nil {
+		t.Fatalf("manifest 失败: %v", err)
+	}
+	if m.AdjustDeepLinkHost != "link.bingoplus.com" {
+		t.Errorf("manifest 顶层 adjustDeepLinkHost 应为 link.bingoplus.com，实际 %q", m.AdjustDeepLinkHost)
+	}
+	var got003, got004 bool
+	var found003, found004 bool
+	for _, mc := range m.Channels {
+		switch mc.FlavorName {
+		case "bp003":
+			got003, found003 = mc.AdjustBpRawEvents, true
+		case "bp004":
+			got004, found004 = mc.AdjustBpRawEvents, true
+		}
+	}
+	if !found003 || !got003 {
+		t.Errorf("bp003 的 manifest adjustBpRawEvents 应为 true，found=%v got=%v", found003, got003)
+	}
+	if !found004 || got004 {
+		t.Errorf("bp004 的 manifest adjustBpRawEvents 应为 false，found=%v got=%v", found004, got004)
+	}
+}

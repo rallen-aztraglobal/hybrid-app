@@ -3,16 +3,26 @@
 //
 // 用法：把本函数整体贴进 evaluate_script 的 function 参数，先把下面 BATCH 换成本批要处理的
 // [[flavor, applicationId], ...]（每批 ≤14，避免超时）。返回每个渠道的
-// {flavor, appId, appToken, events:{name:token}, steps, error}。幂等：已存在的 app/平台/事件自动跳过。
+// {flavor, appId, bpRaw, appToken, events:{name:token}, steps, error}。幂等：已存在的 app/平台/事件自动跳过；
+// 渠道从 legacy 切到 bpRaw 时只补建缺的事件，旧 6 个留在 Adjust 不影响（App 在 bpRaw 模式下不发它们）。
 //
 // 每批返回后立刻落盘 scratchpad/adjust_results_<n>.json。全部批次跑完后用文末「合并/校验」片段汇总。
 
 async () => {
-  const OUR = ['AddToCart', 'CompleteRegistration', 'Login', 'OldRegPurchase', 'Purchase', 'TPFirstDeposit'];
+  // 事件集按渠道模式选（ADR-0018 / 08-adjust.md §11）：
+  //   legacy（默认）= 现有 6 个，与 AdjustBootstrap.LOGICAL_TO_ADJUST_NAME 对齐；
+  //   bpRaw（Console「BP 原始事件」开关打开）= BP 原始事件 14 个，含 App 不发的 Action_* 5 个（S2S 侧用）。
+  const EVENT_SETS = {
+    legacy: ['AddToCart', 'CompleteRegistration', 'Login', 'OldRegPurchase', 'Purchase', 'TPFirstDeposit'],
+    bpRaw: ['Action_BUFD', 'Action_BURD', 'Action_Deposit', 'Action_FDRD', 'Action_Registration',
+            'ad_app_opened', 'ad_deeplink_opened', 'ad_deposit', 'ad_game_open', 'ad_registration',
+            'ad_web_deposit', 'ad_web_login', 'ad_web_pageview', 'ad_web_reg'],
+  };
 
-  // ↓↓↓ 每批把这里换成本批的 [flavor, applicationId] 列表（≤14）↓↓↓
+  // ↓↓↓ 每批把这里换成本批的 [flavor, applicationId, bpRaw] 列表（≤14）；第 3 位省略 = false ↓↓↓
   const BATCH = [
     // ["ap01159", "com.arenaplus.ap01159"],
+    // ["bpom3410", "com.bingoplus.bpom3410", true],
   ];
   // ↑↑↑ ↑↑↑
 
@@ -28,8 +38,9 @@ async () => {
   (lj.apps || []).forEach(a => { byName[a.name] = a; });
 
   const out = [];
-  for (const [flavor, appId] of BATCH) {
-    const rec = { flavor, appId, appToken: null, events: {}, steps: [], error: null };
+  for (const [flavor, appId, bpRaw] of BATCH) {
+    const OUR = EVENT_SETS[bpRaw ? 'bpRaw' : 'legacy'];
+    const rec = { flavor, appId, bpRaw: !!bpRaw, appToken: null, events: {}, steps: [], error: null };
     try {
       // 1) app：不存在才建
       let app = byName[flavor], token;
@@ -84,13 +95,18 @@ merged = {}
 for f in sorted(glob.glob(SC + "/adjust_results_*.json")):
     for r in json.load(open(f)): merged[r["flavor"]] = r
 chans = json.load(open(SC + "/adjust_channels.json"))["channels"]
-EV = ["AddToCart","CompleteRegistration","Login","OldRegPurchase","Purchase","TPFirstDeposit"]
+EV_SETS = {
+    False: ["AddToCart","CompleteRegistration","Login","OldRegPurchase","Purchase","TPFirstDeposit"],
+    True:  ["Action_BUFD","Action_BURD","Action_Deposit","Action_FDRD","Action_Registration",
+            "ad_app_opened","ad_deeplink_opened","ad_deposit","ad_game_open","ad_registration",
+            "ad_web_deposit","ad_web_login","ad_web_pageview","ad_web_reg"],
+}
 final, issues, seen = [], [], {}
 for c in chans:
     r = merged.get(c["flavor"])
     if not r: continue                      # 不在本次增量内，跳过
     if not r.get("appToken"): issues.append(c["flavor"] + " 无 appToken")
-    miss = [e for e in EV if e not in r.get("events", {})]
+    miss = [e for e in EV_SETS[bool(r.get("bpRaw"))] if e not in r.get("events", {})]
     if miss: issues.append(f"{c['flavor']} 缺事件 {miss}")
     if r["appToken"] in seen: issues.append(f"appToken 撞车 {c['flavor']} vs {seen[r['appToken']]}")
     seen[r["appToken"]] = c["flavor"]

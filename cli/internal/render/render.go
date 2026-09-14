@@ -155,7 +155,7 @@ func RenderManifest(ctx context.Context, r *repo.Repo, src api.ManifestSource, m
 
 	// 4) 渲染 app/adjust-tokens.json（ADR-0013 §3）：只收录已绑定 Adjust App Token 的渠道，
 	//    键=applicationId（ADR-0009 派生值）。与 CSV/bootstrap.json 同一次 pull 落地。
-	boundCount, err := renderAdjustTokens(r, m.Brand, m.Channels, opt)
+	boundCount, err := renderAdjustTokens(r, m.Brand, m.AdjustDeepLinkHost, m.Channels, opt)
 	if err != nil {
 		return res, err
 	}

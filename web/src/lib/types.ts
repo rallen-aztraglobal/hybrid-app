@@ -55,6 +55,11 @@ export interface Brand {
    * 前端用 BRAND_META 兜底（见 lib/brands.ts deriveApplicationId）。
    */
   packagePrefix?: string;
+  /**
+   * Adjust 短链 host（仅 bp 品牌使用）：只存 host，如 `link.bingoplus.com`，
+   * 不含 `https://` 或路径。空字符串 = 未配置。见 PUT /api/brands/:code/adjust。
+   */
+  adjustDeepLinkHost?: string;
 }
 
 /** 单条域名（品牌级或渠道级覆盖通用）。 */
@@ -184,6 +189,12 @@ export interface Channel {
    * （`token,name,unique`，`unique` 列丢弃）得到。server 只存不解析（见 CLAUDE.md 跨层契约）。
    */
   adjustEvents?: Record<string, string>;
+  /**
+   * BP 原始事件开关（仅 bp 品牌可为 true）：false（默认）= 沿用现有逻辑，拦截站点接口响应后
+   * 上报 6 个事件；true = 走 BP 原始事件逻辑（H5 通过 `adjusth5event://` 自定义 scheme 触发、
+   * 原生统一上报，事件集为 14 个而非 6 个）。后端总是带出该字段（false 也带）。
+   */
+  adjustBpRawEvents: boolean;
 }
 
 /**
@@ -225,6 +236,8 @@ export interface ChannelInput {
   adjustAppToken?: string;
   /** Adjust 事件映射 `{ name: token }`（见 Channel.adjustEvents 注释）。 */
   adjustEvents?: Record<string, string>;
+  /** BP 原始事件开关（见 Channel.adjustBpRawEvents 注释）；表单总是提交显式布尔值。 */
+  adjustBpRawEvents?: boolean;
 }
 
 /**

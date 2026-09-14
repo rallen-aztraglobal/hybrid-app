@@ -106,6 +106,14 @@ func (r *Repo) ReplaceBrandDomains(ctx context.Context, brandID uint64, domains 
 	})
 }
 
+// UpdateBrandFields 部分字段更新（同 UpdateChannelFields 的模式）。
+func (r *Repo) UpdateBrandFields(ctx context.Context, id uint64, fields map[string]any) error {
+	if err := r.db.WithContext(ctx).Model(&model.Brand{}).Where("id = ?", id).Updates(fields).Error; err != nil {
+		return fmt.Errorf("更新品牌字段失败: %w", err)
+	}
+	return nil
+}
+
 // ---------- Store ----------
 
 // ListStores 返回全部应用商店（含 disabled），按 sort 升序。

@@ -97,6 +97,9 @@ const brandDomainStore: Record<BrandCode, DomainEntry[]> = {
   wp: brandDomains('wp'),
 };
 
+// Adjust 短链 host（仅 bp 品牌在 UI 上展示/可编辑）；其余品牌恒空串，mock 下也一起下发。
+const brandAdjustHostStore: Record<BrandCode, string> = { ap: '', bp: '', gp: '', wp: '' };
+
 /** 模拟 nginx 静态产物地址（ADR-0008：/apks/<brand>/<flavor>/<versionName>/...）。 */
 function mockApkUrl(brand: BrandCode, flavor: string, versionName: string): string {
   return `/apks/${brand}/${flavor}/${versionName}/app-${flavor}-release.apk`;
@@ -251,6 +254,7 @@ export const mockDb = {
         accentColor: meta.accentColor,
         channelCount: countChannels(channels, code),
         domains: brandDomainStore[code].map((d) => ({ ...d })),
+        adjustDeepLinkHost: brandAdjustHostStore[code],
       };
     });
   },
@@ -265,6 +269,12 @@ export const mockDb = {
       .filter((d) => d.url.trim())
       .map((d) => ({ ...d, health: d.health ?? 'ok' }));
     return this.getBrandDomains(code);
+  },
+
+  /** 保存品牌级 Adjust 短链 host（仅 bp 使用；mock 下不限制品牌，前端只对 bp 展示入口）。 */
+  setBrandAdjustHost(code: BrandCode, host: string): Brand {
+    brandAdjustHostStore[code] = host;
+    return this.listBrands().find((b) => b.code === code)!;
   },
 
   listChannels(): Channel[] {

@@ -152,6 +152,17 @@ export function useSaveBrandDomains(code: BrandCode) {
   });
 }
 
+/** 保存品牌级 Adjust 短链 host（仅 bp 品牌在 UI 展示入口，见 BrandDomainsCard）。 */
+export function useUpdateBrandAdjust(code: BrandCode) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (adjustDeepLinkHost: string) => brandApi.updateAdjust(code, adjustDeepLinkHost),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.brands });
+    },
+  });
+}
+
 // ---------- 应用商店 mutations ----------
 
 export function useCreateStore() {

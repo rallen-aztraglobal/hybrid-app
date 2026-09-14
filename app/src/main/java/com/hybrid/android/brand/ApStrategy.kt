@@ -51,7 +51,8 @@ class ApStrategy : BrandStrategy {
         // 未首存且停留钱包页时强刷一次，逼出新的 getById（同 BpStrategy 的兜底）。
         if (lastKnownFlag == false && host.currentPath?.contains("wallet") == true) {
             host.webView.post {
-                host.webView.loadUrl("${host.domain}/wallet?t=${System.currentTimeMillis()}")
+                val url = "${host.domain}/wallet?t=${System.currentTimeMillis()}"
+                host.webView.loadUrl(host.decorateLoadUrl(url))
             }
         }
     }

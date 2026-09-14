@@ -139,6 +139,7 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
         hmsEnabled: editChannel.hmsEnabled ?? defaultHmsEnabled(editChannel.brandCode, editChannel.flavorName, brandHms),
         adjustAppToken: editChannel.adjustAppToken ?? '',
         adjustEvents: editChannel.adjustEvents ?? {},
+        adjustBpRawEvents: editChannel.adjustBpRawEvents ?? false,
       });
       setIcon(emptyIconState(editChannel.iconMasterUrl ?? null));
       setSplash(editChannel.splashUrl ?? null);
@@ -288,6 +289,8 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
       domains: form.useBrandDomains ? undefined : form.domains,
       adjustAppToken: form.adjustAppToken?.trim() ?? '',
       adjustEvents: form.adjustEvents ?? {},
+      // 开关只对 bp 渲染，非 bp 无从置 true；后端再校验一道（非 bp 传 true → 400）。
+      adjustBpRawEvents: form.adjustBpRawEvents ?? false,
       liveVersion: form.liveVersion?.trim() ?? '',
       signingKey: form.signingKey?.trim() ?? '',
       // 开关总有确定值：保存即把该渠道固化为显式配置，之后不再随默认规则漂移。
@@ -560,10 +563,13 @@ export function ChannelDrawer({ brandMeta }: { brandMeta: BrandMeta }) {
               </span>
             </SectionHeading>
             <AdjustSection
+              brandCode={form.brandCode}
               appToken={form.adjustAppToken ?? ''}
               onAppTokenChange={(v) => set('adjustAppToken', v)}
               events={form.adjustEvents ?? {}}
               onEventsChange={(v) => set('adjustEvents', v)}
+              bpRawEvents={form.adjustBpRawEvents ?? false}
+              onBpRawEventsChange={(v) => set('adjustBpRawEvents', v)}
             />
           </div>
         </div>
@@ -670,6 +676,7 @@ function blankForm(brandCode: BrandMeta['code']): ChannelInput {
     hmsEnabled: BRAND_META[brandCode].hmsEnabled,
     adjustAppToken: '',
     adjustEvents: {},
+    adjustBpRawEvents: false,
     liveVersion: '',
   };
 }

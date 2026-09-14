@@ -29,6 +29,9 @@ type CreateChannelInput struct {
 	// HMSEnabled 是否集成华为 HMS/OAID：不传（null）= 跟随默认规则（品牌整体开 HMS 或 _hw 华为商店包），
 	// 传 true/false = 该渠道显式指定（见 model.Channel.HMSEnabled）。
 	HMSEnabled *bool `json:"hmsEnabled"`
+	// AdjustBpRawEvents：BP 原始事件开关，未传 = false（不启用）。只有所属品牌 code == "bp" 时
+	// 才允许传 true，否则 400（见 validateAdjustBpRawEvents）。
+	AdjustBpRawEvents *bool `json:"adjustBpRawEvents"`
 }
 
 // UpdateChannelInput 修改渠道入参（指针字段表示可选更新）。
@@ -56,6 +59,9 @@ type UpdateChannelInput struct {
 	// HMSEnabled 是否集成华为 HMS/OAID：未传 = 不改动（含保持「跟随默认规则」的 NULL 状态）；
 	// 传 true/false = 显式固化该渠道的取值。
 	HMSEnabled *bool `json:"hmsEnabled"`
+	// AdjustBpRawEvents：未传 = 不改动；传了必须满足「只有 bp 品牌渠道能置 true」（校验时用渠道
+	// 当前所属品牌，flavor 变更不影响所属品牌）。
+	AdjustBpRawEvents *bool `json:"adjustBpRawEvents"`
 }
 
 // ListChannels 列表查询，并为每条渠道填充 latestApkUrl（按 flavor 取最近成功构建产物，ADR-0008）。
@@ -108,6 +114,9 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 	if !brand.SupportsChannels {
 		return nil, errBadRequest(fmt.Sprintf("品牌 %q 只支持上架包，不能建小渠道包", brand.Name))
 	}
+	if err := validateAdjustBpRawEvents(brand.Code, in.AdjustBpRawEvents); err != nil {
+		return nil, err
+	}
 
 	// 若指定了应用商店，校验其存在且已启用；并要求 flavor 以 "_"+store.Code 结尾，
 	// 保证派生出的 applicationId 分段与所选商店一致。
@@ -158,6 +167,9 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*mo
 		AdjustAppToken:  adjustToken,
 		AdjustEvents:    model.AdjustEvents(in.AdjustEvents),
 		HMSEnabled:      in.HMSEnabled,
+	}
+	if in.AdjustBpRawEvents != nil {
+		ch.AdjustBpRawEvents = *in.AdjustBpRawEvents
 	}
 	if err := s.repo.CreateChannel(ctx, ch); err != nil {
 		return nil, err
@@ -256,6 +268,13 @@ func (s *Service) UpdateChannel(ctx context.Context, id uint64, in UpdateChannel
 	// HMSEnabled：未传 = 不改动（保持 NULL 的「跟随默认」语义）；传了就固化成显式值。
 	if in.HMSEnabled != nil {
 		ch.HMSEnabled = in.HMSEnabled
+	}
+	// AdjustBpRawEvents：未传 = 不改动；传了必须满足「只有 bp 品牌渠道能置 true」。
+	if in.AdjustBpRawEvents != nil {
+		if err := validateAdjustBpRawEvents(brand.Code, in.AdjustBpRawEvents); err != nil {
+			return nil, err
+		}
+		ch.AdjustBpRawEvents = *in.AdjustBpRawEvents
 	}
 	if in.Status != nil {
 		st := *in.Status
@@ -421,6 +440,18 @@ func normalizeAdjustAppToken(raw string) (*string, error) {
 		return nil, errBadRequest(fmt.Sprintf("adjustAppToken 长度不能超过 %d", maxAdjustAppTokenLen))
 	}
 	return &tok, nil
+}
+
+// validateAdjustBpRawEvents 校验 BP 原始事件开关：nil（未传）恒放行；非 nil 时若为 true，
+// 所属品牌必须是 bp，否则 400。false 对任何品牌都合法（等价于「不启用」，与默认值一致）。
+func validateAdjustBpRawEvents(brandCode string, v *bool) error {
+	if v == nil || !*v {
+		return nil
+	}
+	if brandCode != "bp" {
+		return errBadRequest("BP 原始事件仅 BP 品牌可用")
+	}
+	return nil
 }
 
 // validateAdjustEvents 校验 adjustEvents 的形状：要么为空，要么是 string→string 的 JSON 对象

@@ -72,6 +72,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	// 大渠道。
 	api.GET("/brands/:code/domains", h.GetBrandDomains, need(perm.PageDomains))
 	api.PUT("/brands/:code/domains", h.SetBrandDomains, need(perm.DomainEdit))
+	// 品牌 Adjust 品牌短链 host：权限沿用域名编辑（同属品牌级配置写操作）。
+	api.PUT("/brands/:code/adjust", h.SetBrandAdjust, need(perm.DomainEdit))
 
 	// 应用商店（渠道 store 后缀，见 CLAUDE.md 商店后缀功能）；GET 登录即可，写操作需 store:manage。
 	api.POST("/stores", h.CreateStore, need(perm.StoreManage))

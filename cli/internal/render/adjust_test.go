@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hybrid-app/cli/internal/manifest"
@@ -98,6 +99,137 @@ func TestRenderAdjustTokensSkipsWhenNoneBound(t *testing.T) {
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Error("无渠道绑定时应清理残留的 adjust-tokens.json，但文件仍存在")
+	}
+}
+
+// TestRenderAdjustTokensBpRawEvents 验证 ADR-0013「BP 原始事件」旁支：
+//   - bpRaw 渠道写出 bpRawEvents=true 与品牌级 deepLinkHost；
+//   - 非 bpRaw 渠道（即使已绑定 Adjust）两键都不出现；
+//   - bpRaw 但品牌 host 为空时只写 bpRawEvents，不写 deepLinkHost；
+//   - 未绑定 App Token 的 bpRaw 渠道仍不写入条目（开关对它无意义）。
+func TestRenderAdjustTokensBpRawEvents(t *testing.T) {
+	r := fakeRepo(t)
+	m := &manifest.Manifest{
+		Brand:              "bp",
+		AdjustDeepLinkHost: "link.bingoplus.com",
+		Channels: []manifest.Channel{
+			{
+				// bpRaw 开启 + 已绑定 token → 两键都应写出。
+				Flavor: "bp001", ApplicationId: "com.bingoplus.bp001", PalCode: "1", AppName: "BP1",
+				AdjustAppToken:    "tok-bpraw",
+				AdjustBpRawEvents: true,
+			},
+			{
+				// 已绑定 token 但未开 bpRaw → 两键都不应出现。
+				Flavor: "bp002", ApplicationId: "com.bingoplus.bp002", PalCode: "2", AppName: "BP2",
+				AdjustAppToken: "tok-normal",
+			},
+			{
+				// bpRaw 开启但未绑定 token → 不应出现在产物中。
+				Flavor: "bp003", ApplicationId: "com.bingoplus.bp003", PalCode: "3", AppName: "BP3",
+				AdjustBpRawEvents: true,
+			},
+		},
+	}
+	src := &fixtureSource{m: m}
+
+	res, err := RenderManifest(context.Background(), r, src, m, Options{SkipRes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.AdjustBoundCount != 2 {
+		t.Fatalf("期望 2 个已绑定 Adjust 的渠道，实得 %d", res.AdjustBoundCount)
+	}
+
+	data, err := os.ReadFile(r.AppAdjustTokensJSON())
+	if err != nil {
+		t.Fatalf("adjust-tokens.json 应已写出: %v", err)
+	}
+	var got map[string]manifest.AdjustTokenEntry
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("解析 adjust-tokens.json 失败: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("期望仅 2 个键，实得 %d: %+v", len(got), got)
+	}
+
+	bpraw, ok := got["com.bingoplus.bp001"]
+	if !ok {
+		t.Fatalf("bpRaw 渠道应写入，got=%+v", got)
+	}
+	if !bpraw.BpRawEvents {
+		t.Errorf("bpRawEvents 应为 true，实得 %+v", bpraw)
+	}
+	if bpraw.DeepLinkHost != "link.bingoplus.com" {
+		t.Errorf("deepLinkHost 应透传品牌级配置，实得 %q", bpraw.DeepLinkHost)
+	}
+
+	normal, ok := got["com.bingoplus.bp002"]
+	if !ok {
+		t.Fatalf("非 bpRaw 渠道仍应写入（已绑定 token），got=%+v", got)
+	}
+	if normal.BpRawEvents {
+		t.Error("非 bpRaw 渠道不应写出 bpRawEvents=true")
+	}
+	if normal.DeepLinkHost != "" {
+		t.Errorf("非 bpRaw 渠道不应写出 deepLinkHost，实得 %q", normal.DeepLinkHost)
+	}
+
+	if _, ok := got["com.bingoplus.bp003"]; ok {
+		t.Error("未绑定 token 的 bpRaw 渠道不应出现在 adjust-tokens.json 中")
+	}
+
+	// 校验序列化产物本身：非 bpRaw 渠道两键在 JSON 文本中完全不出现（而非出现为 false/""）。
+	raw := string(data)
+	if strings.Contains(raw, `"bpRawEvents"`) == false {
+		t.Error("bpRaw 渠道应在原始 JSON 中含 bpRawEvents 键")
+	}
+	var normalRaw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &normalRaw); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(normalRaw["com.bingoplus.bp002"]), "bpRawEvents") {
+		t.Errorf("非 bpRaw 渠道的原始 JSON 不应含 bpRawEvents 键，实得 %s", normalRaw["com.bingoplus.bp002"])
+	}
+}
+
+// TestRenderAdjustTokensBpRawEventsWithoutBrandHost 验证 bpRaw 渠道在品牌未配置
+// AdjustDeepLinkHost 时只写 bpRawEvents，不写 deepLinkHost（omitempty，不落空串）。
+func TestRenderAdjustTokensBpRawEventsWithoutBrandHost(t *testing.T) {
+	r := fakeRepo(t)
+	m := &manifest.Manifest{
+		Brand: "bp",
+		Channels: []manifest.Channel{
+			{
+				Flavor: "bp001", ApplicationId: "com.bingoplus.bp001", PalCode: "1", AppName: "BP1",
+				AdjustAppToken:    "tok-bpraw",
+				AdjustBpRawEvents: true,
+			},
+		},
+	}
+	src := &fixtureSource{m: m}
+
+	if _, err := RenderManifest(context.Background(), r, src, m, Options{SkipRes: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(r.AppAdjustTokensJSON())
+	if err != nil {
+		t.Fatalf("adjust-tokens.json 应已写出: %v", err)
+	}
+	var got map[string]manifest.AdjustTokenEntry
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	entry := got["com.bingoplus.bp001"]
+	if !entry.BpRawEvents {
+		t.Error("bpRawEvents 应为 true")
+	}
+	if entry.DeepLinkHost != "" {
+		t.Errorf("品牌未配置 host 时不应写出 deepLinkHost，实得 %q", entry.DeepLinkHost)
+	}
+	if strings.Contains(string(data), "deepLinkHost") {
+		t.Error("品牌未配置 host 时原始 JSON 不应含 deepLinkHost 键")
 	}
 }
 

@@ -199,6 +199,20 @@ export function validateDomainUrl(url: string): string | null {
   return null;
 }
 
+/**
+ * Adjust 短链 host 校验（仅存 host，如 `link.bingoplus.com`，不含 `https://` 或路径）。
+ * 与后端 PUT /api/brands/:code/adjust 的校验保持一致：去空白、转小写、不含 `/`/`:`/空白、超 128 报错。
+ * 返回归一化后的值 + 错误信息（空字符串合法，代表清空/未配置）。
+ */
+export function normalizeAdjustDeepLinkHost(raw: string): { value: string; error: string | null } {
+  const value = raw.trim().toLowerCase();
+  if (!value) return { value, error: null };
+  if (value.length > 128) return { value, error: 'Adjust 短链 host 不能超过 128 字符' };
+  // 与后端 normalizeAdjustDeepLinkHost 同一字符集：只允许字母数字点横线，不带 scheme/路径/端口。
+  if (!/^[a-z0-9.-]+$/.test(value)) return { value, error: '只能是 host（字母、数字、点、横线），不要带 https://、路径或端口' };
+  return { value, error: null };
+}
+
 /** 品牌下渠道计数（不含 archived），用于 Tab/侧栏徽标。 */
 export function countChannels(channels: Channel[], brand: BrandCode): number {
   return channels.filter((c) => c.brandCode === brand && c.status !== 'archived').length;

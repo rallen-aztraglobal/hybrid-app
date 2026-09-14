@@ -42,7 +42,7 @@ class BpStrategy : BrandStrategy {
             if (host.currentPath?.contains("wallet") == true) {
                 host.webView.post {
                     val url = "${host.domain}/wallet?t=${System.currentTimeMillis()}"
-                    host.webView.loadUrl(url)
+                    host.webView.loadUrl(host.decorateLoadUrl(url))
                 }
             }
         }

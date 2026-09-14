@@ -33,21 +33,63 @@ if (file("google-services.json").exists()) {
 }
 
 // ============================================================================
+// adjust-tokens.json 只解析一次，供下面两个旁路块（BuildConfig 注入 / 短链 manifest 生成）共用。
+// ============================================================================
+def adjustCfg = file("adjust-tokens.json").exists()
+        ? new groovy.json.JsonSlurper().parse(file("adjust-tokens.json"))
+        : [:]
+
+// bpRawEvents 是否开启：toString().toBoolean() 同 hmsOverrides 的写法，既容忍 JSON 布尔也容忍字符串 "true"。
+def isBpRawEvents = { entry -> entry?.bpRawEvents != null && entry.bpRawEvents.toString().toBoolean() }
+
+// ============================================================================
 // Adjust 按 flavor 自动开关（对齐上面 FCM 的 feature gate，见 docs/admin/08-adjust.md §4.2 / ADR-0013）：
 //   adjust-tokens.json 里该 applicationId 有非空 appToken → 注入 BuildConfig，运行时真集成、发事件；
 //   不在（未在 Console 绑定 Adjust）→ token 留空，运行时 AdjustBootstrap 探测为空后全程 no-op。
 //   依赖恒在 classpath（同 firebase-messaging），仅靠 token 是否为空决定「集成/跳过」，零改码激活。
 // 自包含旁路块，不动 loadChannels/productFlavors 一行（护栏 ADR-0004）。
 // ============================================================================
-if (file("adjust-tokens.json").exists()) {
-    def adjustCfg = new groovy.json.JsonSlurper().parse(file("adjust-tokens.json"))
-    android.applicationVariants.all { variant ->
-        def entry = adjustCfg[variant.applicationId]
-        if (entry?.appToken) {
-            def events = groovy.json.JsonOutput.toJson(entry.events ?: [:])
-                    .replace('\\', '\\\\').replace('"', '\\"')
-            variant.buildConfigField "String", "ADJUST_APP_TOKEN", "\"${entry.appToken}\""
-            variant.buildConfigField "String", "ADJUST_EVENT_MAP", "\"${events}\""
+android.applicationVariants.all { variant ->
+    def entry = adjustCfg[variant.applicationId]
+    if (entry?.appToken) {
+        def events = groovy.json.JsonOutput.toJson(entry.events ?: [:])
+                .replace('\\', '\\\\').replace('"', '\\"')
+        variant.buildConfigField "String", "ADJUST_APP_TOKEN", "\"${entry.appToken}\""
+        variant.buildConfigField "String", "ADJUST_EVENT_MAP", "\"${events}\""
+        // BP 原始事件模式（编译期开关，见 docs/admin/08-adjust.md「BP 原始事件」）：
+        // entry.bpRawEvents 为 true 才开启；关闭时 AdjustBootstrap 走原有逻辑一字不改。
+        def bpRawEvents = isBpRawEvents(entry)
+        variant.buildConfigField "boolean", "ADJUST_BP_RAW_EVENTS", "${bpRawEvents}"
+        variant.buildConfigField "String", "ADJUST_DEEP_LINK_HOST", "\"${entry.deepLinkHost ?: ''}\""
+    }
+}
+
+// ============================================================================
+// Adjust BP 原始事件 · 短链 App Links intent-filter 按变体生成（评审修复，见
+// docs/admin/08-adjust.md「BP 原始事件」）：
+//   原先对**全部** flavor 都在主 AndroidManifest 里声明一个 autoVerify 的 https intent-filter
+//   （用 ${adjustDeepLinkHost} 占位符），未开启该模式的渠道包也会拿到占位 host
+//   「adjust-deeplink.invalid」，仍会触发系统 App Links 校验、出现在「默认打开」设置列表里，
+//   违反「关闭 = 现状」的护栏。
+//   改为：只对 adjust-tokens.json 中 bpRawEvents=true 且 deepLinkHost 非空的变体，生成一份只含
+//   该 intent-filter 的 overlay manifest（GenerateAdjustDeepLinkManifestTask，类定义见文件末尾），
+//   通过 AGP 8.12 的 Sources.manifests.addGeneratedManifestFile 合并进最终清单；其余变体不注册
+//   任何任务、不生成任何文件，manifest 与关闭前完全一致。
+//   自包含旁路块，未动 loadChannels/productFlavors 一行（护栏 ADR-0004）。
+// ============================================================================
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def entry = adjustCfg[variant.applicationId.get()]
+        def host = (entry?.deepLinkHost ?: "").toString().trim()
+        if (isBpRawEvents(entry) && !host.isEmpty()) {
+            def taskProvider = tasks.register(
+                    "generate${variant.name.capitalize()}AdjustDeepLinkManifest",
+                    GenerateAdjustDeepLinkManifestTask
+            ) { t ->
+                t.deepLinkHost.set(host)
+                t.outputFile.set(layout.buildDirectory.file("generated/adjustDeepLink/${variant.name}/AndroidManifest.xml"))
+            }
+            variant.sources.manifests?.addGeneratedManifestFile(taskProvider) { it.outputFile }
         }
     }
 }
@@ -146,6 +188,10 @@ android {
         // 上面的 adjust-tokens.json 旁路块会在变体级覆盖（变体级 buildConfigField 优先于默认级）。
         buildConfigField "String", "ADJUST_APP_TOKEN", "\"\""
         buildConfigField "String", "ADJUST_EVENT_MAP", "\"{}\""
+        // BP 原始事件模式兜底默认（未开启的渠道保持这两个值）：保证字段对所有 flavor 都存在、
+        // 编译安全；上面的 adjust-tokens.json 旁路块会在变体级覆盖（变体级优先于默认级）。
+        buildConfigField "boolean", "ADJUST_BP_RAW_EVENTS", "false"
+        buildConfigField "String", "ADJUST_DEEP_LINK_HOST", "\"\""
     }
 
     flavorDimensions "channel"
@@ -305,4 +351,36 @@ dependencies {
     debugImplementation libs.androidx.ui.tooling
     debugImplementation libs.androidx.ui.test.manifest
 
+}
+
+// ============================================================================
+// Adjust BP 原始事件 · 短链 App Links intent-filter 生成任务（配合上面 androidComponents.onVariants
+// 旁路块使用，见其注释）：只对开启该模式且配了 deepLinkHost 的变体注册，写一份只含
+// WebViewActivity 该 intent-filter 的 overlay manifest，由 AGP 合并进最终清单。
+// 用 @OutputFile 声明输出，保证增量构建正确（host 不变则任务 UP-TO-DATE）。
+// ============================================================================
+abstract class GenerateAdjustDeepLinkManifestTask extends DefaultTask {
+    @Input
+    abstract Property<String> getDeepLinkHost()
+
+    @OutputFile
+    abstract RegularFileProperty getOutputFile()
+
+    @TaskAction
+    void generate() {
+        outputFile.get().asFile.text = """<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name=".WebViewActivity">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${deepLinkHost.get()}" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+"""
+    }
 }

@@ -369,6 +369,51 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/brands/{code}/adjust": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brands"
+                ],
+                "summary": "更新品牌 Adjust 品牌短链 host（只存 host，不含 scheme/路径/端口）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Adjust 短链 host",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.setBrandAdjustReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/brands/{code}/domains": {
             "get": {
                 "security": [
@@ -2990,6 +3035,10 @@ const docTemplate = `{
         "github_com_hybrid-app_server_internal_service.BuildManifest": {
             "type": "object",
             "properties": {
+                "adjustDeepLinkHost": {
+                    "description": "AdjustDeepLinkHost 该品牌 Adjust 品牌短链的 host（如 link.bingoplus.com），空 = 未配置。\nomitempty：未配置的品牌（含非 bp）不下发该字段，CLI 侧按缺失/空同等对待。",
+                    "type": "string"
+                },
                 "brand": {
                     "type": "string"
                 },
@@ -3062,6 +3111,10 @@ const docTemplate = `{
                 "adjustAppToken": {
                     "type": "string"
                 },
+                "adjustBpRawEvents": {
+                    "description": "AdjustBpRawEvents：BP 原始事件开关，未传 = false（不启用）。只有所属品牌 code == \"bp\" 时\n才允许传 true，否则 400（见 validateAdjustBpRawEvents）。",
+                    "type": "boolean"
+                },
                 "adjustEvents": {
                     "type": "object",
                     "additionalProperties": {
@@ -3076,6 +3129,10 @@ const docTemplate = `{
                 },
                 "flavorName": {
                     "type": "string"
+                },
+                "hmsEnabled": {
+                    "description": "HMSEnabled 是否集成华为 HMS/OAID：不传（null）= 跟随默认规则（品牌整体开 HMS 或 _hw 华为商店包），\n传 true/false = 该渠道显式指定（见 model.Channel.HMSEnabled）。",
+                    "type": "boolean"
                 },
                 "liveVersion": {
                     "type": "string"
@@ -3135,6 +3192,10 @@ const docTemplate = `{
                 "adjustAppToken": {
                     "type": "string"
                 },
+                "adjustBpRawEvents": {
+                    "description": "AdjustBpRawEvents：BP 原始事件开关，原样带出渠道值（编译期 feature gate，沿本条 manifest\n链路下发给 CLI → adjust-tokens.json → BuildConfig，与 AdjustAppToken 同一条链路）。",
+                    "type": "boolean"
+                },
                 "adjustEvents": {
                     "type": "object",
                     "additionalProperties": {
@@ -3160,6 +3221,10 @@ const docTemplate = `{
                 },
                 "flavorName": {
                     "type": "string"
+                },
+                "hmsEnabled": {
+                    "description": "HMSEnabled 该渠道是否集成华为 HMS/OAID，**已解析成有效值**（显式配置优先，未配置回落\n「品牌整体开 HMS 或 _hw 华为商店包」的默认规则，见 model.Channel.EffectiveHMSEnabled）。\nCLI 据此渲染 app/hms-channels.json，供 build.gradle 的旁路块按 applicationId 查表决定\n是否注入 OAID 依赖。用指针只为兼容老 CLI/老后端组合：字段缺失（null）时 CLI 自行回落\n同一套默认规则，不会把 bp/_hw 包的 HMS 误关成 false。CSVLine 不带出——CSV 四列格式不变。",
+                    "type": "boolean"
                 },
                 "palCode": {
                     "type": "string"
@@ -3268,6 +3333,10 @@ const docTemplate = `{
                 "adjustAppToken": {
                     "type": "string"
                 },
+                "adjustBpRawEvents": {
+                    "description": "AdjustBpRawEvents：未传 = 不改动；传了必须满足「只有 bp 品牌渠道能置 true」（校验时用渠道\n当前所属品牌，flavor 变更不影响所属品牌）。",
+                    "type": "boolean"
+                },
                 "adjustEvents": {
                     "type": "object",
                     "additionalProperties": {
@@ -3279,6 +3348,10 @@ const docTemplate = `{
                 },
                 "flavorName": {
                     "type": "string"
+                },
+                "hmsEnabled": {
+                    "description": "HMSEnabled 是否集成华为 HMS/OAID：未传 = 不改动（含保持「跟随默认规则」的 NULL 状态）；\n传 true/false = 显式固化该渠道的取值。",
+                    "type": "boolean"
                 },
                 "liveVersion": {
                     "type": "string"
@@ -3616,6 +3689,14 @@ const docTemplate = `{
             "properties": {
                 "dryRun": {
                     "type": "boolean"
+                }
+            }
+        },
+        "internal_handler.setBrandAdjustReq": {
+            "type": "object",
+            "properties": {
+                "adjustDeepLinkHost": {
+                    "type": "string"
                 }
             }
         },

@@ -2,6 +2,7 @@ package com.hybrid.android
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,6 +13,7 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Message
 import android.util.Base64
 import android.util.Log
 import android.view.View
@@ -48,6 +50,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.hybrid.android.brand.BrandHost
 import com.hybrid.android.brand.BrandStrategies
 import com.hybrid.android.brand.BrandStrategy
+import com.hybrid.android.bridge.BingoPlusShellBridge
 import com.hybrid.android.bridge.WebAppBridge
 import com.hybrid.android.domain.DomainResolver
 import com.hybrid.android.domain.ErrorKind
@@ -57,6 +60,7 @@ import com.hybrid.android.push.HybridMessagingService
 import com.hybrid.android.push.PushBootstrap
 import com.hybrid.android.push.TokenRegistrar
 import com.hybrid.android.track.AdjustBootstrap
+import com.hybrid.android.track.BpRawAdjustTracker
 import com.hybrid.android.track.DeviceInfoRegistrar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -105,6 +109,15 @@ class WebViewActivity : ComponentActivity(), BrandHost {
      */
     private var pendingPushPath: String? = null
 
+    /**
+     * BP 原始事件模式下懒创建、复用的弹窗 WebView（承接 window.open），避免每次 onCreateWindow
+     * 都 new 一个临时 WebView 造成泄漏；跟随 Activity 生命周期，在 [onDestroy] 里销毁。
+     */
+    private var popupWebView: WebView? = null
+
+    /** 本次 popup 导航是否已被其 shouldOverrideUrlLoading 消费，避免 onPageStarted 兜底重复路由。 */
+    private var popupNavigationHandled = false
+
     // ---- BrandHost ----
     override val context: Context get() = this
     // 域名运行时解析：返回当前实际加载的域名（容灾切到备用后随之更新），
@@ -115,6 +128,11 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     override val currentPath: String? get() = currentPathValue
     override val webView: WebView get() = _webView
     override fun putEventValue(key: String, value: Any) { eventValues[key] = value }
+    // BP 原始事件模式：所有站点加载（首屏、运行中容灾、BpStrategy/ApStrategy 强刷钱包页、
+    // window.open/外链路由）统一在此追加 appSource，H5 才能在任何入口都正确识别「在壳内」。
+    // 非本模式恒等（原样返回），与关闭时行为一致。
+    override fun decorateLoadUrl(url: String): String =
+        if (AdjustBootstrap.bpRawMode) BpRawAdjustTracker.appendAppSource(url) else url
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -128,6 +146,16 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         strategy.initTracking(this)
         // Adjust 归因初始化（feature gate，未绑定 App Token 时 no-op，见 ADR-0013）
         AdjustBootstrap.init(this)
+        // BP 原始事件模式：冷启动短链归因（Adjust 品牌短链，非本模式短链返回 false，无副作用）。
+        // 命中也照常走下面的 startResolve() 加载首页，这里只做归因上报。
+        // 仅当本次是「真正的冷启动」（savedInstanceState == null）且不是从最近任务列表重新
+        // 唤起（FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY）时才处理，否则旋转屏幕/进程重建/从最近
+        // 任务重新打开都会带着同一个 intent.data 再上报一次 ad_deeplink_opened。
+        val launchedFromHistory =
+            (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (AdjustBootstrap.bpRawMode && savedInstanceState == null && !launchedFromHistory) {
+            intent?.data?.let { BpRawAdjustTracker.handleDeepLink(this, it) }
+        }
 
         // 安装事件（仅首次），可选的测试事件由打包开关 ENABLE_TEST_EVENTS 控制
         val prefs = getSharedPreferences("af_install", Context.MODE_PRIVATE)
@@ -197,6 +225,12 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         settings.javaScriptEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        // BP 原始事件模式：支持 window.open 弹出新窗口，配合下面 WebChromeClient.onCreateWindow
+        // 拦截目标 URL（Adjust H5 事件优先消费，否则回退主 WebView 加载）。非本模式两项设置不改。
+        if (AdjustBootstrap.bpRawMode) {
+            settings.setSupportMultipleWindows(true)
+            settings.javaScriptCanOpenWindowsAutomatically = true
+        }
 
         // window insets（状态栏/导航栏 padding）
         ViewCompat.setOnApplyWindowInsetsListener(_webView) { view, insets ->
@@ -215,12 +249,77 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             },
             "JSBridge"
         )
+        // BP 原始事件模式：原样注入 BingoPlusShell（H5 只调它的 openExternal(url)，三个入口之一，
+        // 见 08-adjust.md §11.3）。命中 Adjust H5 事件就消费；否则按方法名的本意「外部打开」：
+        // http(s) 一律系统浏览器（站内链接也跳出，不回主 WebView），intent:// 与其他自定义 scheme
+        // 交给 strategy.shouldOverrideUrl（拉起 App / 应用市场）。非本模式不注入，与现状一致。
+        if (AdjustBootstrap.bpRawMode) {
+            _webView.addJavascriptInterface(
+                BingoPlusShellBridge { url -> runOnUiThread { openExternalUrl(url) } },
+                "BingoPlusShell"
+            )
+        }
 
         _webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest?) {
                 runOnUiThread {
                     request?.grant(request.resources) // 允许 JS 使用相机/麦克风
                 }
+            }
+
+            // BP 原始事件模式：支持 window.open。复用懒创建的 popupWebView（而非每次 new 一个
+            // 临时 WebView）拦截目标 URL，统一走 routeExternalUrl 分流。非本模式直接走父类默认
+            // 实现（恒返回 false），行为与不覆写一致。
+            override fun onCreateWindow(
+                view: WebView?,
+                isDialog: Boolean,
+                isUserGesture: Boolean,
+                resultMsg: Message?
+            ): Boolean {
+                if (!AdjustBootstrap.bpRawMode || resultMsg == null) {
+                    return super.onCreateWindow(view, isDialog, isUserGesture, resultMsg)
+                }
+                val popup = popupWebView ?: WebView(this@WebViewActivity).apply {
+                    settings.javaScriptEnabled = true
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            webView: WebView,
+                            request: WebResourceRequest
+                        ): Boolean {
+                            popupNavigationHandled = true
+                            routeExternalUrl(request.url.toString())
+                            return true
+                        }
+
+                        // window.open('') / about:blank / document.write / POST 表单 target=_blank
+                        // 都不会触发上面的 shouldOverrideUrlLoading（尤其 POST：WebViewClient 文档
+                        // 明确 shouldOverrideUrlLoading 不对 POST 请求调用），靠这里兜底：非
+                        // about:blank 且尚未被上面消费过才走同一路由——退化为 GET 加载（丢失原
+                        // POST body 是可接受的取舍，这类场景本就是「弹出跳到别处」而非需要保留
+                        // 表单语义的场内提交）。随后统一 stopLoading，popup 自身永不真正渲染。
+                        override fun onPageStarted(
+                            view: WebView,
+                            url: String?,
+                            favicon: android.graphics.Bitmap?
+                        ) {
+                            super.onPageStarted(view, url, favicon)
+                            if (!popupNavigationHandled &&
+                                !url.isNullOrBlank() &&
+                                !url.equals("about:blank", ignoreCase = true)
+                            ) {
+                                popupNavigationHandled = true
+                                routeExternalUrl(url)
+                            }
+                            view.stopLoading()
+                        }
+                    }
+                }.also { popupWebView = it }
+                popupNavigationHandled = false
+                popup.stopLoading()
+                val transport = resultMsg.obj as WebView.WebViewTransport
+                transport.webView = popup
+                resultMsg.sendToTarget()
+                return true
             }
         }
 
@@ -246,6 +345,12 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                // BP 原始事件模式：Adjust H5 自定义 scheme 必须在 strategy.shouldOverrideUrl 之前
+                // 拦截——BpStrategy 对未知 scheme 会 startActivity 失败后 return false，WebView 会
+                // 去加载 adjusth5event:// 导致主框架错误并误触发域名容灾。
+                if (AdjustBootstrap.bpRawMode && BpRawAdjustTracker.handleH5Url(request.url)) {
+                    return true
+                }
                 return strategy.shouldOverrideUrl(request.url.toString(), this@WebViewActivity)
             }
 
@@ -371,7 +476,7 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                                 }
                         } ?: r.url
                     pendingPushPath = null  // 消费后清空，防止 retryResolve 重复加载
-                    _webView.loadUrl(loadUrl)
+                    _webView.loadUrl(decorateLoadUrl(loadUrl))
                 }
                 ResolveResult.ServiceDown -> showErrorView(ErrorKind.SERVICE_DOWN) // B：域名/服务
                 ResolveResult.NoNetwork -> showErrorView(ErrorKind.NO_NETWORK)     // A：本机网络
@@ -511,13 +616,18 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                 val url = "$domain$cleanPath?palcode=${BuildConfig.PAL_CODE}"
                 Log.d("HybridPush", "推送 deeplink（快路径）加载: $url")
                 strategy.onPushOpen(pushPath, domain, this)
-                _webView.loadUrl(url)
+                _webView.loadUrl(decorateLoadUrl(url))
             } else {
                 // 尚未完成首次解析（极少情况）：保存 path，下次 startResolve 消费
                 pendingPushPath = pushPath
                 startResolve()
             }
             return
+        }
+
+        // BP 原始事件模式：Adjust 品牌短链归因，命中则直接返回（不再走下面的品牌 deeplink 处理）。
+        intent?.data?.let { uri ->
+            if (AdjustBootstrap.bpRawMode && BpRawAdjustTracker.handleDeepLink(this, uri)) return
         }
 
         // 普通系统 deeplink
@@ -531,6 +641,8 @@ class WebViewActivity : ComponentActivity(), BrandHost {
 
     override fun onDestroy() {
         unregisterNetworkRecovery()
+        popupWebView?.destroy()
+        popupWebView = null
         super.onDestroy()
     }
 
@@ -595,6 +707,38 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             })();
         """.trimIndent()
         view.evaluateJavascript(js, null)
+    }
+
+    /**
+     * BP 原始事件模式：统一路由一个「不该由触发它的（弹窗）WebView 自己加载」的外部 URL——
+     * window.open 目标（[popupWebView] 的两个回调）与 [BingoPlusShellBridge] 的 openExternal 三处
+     * 入口共用，保证 intent:// 与站内/站外链接在这三处的处理行为完全一致。必须在主线程调用。
+     *   1) 先交给 [BpRawAdjustTracker.handleH5Url] 消费 Adjust H5 自定义 scheme（adjusth5event://），
+     *      命中则到此为止；
+     *   2) 否则交给 [strategy].shouldOverrideUrl 判定：站内域名返回 false → 这里改用主 WebView
+     *      loadUrl 打开；站外/自定义 scheme（含 intent://）→ 策略自行处理并返回 true，不再重复加载。
+     */
+    /** BingoPlusShell.openExternal 的分流：adjust 事件消费；http(s) 系统浏览器；其余 scheme 交 strategy。 */
+    private fun openExternalUrl(url: String) {
+        val uri = Uri.parse(url)
+        if (AdjustBootstrap.bpRawMode && BpRawAdjustTracker.handleH5Url(uri)) return
+        val scheme = uri.scheme
+        if ("http".equals(scheme, ignoreCase = true) || "https".equals(scheme, ignoreCase = true)) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, uri))
+            } catch (e: ActivityNotFoundException) {
+                Log.w("HybridAdjustBpRaw", "openExternal 无浏览器可打开: $url")
+            }
+            return
+        }
+        strategy.shouldOverrideUrl(url, this)
+    }
+
+    private fun routeExternalUrl(url: String) {
+        if (AdjustBootstrap.bpRawMode && BpRawAdjustTracker.handleH5Url(Uri.parse(url))) return
+        if (!strategy.shouldOverrideUrl(url, this)) {
+            _webView.loadUrl(decorateLoadUrl(url))
+        }
     }
 
     private fun handleApiResponse(apiUrl: String, fullRequestDataJson: String) {

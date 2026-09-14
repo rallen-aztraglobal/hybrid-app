@@ -21,6 +21,9 @@ type BuildManifest struct {
 	ConfigBaseURL string            `json:"configBaseUrl"` // CDN 配置端点前缀（烧录进 bootstrap.json）
 	GeneratedAt   string            `json:"generatedAt"`
 	Channels      []ManifestChannel `json:"channels"`
+	// AdjustDeepLinkHost 该品牌 Adjust 品牌短链的 host（如 link.bingoplus.com），空 = 未配置。
+	// omitempty：未配置的品牌（含非 bp）不下发该字段，CLI 侧按缺失/空同等对待。
+	AdjustDeepLinkHost string `json:"adjustDeepLinkHost,omitempty"`
 }
 
 // ManifestChannel 单个渠道的全量信息。
@@ -50,6 +53,9 @@ type ManifestChannel struct {
 	// 是否注入 OAID 依赖。用指针只为兼容老 CLI/老后端组合：字段缺失（null）时 CLI 自行回落
 	// 同一套默认规则，不会把 bp/_hw 包的 HMS 误关成 false。CSVLine 不带出——CSV 四列格式不变。
 	HMSEnabled *bool `json:"hmsEnabled,omitempty"`
+	// AdjustBpRawEvents：BP 原始事件开关，原样带出渠道值（编译期 feature gate，沿本条 manifest
+	// 链路下发给 CLI → adjust-tokens.json → BuildConfig，与 AdjustAppToken 同一条链路）。
+	AdjustBpRawEvents bool `json:"adjustBpRawEvents,omitempty"`
 }
 
 // CSVLine 渲染成与现有 channels/*.csv 字节级兼容的一行：flavor|applicationId|palCode|appName。
@@ -99,12 +105,13 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, scope auth.Scope, b
 	}
 
 	out := &BuildManifest{
-		Brand:         brand.Code,
-		Scheme:        brand.Scheme,
-		HMSEnabled:    brand.HMSEnabled,
-		BrandDomains:  brandDomains,
-		ConfigBaseURL: s.appConfigBaseURL(),
-		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
+		Brand:              brand.Code,
+		Scheme:             brand.Scheme,
+		HMSEnabled:         brand.HMSEnabled,
+		BrandDomains:       brandDomains,
+		ConfigBaseURL:      s.appConfigBaseURL(),
+		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
+		AdjustDeepLinkHost: brand.AdjustDeepLinkHost,
 	}
 	for i := range list {
 		ch := &list[i]
@@ -130,6 +137,7 @@ func (s *Service) BuildManifestForBrand(ctx context.Context, scope auth.Scope, b
 			AdjustAppToken:    adjustToken,
 			AdjustEvents:      map[string]string(ch.AdjustEvents),
 			SigningKey:        ch.SigningKey,
+			AdjustBpRawEvents: ch.AdjustBpRawEvents,
 		})
 	}
 	return out, nil

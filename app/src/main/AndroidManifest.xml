@@ -74,6 +74,13 @@
                 <data android:scheme="${deeplinkScheme}" />
             </intent-filter>
 
+            <!-- ✅ Adjust 品牌短链入口（BP 原始事件模式，见 docs/admin/08-adjust.md / BpRawAdjustTracker）：
+                 未在此静态声明——只对 adjust-tokens.json 中 bpRawEvents=true 且 deepLinkHost 非空的
+                 变体，由 app/build.gradle 的 androidComponents.onVariants 生成一份 overlay manifest
+                 并合并进来（见该处 GenerateAdjustDeepLinkManifestTask）。这样未开启该模式的渠道包
+                 不会带任何 https intent-filter，不会触发系统 App Links 校验、不出现在「默认打开」
+                 列表里。autoVerify 需在 Adjust 面板为各绑定包登记证书指纹才能完成 App Links 自动验证。 -->
+
         </activity>
     </application>
 

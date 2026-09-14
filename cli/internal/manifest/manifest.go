@@ -26,6 +26,11 @@ type Manifest struct {
 	// HMSEnabled 该品牌是否整体集成华为 HMS/OAID（bp=true，ap/gp=false）。
 	// 仅作渠道级 HMSEnabled 缺失（老后端不下发）时的回落依据，见 Channel.EffectiveHMS。
 	HMSEnabled bool `json:"hmsEnabled"`
+	// AdjustDeepLinkHost Adjust 深度链接域名（品牌级，如 "link.bingoplus.com"），
+	// ADR-0018「BP 原始事件」：仅当渠道 AdjustBpRawEvents=true 时才随该渠道写入
+	// adjust-tokens.json 的 deepLinkHost（见 renderAdjustTokens）；非 bpRaw 渠道即使
+	// 品牌配了此值也不写。空串 = 未配置（老后端不下发时同样为空，不报错）。
+	AdjustDeepLinkHost string `json:"adjustDeepLinkHost,omitempty"`
 	// Channels 该品牌下全部启用的小渠道。
 	Channels []Channel `json:"channels"`
 	// ConfigVersion 后台配置版本号，便于漂移检测与日志。
@@ -72,6 +77,11 @@ type Channel struct {
 	// 指针：null = 老后端未下发该字段，此时 CLI 用 EffectiveHMS 回落同一套默认规则，
 	// 绝不把它当 false——否则 bp/_hw 包会静默丢掉 OAID 采集。
 	HMSEnabled *bool `json:"hmsEnabled,omitempty"`
+	// AdjustBpRawEvents 是否为该渠道开启「BP 原始事件」逻辑（ADR-0018，
+	// Console「BP 原始事件」开关）。缺失/false = 沿用现有事件逻辑。仅当为 true 时，
+	// renderAdjustTokens 才会在 adjust-tokens.json 对应条目写出 bpRawEvents/deepLinkHost，
+	// app/build.gradle 的 Adjust 旁路块据此向 BuildConfig 与 manifestPlaceholder 注入取值。
+	AdjustBpRawEvents bool `json:"adjustBpRawEvents,omitempty"`
 }
 
 // AdjustTokenEntry 是 app/adjust-tokens.json 中单个 applicationId 对应的 Adjust 配置
@@ -83,6 +93,17 @@ type Channel struct {
 type AdjustTokenEntry struct {
 	AppToken string            `json:"appToken"`
 	Events   map[string]string `json:"events"`
+	// BpRawEvents 是否为该渠道启用「BP 原始事件」逻辑（Console 开关，ADR-0018）。
+	// omitempty：仅当渠道 AdjustBpRawEvents=true 时才写出该键，false 不写——
+	// app/build.gradle 按「键是否存在」而非「值是否为 false」门控，与 appToken 整体
+	// 收录规则同构（缺键 = 默认关闭该旁支）。消费方：app/build.gradle 的 Adjust 旁路块，
+	// 读 entry.bpRawEvents 注入 BuildConfig（如 ADJUST_BP_RAW_EVENTS）。
+	BpRawEvents bool `json:"bpRawEvents,omitempty"`
+	// DeepLinkHost Adjust 深度链接域名，仅当 BpRawEvents=true 且品牌级
+	// Manifest.AdjustDeepLinkHost 非空时才写出（omitempty）。消费方：app/build.gradle
+	// 的 Adjust 旁路块，读 entry.deepLinkHost 注入 BuildConfig 与 manifestPlaceholder
+	// （用于 App Link / Adjust deep link intent-filter 的 host）。
+	DeepLinkHost string `json:"deepLinkHost,omitempty"`
 }
 
 // HuaweiStoreFlavorSuffix 华为商店包的 flavor 后缀（store.code = hw）。

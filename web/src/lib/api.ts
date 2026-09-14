@@ -239,6 +239,8 @@ interface BrandViewDTO {
   channelCount: number;
   domains: string[];
   packagePrefix?: string;
+  /** Adjust 短链 host（仅 bp 使用，见 types.ts Brand.adjustDeepLinkHost 注释）；空/缺省 = 未配置。 */
+  adjustDeepLinkHost?: string | null;
 }
 function adaptBrand(b: BrandViewDTO): Brand {
   return {
@@ -254,6 +256,7 @@ function adaptBrand(b: BrandViewDTO): Brand {
     channelCount: b.channelCount,
     domains: domainsFromUrls(b.domains),
     packagePrefix: b.packagePrefix || BRAND_META[b.code]?.packagePrefix,
+    adjustDeepLinkHost: b.adjustDeepLinkHost || '',
   };
 }
 
@@ -287,6 +290,8 @@ interface ChannelDTO {
    */
   adjustAppToken?: string | null;
   adjustEvents?: Record<string, string> | null;
+  /** BP 原始事件开关（见 types.ts Channel.adjustBpRawEvents 注释）；后端总是带出，false 也带。 */
+  adjustBpRawEvents?: boolean | null;
 }
 function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
   const brandCode = (c.brandCode ?? c.brand?.code ?? brandHint ?? 'ap') as BrandCode;
@@ -315,6 +320,7 @@ function adaptChannel(c: ChannelDTO, brandHint?: BrandCode): Channel {
     hmsEnabled: c.hmsEnabled ?? undefined,
     adjustAppToken: c.adjustAppToken || undefined,
     adjustEvents: c.adjustEvents && Object.keys(c.adjustEvents).length ? c.adjustEvents : undefined,
+    adjustBpRawEvents: c.adjustBpRawEvents ?? false,
   };
 }
 
@@ -511,6 +517,22 @@ export const brandApi = {
       () => mockDb.setBrandDomains(code, domains),
     );
   },
+  /**
+   * 保存品牌级 Adjust 短链 host（仅 bp 品牌在 UI 上展示，PUT /api/brands/:code/adjust，
+   * body `{ adjustDeepLinkHost }`，只存 host，不含 `https://` 或路径）。
+   */
+  updateAdjust(code: BrandCode, adjustDeepLinkHost: string): Promise<Brand> {
+    return withFallback(
+      async () =>
+        adaptBrand(
+          await request<BrandViewDTO>(`/brands/${code}/adjust`, {
+            method: 'PUT',
+            body: JSON.stringify({ adjustDeepLinkHost }),
+          }),
+        ),
+      () => mockDb.setBrandAdjustHost(code, adjustDeepLinkHost),
+    );
+  },
 };
 
 // =========================================================================
@@ -555,6 +577,7 @@ export const channelApi = {
             hmsEnabled: input.hmsEnabled ?? null,
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
+            adjustBpRawEvents: input.adjustBpRawEvents ?? false,
           }),
         });
         const ch = adaptChannel(created, input.brandCode);
@@ -585,6 +608,8 @@ export const channelApi = {
             // adjustAppToken/adjustEvents：08-adjust.md §6 跨层契约，随保存接口一起提交。
             adjustAppToken: input.adjustAppToken?.trim() ?? '',
             adjustEvents: input.adjustEvents ?? {},
+            // BP 原始事件开关：表单总有确定值，保存即固化（仅 bp 品牌允许 true，后端校验）。
+            adjustBpRawEvents: input.adjustBpRawEvents ?? false,
           }),
         });
         const ch = adaptChannel(updated, input.brandCode);
@@ -1608,5 +1633,6 @@ function inputToChannel(input: ChannelInput): Channel {
     hmsEnabled: input.hmsEnabled,
     adjustAppToken: input.adjustAppToken?.trim() || undefined,
     adjustEvents: input.adjustEvents && Object.keys(input.adjustEvents).length ? input.adjustEvents : undefined,
+    adjustBpRawEvents: input.adjustBpRawEvents ?? false,
   };
 }

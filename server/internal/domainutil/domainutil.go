@@ -118,7 +118,7 @@ func normalizeOne(raw string) (Normalized, error) {
 	if host == "" {
 		return Normalized{}, fmt.Errorf("缺少域名 host")
 	}
-	if !isPlausibleHost(host) {
+	if !IsPlausibleHost(host) {
 		return Normalized{}, fmt.Errorf("域名 %q 非法或不可解析格式", host)
 	}
 	// 规范化：host 小写、去掉末尾斜杠、丢弃 query/fragment（域名清单只保留 scheme+host[:port]）。
@@ -131,8 +131,9 @@ func normalizeOne(raw string) (Normalized, error) {
 	return Normalized{URL: rebuilt, Host: normHost}, nil
 }
 
-// isPlausibleHost 判断是否为合法 IP 或形如 a.b.c 的域名（不真正发 DNS）。
-func isPlausibleHost(host string) bool {
+// IsPlausibleHost 判断是否为合法 IP 或形如 a.b.c 的域名（不真正发 DNS）。
+// 导出供 service 层复用（品牌域名与 Adjust 短链 host 用同一套规则）。
+func IsPlausibleHost(host string) bool {
 	if ip := net.ParseIP(host); ip != nil {
 		return true
 	}

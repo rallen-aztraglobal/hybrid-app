@@ -327,3 +327,82 @@ ERROR: R8: Missing class com.bun.miitmdid.core.MdidSdkHelper
 - **华为真机**装 `_hw` 包，`adb logcat -s HybridAdjust Adjust AppsFlyer`：Adjust 请求里 `oaid` 字段非空；AF 的 deviceData 里能看到 `oaid`。Adjust Testing Console 见 install/session 与事件。
 - **非华为机回归**：装任一存量包（非 `_hw`），确认 Adjust / AF 事件照常——OAID 读取失败必须是静默跳过，不能影响 SDK 初始化。
 - **构建回归**：`_hw` 与非 `_hw` 各挑一个 flavor 跑 `assembleXxxRelease`（含 R8），确认 minify 阶段无 missing class 警告。
+
+---
+
+## 11. BP 原始事件模式（ADR-0018）
+
+> 补于 2026-09-11。BP 团队自家马甲壳有一套不同的 Adjust 埋点（H5 通过自定义 scheme 触发、原生统一上报，事件集 14 个）。BP 小渠道包按渠道可选走哪一套：**关闭 = 现状一字不差；开启 = 走本节这套**。AppsFlyer 不受影响。
+
+### 11.1 开关与数据流
+
+| 层 | 字段 / 产物 | 说明 |
+| --- | --- | --- |
+| Console 渠道编辑 · Adjust 区块 | 「BP 原始事件」Switch | 仅 bp 品牌可见；开启需同时填 App Token + 上传 14 事件的 CSV |
+| Console 品牌域名卡片 | 「Adjust 短链 host」 | 品牌级，只存 host（如 `link.bingoplus.com`），不含 scheme/路径 |
+| server | `channel.adjust_bp_raw_events`（bool，默认 0）· `brand.adjust_deeplink_host` | 非 bp 品牌传 true → 400 |
+| `GET /api/build/manifest` | 顶层 `adjustDeepLinkHost` · channel `adjustBpRawEvents` | 老 CLI 忽略即可 |
+| CLI → `app/adjust-tokens.json` | 条目多两键 `bpRawEvents: true` / `deepLinkHost` | 只对 bpRaw 且已绑定 token 的渠道写；非 bpRaw 渠道两键都不出现 |
+| Gradle（旁路块） | `BuildConfig.ADJUST_BP_RAW_EVENTS` / `ADJUST_DEEP_LINK_HOST` · `manifestPlaceholders.adjustDeepLinkHost` | defaultConfig 兜底 false / "" / 占位 host；`androidComponents.onVariants` 按 applicationId 覆盖占位符 |
+| 运行时 | `AdjustBootstrap.bpRawMode = enabled && ADJUST_BP_RAW_EVENTS` | 唯一分叉点；关闭时新增路径全部不可达 |
+
+切换模式必须**重传事件 CSV + 重新打包**（事件集不同、token 不同），因此开关是编译期的，不走运行时下发。
+
+### 11.2 事件归属（14 个）
+
+| 事件 | 谁发 | 触发点 |
+| --- | --- | --- |
+| `ad_app_opened` | 原生 | 冷启动 `initSdk` 之后立刻发，带缓存 `customerId`，未登录也发 |
+| `ad_deeplink_opened` | 原生 | 系统以品牌短链（host = `ADJUST_DEEP_LINK_HOST`）打开 App：`Adjust.processDeeplink` 后上报，**不加载短链**，仍走默认首页 |
+| `ad_registration` | H5 | `adjusth5event://register?customerId=…`：**先** `updateCustomerId`（空也置空）**再**上报，顺序不能对调 |
+| `ad_deposit` `ad_web_deposit` `ad_web_login` `ad_web_pageview` `ad_web_reg` | H5 | `adjusth5event://<action>?...`，三个入口汇到 `BpRawAdjustTracker.handleH5Url` |
+| `ad_game_open` | 不处理 | 曾计划原生监听 `/game` 路径，需求确认后去掉；事件仍建在 Adjust app 里 |
+| `Action_BUFD` `Action_BURD` `Action_Deposit` `Action_FDRD` `Action_Registration` | 不处理 | S2S 侧；adjust-sync 建事件时照单建好，App 不碰 |
+
+bpRawMode 下 `sendAFEvent` 的 6 个逻辑事件**全部不再分发到 Adjust**（原生不自己判断注册/登录/首存）；AppsFlyer 那条老分发不变。此外**本分支上报的每个事件都同名同参数再给 AppsFlyer 一份**（`AdjustBootstrap.trackRaw` 内 fan-out，有收入时带 `af_revenue`/`af_currency`），即 AF 侧同时有老 6 个 + 新 `ad_*` 事件。
+
+### 11.3 H5 契约（三个入口，一个处理函数）
+
+| 入口 | H5 写法 | 我们的拦截点 | 命中后 |
+| --- | --- | --- | --- |
+| 页面跳转 | `location.href = 'adjusth5event://deposit?amount=100&currency=PHP&orderId=x'` 或 `<a href>` | `WebViewClient.shouldOverrideUrlLoading`，**在 BpStrategy 之前** | `return true` |
+| JS 桥 | `BingoPlusShell.openExternal(url)`（H5 只调这一个方法） | 原样注入同名 JavascriptInterface `BingoPlusShellBridge`（仅 bpRawMode） | 非 adjust URL 按「外部打开」本意：http(s) 一律系统浏览器（站内链接也跳出），`intent://` 等交 strategy 拉起 App |
+| `window.open(url)` | 任意 | `WebChromeClient.onCreateWindow`（bpRawMode 下开 `setSupportMultipleWindows` + `javaScriptCanOpenWindowsAutomatically`），复用一个隐藏的 popup WebView 捕获 URL（`shouldOverrideUrlLoading` + `onPageStarted` 双保险） | 非 adjust URL 走 `strategy.shouldOverrideUrl` 同一套分流（站内→主 WebView 加载并带 `appSource`，站外→系统浏览器，`intent://`→拉起 App）。**取舍**：`target=_blank` 的 POST 表单会退化为 GET 加载目标地址 |
+
+H5 如何识别「在壳内」：bpRawMode 下**所有**站点加载 URL 追加 **`appSource=<applicationId>`**（`BrandHost.decorateLoadUrl`，首页、推送深链、strategy 的钱包页强刷、window.open 回主 WebView 都经它），H5 据此走 BingoPlusShell / adjusth5event 路径；不靠探测 `window.BingoPlusShell`。
+
+为什么必须排在 BpStrategy 之前：BpStrategy 对未知 scheme 会 `startActivity` 失败后 `return false`，WebView 会去加载 `adjusth5event://` → 主框架 `ERR_UNKNOWN_URL_SCHEME` → `onMainFrameError` → **误触发域名容灾**。
+
+`handleH5Url(uri)` 规则：
+- scheme 忽略大小写等于 `adjusth5event`；action = `uri.host` 小写；query 键忽略大小写、空白值视为无。
+- `updatecustomerid` → 只更新绑定，不上报。`register` → 先 `updateCustomerId`（空也置空）再上报 `ad_registration`。
+- 其余：`deposit→ad_deposit`；否则先按 action 原名在事件表找，再找 `ad_` + action（`web_login` 与 `ad_web_login` 都能命中）。事件表没有 → 打日志、仍返回 true。
+- 命中后统一：query 全部 `addCallbackParameter`；`amount`+`currency` 设收入；`orderId` 设去重 ID；URL 无 `customerId` 用缓存补。缺字段照发事件。
+
+金额解析（比 BP 的 `toIntOrNull` 宽松）：`amount` 剔除千分位逗号、空格、货币符号/字母后 `toDouble`，非有限或负数不设收入；`currency` 转大写须 3 字母，缺失/不合法回落 `PHP`；原始 `amount` 字符串仍进 callback。
+
+### 11.4 customerId
+
+SharedPreferences `adjust_bp_raw` / `customer_id`。`init` 读盘 → 缓存非空则 `AdjustConfig.setExternalDeviceId(cached)` → `initSdk` → `ad_app_opened`（**init 必须早于 app_open**）。`updateCustomerId(id)` 只做 trim + 持久化（空 → 删键，对应退出登录）。
+
+**为什么不用 BP 参考实现的 `setExternalDeviceIdInDelay`**：已核 SDK 5.4.1 字节码，该方法只在 SDK 正处于 first session delay（`FirstSessionDelayManager` 状态 3）时才写入，否则静默 return；参考实现不开 delay，所以它的绑定从未生效过。SDK v5 的 externalDeviceId 只能在 `initSdk` 前设置，因此我们的语义是：**登录后的绑定在下次冷启动生效**；本次会话内每个事件仍带 `customerId` callback 参数，归因数据不缺。不要为此打开 `enableFirstSessionDelay`（未登录也要立刻报 `ad_app_opened`）。
+
+### 11.5 短链
+
+`brand.adjust_deeplink_host` → manifest → `adjust-tokens.json.deepLinkHost` → Gradle `androidComponents.onVariants` **只对 bpRaw 且 host 非空的变体**生成一份 overlay manifest（`https` + host 的 `autoVerify` intent-filter）并 `addGeneratedManifestFile` 合并；其余变体的 manifest 一字不变（不能用占位 host 兜底：`.invalid` 域会让每个包都触发系统 App Links 校验并出现在「默认打开」列表）。冷启动 `onCreate`（仅 `savedInstanceState == null` 且非从最近任务重开）与 `onNewIntent` 都调 `handleDeepLink`，避免旋转/重开重复上报。App Links 自动验证需在 Adjust 面板为每个小渠道 app 登记证书 SHA256，否则打开时退化为系统选择框。注意 `link.bingoplus.com` 是 BP 自己账号的链接域，我们的 app 若不在同一 Adjust 账号，需换成我们账号的链接域。
+
+### 11.6 运营步骤
+
+1. Console 渠道编辑 → Adjust 区块 → 打开「BP 原始事件」。
+2. 用 [`adjust-sync`](../../.claude/skills/adjust-sync/SKILL.md) 给该渠道建/补齐 14 个事件（脚本按开关自动选事件集），或在 Adjust 面板手工建后导出 CSV 上传。
+3. 品牌域名卡片填「Adjust 短链 host」（首次一次即可）。
+4. 打包中心重新打包该渠道。
+
+### 11.7 验收
+
+- 沙盒包（`-PtestEvents=true`）冷启动：Testing Console 见 `ad_app_opened`，已登录过的设备带 `customerId`。
+- 用 Chrome DevTools 在页面执行 `location.href='adjusth5event://deposit?amount=1,000.50&currency=php&orderId=t1'`：Adjust 见 `ad_deposit`，revenue 1000.5 PHP，重复同一 orderId 被去重；AF 见同名事件带 af_revenue。`BingoPlusShell.openExternal(...)` 与 `window.open(...)` 同样各验一次。
+- 注册一个新账号（H5 发 `adjusth5event://register?customerId=…`）：Adjust 见 `ad_registration` 且 externalDeviceId 已绑定；AppsFlyer 侧同时见 `ad_registration` 与老的 `af_complete_registration`。
+- 首页 URL 抓包确认带 `appSource=<applicationId>`；`window.BingoPlusShell.openExternal` 存在。
+- `adb shell am start -a android.intent.action.VIEW -d "https://<deepLinkHost>/xxx"`：App 打开默认首页且见 `ad_deeplink_opened`。
+- **回归**：同一渠道关掉开关重打包，`adb logcat -s HybridAdjust HybridAdjustBpRaw` 无 bpRaw 日志，6 个旧事件照常。

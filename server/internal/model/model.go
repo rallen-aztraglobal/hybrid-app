@@ -57,11 +57,14 @@ type Brand struct {
 	HMSEnabled    bool   `gorm:"column:hms_enabled;not null;default:false" json:"hmsEnabled"`
 	// SupportsChannels 是否走渠道 APK 产线。默认 true：老库 AutoMigrate 加列后存量品牌自动为 true，
 	// 与升级前行为一致；只做上架包的品牌由 seed 置 false。
-	SupportsChannels bool      `gorm:"column:supports_channels;not null;default:true" json:"supportsChannels"`
-	AccentColor      string    `gorm:"column:accent_color;type:varchar(16)" json:"accentColor"`
-	Sort             int       `gorm:"column:sort;not null;default:0" json:"sort"`
-	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
-	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+	SupportsChannels bool   `gorm:"column:supports_channels;not null;default:true" json:"supportsChannels"`
+	AccentColor      string `gorm:"column:accent_color;type:varchar(16)" json:"accentColor"`
+	Sort             int    `gorm:"column:sort;not null;default:0" json:"sort"`
+	// AdjustDeepLinkHost 该品牌 Adjust 品牌短链的 host（如 link.bingoplus.com），只存 host，
+	// 不含 scheme/路径/端口。空串 = 未配置。NOT NULL DEFAULT ''，AutoMigrate 补列时存量品牌自然为空。
+	AdjustDeepLinkHost string    `gorm:"column:adjust_deeplink_host;type:varchar(128);not null;default:''" json:"adjustDeepLinkHost"`
+	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	UpdatedAt          time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 
 	Domains  []BrandDomain `gorm:"foreignKey:BrandID;constraint:OnDelete:CASCADE" json:"domains,omitempty"`
 	Channels []Channel     `gorm:"foreignKey:BrandID" json:"-"`
@@ -134,6 +137,11 @@ type Channel struct {
 	// AdjustAppToken 用指针：列允许 NULL，指针可原生对应 NULL/无值，避免历史行 NULL 的扫描问题。
 	AdjustAppToken *string      `gorm:"column:adjust_app_token;type:varchar(64)" json:"adjustAppToken,omitempty"`
 	AdjustEvents   AdjustEvents `gorm:"column:adjust_events;type:text" json:"adjustEvents,omitempty"`
+	// AdjustBpRawEvents：BP 原始事件开关（本渠道打包时走新的 Adjust 事件逻辑，ADR-0013 延伸）。
+	// 编译期 feature gate，沿 manifest → CLI → adjust-tokens.json → BuildConfig 与 adjustAppToken
+	// 同一条链路下发。只有所属品牌为 bp 才允许 true（见 service.CreateChannel/UpdateChannel 校验），
+	// 非 bp 恒为 false。JSON 不带 omitempty：false 也要显式带出，前端才能区分「未开」与「字段缺失」。
+	AdjustBpRawEvents bool `gorm:"column:adjust_bp_raw_events;not null;default:false" json:"adjustBpRawEvents"`
 
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`

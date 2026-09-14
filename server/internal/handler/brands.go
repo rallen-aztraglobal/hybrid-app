@@ -77,3 +77,33 @@ func (h *Handler) SetBrandDomains(c echo.Context) error {
 	}
 	return httpx.OK(c, res)
 }
+
+type setBrandAdjustReq struct {
+	AdjustDeepLinkHost string `json:"adjustDeepLinkHost"`
+}
+
+// SetBrandAdjust godoc
+// @Summary  更新品牌 Adjust 品牌短链 host（只存 host，不含 scheme/路径/端口）
+// @Tags     brands
+// @Accept   json
+// @Produce  json
+// @Param    code  path      string             true  "品牌 code"
+// @Param    body  body      setBrandAdjustReq  true  "Adjust 短链 host"
+// @Success  200   {object}  httpx.Envelope
+// @Security BearerAuth
+// @Router   /api/brands/{code}/adjust [put]
+func (h *Handler) SetBrandAdjust(c echo.Context) error {
+	code := c.Param("code")
+	if err := h.assertBrandCodeInScope(c, code); err != nil {
+		return err
+	}
+	var req setBrandAdjustReq
+	if err := c.Bind(&req); err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
+	}
+	view, err := h.svc.SetBrandAdjustHost(c.Request().Context(), code, req.AdjustDeepLinkHost)
+	if err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, view)
+}

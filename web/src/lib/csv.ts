@@ -31,6 +31,7 @@ export function parseChannelsCsv(text: string, brand: BrandCode): Channel[] {
       // mock：现网默认全部启用、继承品牌域名；少量在 data.ts 里被标记停用以演示筛选
       status: 'enabled',
       useBrandDomains: true,
+      adjustBpRawEvents: false,
     });
   }
   return out;
