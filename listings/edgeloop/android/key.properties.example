@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties on your local machine or CI runner.
+# Never commit the real key.properties file or keystore file.
+storePassword=REPLACE_WITH_STORE_PASSWORD
+keyPassword=REPLACE_WITH_KEY_PASSWORD
+keyAlias=REPLACE_WITH_KEY_ALIAS
+storeFile=REPLACE_WITH_LOCAL_KEYSTORE_FILENAME.jks
