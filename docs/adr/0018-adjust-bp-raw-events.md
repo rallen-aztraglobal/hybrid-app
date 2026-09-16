@@ -31,8 +31,9 @@
        `initSdk` 前用缓存值 `AdjustConfig.setExternalDeviceId` 设置**——已核 SDK 5.4.1 字节码，参考实现
        用的 `setExternalDeviceIdInDelay` 只在 first session delay 期间生效，否则静默丢弃，我们不开 delay。
   4. **JS 桥原样注入 `BingoPlusShell`**，只实现 H5 会调的唯一方法 `openExternal(url)`。H5 识别
-     「在壳内」靠站点加载 URL 上追加的 **`appSource=<applicationId>`**（bpRawMode 才加），不靠探测对象，
-     因此不存在「H5 调到不存在方法」的风险。
+     「在壳内」靠站点加载 URL 上追加的 **`appSource=mktApp`**（bpRawMode 才加），不靠探测对象，
+     因此不存在「H5 调到不存在方法」的风险。值固定为 `mktApp` 而非包名：H5 有 appSource 白名单
+     （lite/slim/search 三个自家马甲包名 + `mktapp`），白名单外一个事件都不发（08-adjust.md §11.3）。
   5. **金额解析比 BP 宽松**：`amount` 剔除千分位、货币符号后 `toDouble`（BP 用 `toInt`，`100.5` 会丢收入）；
      `currency` 缺失或不合法回落 `PHP`；解析失败仍照发事件，只是不设收入。
   6. **短链 host 品牌级配置**（`brand.adjust_deeplink_host`，如 `link.bingoplus.com`），CLI 只对

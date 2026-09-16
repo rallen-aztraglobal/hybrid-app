@@ -27,6 +27,9 @@ object BpRawAdjustTracker {
     private const val PARAM_CUSTOMER_ID = "customerId"
     private const val PARAM_APP_SOURCE = "appSource"
 
+    /** appSource 的固定值，见 [appendAppSource] 的说明；改动前先核对 H5 白名单。 */
+    const val BP_RAW_APP_SOURCE = "mktApp"
+
     /** deposit 单独特判固定映射到 ad_deposit；其余 action 走「原名 / ad_ 前缀名」两级查表。 */
     private const val DEPOSIT_ACTION = "deposit"
     private const val DEPOSIT_EVENT_NAME = "ad_deposit"
@@ -94,10 +97,15 @@ object BpRawAdjustTracker {
     }
 
     /**
-     * 给要加载的站点 URL 追加 `appSource=<applicationId>`（已有则不重复）。H5 据此识别「在壳内」，
+     * 给要加载的站点 URL 追加 `appSource=mktApp`（已有则不重复）。H5 据此识别「在壳内」，
      * 改走 BingoPlusShell.openExternal / adjusth5event 上报路径。解析失败原样返回。
+     *
+     * 值为什么是 mktApp 而不是包名：H5（sensor chunk）有一张 appSource 白名单
+     * `{com.bingoplus.lite, com.bingoplus.slim, com.bingoplus.search, mktapp}`（比较前转小写），
+     * 只有命中才会生成并触发 `adjustH5event://` 链接；`mktapp` 是 BP 给营销马甲包留的通配值。
+     * 传包名不在白名单里，H5 一个事件都不会发（2026-09-16 QA 复现的根因）。
      */
-    fun appendAppSource(url: String, appSource: String = BuildConfig.APPLICATION_ID): String {
+    fun appendAppSource(url: String, appSource: String = BP_RAW_APP_SOURCE): String {
         val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return url
         val has = runCatching { uri.queryParameterNames.any { it.equals(PARAM_APP_SOURCE, ignoreCase = true) } }
             .getOrDefault(false)

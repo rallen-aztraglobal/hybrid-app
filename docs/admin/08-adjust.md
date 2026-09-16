@@ -369,7 +369,19 @@ bpRawMode 下 `sendAFEvent` 的 6 个逻辑事件**全部不再分发到 Adjust*
 | JS 桥 | `BingoPlusShell.openExternal(url)`（H5 只调这一个方法） | 原样注入同名 JavascriptInterface `BingoPlusShellBridge`（仅 bpRawMode） | 非 adjust URL 按「外部打开」本意：http(s) 一律系统浏览器（站内链接也跳出），`intent://` 等交 strategy 拉起 App |
 | `window.open(url)` | 任意 | `WebChromeClient.onCreateWindow`（bpRawMode 下开 `setSupportMultipleWindows` + `javaScriptCanOpenWindowsAutomatically`），复用一个隐藏的 popup WebView 捕获 URL（`shouldOverrideUrlLoading` + `onPageStarted` 双保险） | 非 adjust URL 走 `strategy.shouldOverrideUrl` 同一套分流（站内→主 WebView 加载并带 `appSource`，站外→系统浏览器，`intent://`→拉起 App）。**取舍**：`target=_blank` 的 POST 表单会退化为 GET 加载目标地址 |
 
-H5 如何识别「在壳内」：bpRawMode 下**所有**站点加载 URL 追加 **`appSource=<applicationId>`**（`BrandHost.decorateLoadUrl`，首页、推送深链、strategy 的钱包页强刷、window.open 回主 WebView 都经它），H5 据此走 BingoPlusShell / adjusth5event 路径；不靠探测 `window.BingoPlusShell`。
+H5 如何识别「在壳内」：bpRawMode 下**所有**站点加载 URL 追加 **`appSource=mktApp`**（`BrandHost.decorateLoadUrl`，首页、推送深链、strategy 的钱包页强刷、window.open 回主 WebView 都经它），H5 据此走 BingoPlusShell / adjusth5event 路径；不靠探测 `window.BingoPlusShell`。
+
+**值必须是 `mktApp`，不能是包名**（2026-09-16 QA 复现：只有 `ad_app_opened`、其余事件全无）。H5 `sensor` chunk 里的判定：
+
+```js
+Cm = new Set(['com.bingoplus.lite','com.bingoplus.slim','com.bingoplus.search','mktapp'])  // appSource 转小写后比较
+Em(e,t,n) = Tm() ? (e==='ad_web_pageview' ? 'adjustH5event://updateCustomerId?customerId=…'
+                   : e==='ad_web_reg'      ? 'adjustH5event://register?customerId=…'
+                   : e==='ad_web_deposit'  ? 'adjustH5event://deposit?orderId=…&amount=…&currency=…' : null) : null
+Dm(...) → <a href=r>.click()   // 页面跳转入口
+```
+
+三点结论：白名单外的 appSource 一个事件都不发；H5 实际只发 `updateCustomerId` / `register` / `deposit` 三种 action（`ad_web_login`、`ad_web_pageview` 等由 H5 自己的 web SDK 报，不经壳）；触发方式是 `<a>.click()`，走 `shouldOverrideUrlLoading`。
 
 为什么必须排在 BpStrategy 之前：BpStrategy 对未知 scheme 会 `startActivity` 失败后 `return false`，WebView 会去加载 `adjusth5event://` → 主框架 `ERR_UNKNOWN_URL_SCHEME` → `onMainFrameError` → **误触发域名容灾**。
 

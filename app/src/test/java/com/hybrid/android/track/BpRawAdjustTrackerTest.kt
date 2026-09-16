@@ -186,6 +186,11 @@ class BpRawAdjustTrackerTest {
     // ---------------------------- appSource 追加 ----------------------------
 
     @Test
+    fun `appSource 默认值是 H5 白名单里的 mktApp 而非包名`() {
+        assertEquals("https://a.com/?palcode=1&appSource=mktApp", BpRawAdjustTracker.appendAppSource("https://a.com/?palcode=1"))
+    }
+
+    @Test
     fun `appSource 追加到已有 query 之后`() {
         assertEquals(
             "https://a.com/?palcode=1&appSource=com.x.y",
