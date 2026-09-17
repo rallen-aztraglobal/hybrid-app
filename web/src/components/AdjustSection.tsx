@@ -11,7 +11,7 @@
  *
  * BP 原始事件开关（仅 bp 品牌）：关闭 = 沿用现有逻辑（拦截站点接口响应后上报 6 个事件）；
  * 开启 = 走 BP 原始事件逻辑（H5 通过 `adjusth5event://` 自定义 scheme 触发、原生统一上报，
- * 事件集为 14 个）。仅切换开关本身不阻断保存，但会给出提示（App Token 未填 / 事件表缺关键项）。
+ * App 只发 4 个事件）。仅切换开关本身不阻断保存，但会给出提示（App Token 未填 / 事件表缺关键项）。
  */
 import { useRef, useState } from 'react';
 import type { BrandCode } from '@/lib/types';
@@ -92,9 +92,9 @@ export function AdjustSection({
             <div className="text-[13px] font-semibold">BP 原始事件</div>
             <div className="text-[11.5px] text-muted mt-0.5 leading-[1.6]">
               关闭 = 沿用现有逻辑，拦截站点接口响应后上报 6 个事件；开启 = 走 BP 原始事件逻辑，H5 通过{' '}
-              <span className="mono">adjusth5event://</span> 自定义 scheme 触发、原生统一上报，事件集为 14 个（
-              ad_app_opened / ad_deeplink_opened / ad_game_open / ad_registration / ad_deposit / ad_web_deposit /
-              ad_web_login / ad_web_pageview / ad_web_reg 等），需重新上传对应的事件 CSV 并重新打包才生效。
+              <span className="mono">adjusth5event://</span> 自定义 scheme 触发、原生统一上报。App 会发 4 个事件：
+              ad_app_opened / ad_deeplink_opened / ad_registration / ad_deposit（事件 CSV 至少要含这几个；
+              Action_* 与 ad_web_* 由 S2S / H5 自行上报，表里有无不影响），需重新上传事件 CSV 并重新打包才生效。
             </div>
             {bpRawEvents && !appToken.trim() && (
               <div className="mt-2 text-[12px] text-[#92681a] bg-[#fef3c7] rounded-lg px-3 py-2">
