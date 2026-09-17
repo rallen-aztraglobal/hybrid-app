@@ -5,6 +5,7 @@ import android.util.Log
 import com.adjust.sdk.Adjust
 import com.adjust.sdk.AdjustConfig
 import com.adjust.sdk.AdjustEvent
+import com.adjust.sdk.LogLevel
 import com.adjust.sdk.oaid.AdjustOaid
 import com.appsflyer.AppsFlyerLib
 import com.appsflyer.attribution.AppsFlyerRequestListener
@@ -89,6 +90,9 @@ object AdjustBootstrap {
             AdjustConfig.ENVIRONMENT_PRODUCTION
         }
         val config = AdjustConfig(context.applicationContext, BuildConfig.ADJUST_APP_TOKEN, environment)
+        // 测试包（SANDBOX）把 SDK 日志开到 VERBOSE，logcat -s Adjust 能看到每个请求与服务端回包，
+        // 便于排查「事件发了但面板没有」；生产包保持 SDK 默认（几乎静默）。
+        if (BuildConfig.ENABLE_TEST_EVENTS) config.setLogLevel(LogLevel.VERBOSE)
         if (bpRawMode) {
             BpRawAdjustTracker.externalDeviceId?.takeIf { it.isNotBlank() }?.let {
                 config.setExternalDeviceId(it)
