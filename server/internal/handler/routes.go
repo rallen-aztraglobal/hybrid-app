@@ -110,6 +110,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.GET("/push/listing-campaigns", h.ListListingCampaigns, need(perm.PagePush))
 	api.POST("/push/listing-campaigns", h.CreateListingCampaign, need(perm.PushCreate))
 	api.POST("/push/listing-campaigns/:id/send", h.SendListingCampaign, need(perm.PushSend))
+	api.POST("/push/listing-campaigns/:id/schedule", h.ScheduleListingCampaign, need(perm.PushSend))
 
 	// 小渠道 CRUD。
 	// 渠道列表放宽为 any-of：打包中心选渠道、推送页受众、设置页运行时预览都要读它,
@@ -156,6 +157,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.PUT("/push/campaigns/:id", h.UpdatePushCampaign, need(perm.PushCreate))
 	api.POST("/push/campaigns/:id/send", h.SendPushCampaign, need(perm.PushSend))
 	api.POST("/push/campaigns/:id/schedule", h.SchedulePushCampaign, need(perm.PushSend))
+	// 周期任务的暂停/恢复/取消，对 channel 与 listing 两种 kind 都生效（service 层按 kind 分派/校验）。
+	api.POST("/push/campaigns/:id/pause", h.PausePushCampaign, need(perm.PushSend))
+	api.POST("/push/campaigns/:id/resume", h.ResumePushCampaign, need(perm.PushSend))
+	api.POST("/push/campaigns/:id/cancel", h.CancelPushCampaign, need(perm.PushSend))
 	api.POST("/push/upload-image", h.UploadPushImage, need(perm.PushCreate))
 	api.GET("/push/audience", h.GetPushAudience, need(perm.PagePush))
 	// google-services.json 上传（push:config；GET 公开已在上方注册）。

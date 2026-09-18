@@ -317,7 +317,7 @@ func TestCampaignCRUD(t *testing.T) {
 
 	// 定时发送。
 	future := time.Now().Add(2 * time.Hour)
-	scheduled, err := svc.ScheduleCampaign(ctx, camp.ID, future)
+	scheduled, err := svc.ScheduleCampaign(ctx, auth.FullScope(), camp.ID, ScheduleCampaignInput{ScheduledAt: future})
 	if err != nil {
 		t.Fatalf("定时失败: %v", err)
 	}

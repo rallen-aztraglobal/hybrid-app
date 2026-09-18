@@ -491,14 +491,33 @@ export interface PushStatus {
   brands: Record<BrandCode, boolean>;
 }
 
-/** 推送活动状态机。 */
-export type PushCampaignStatus = 'draft' | 'scheduled' | 'sending' | 'done' | 'failed';
+/** 推送活动状态机（paused / cancelled 仅定时任务会出现）。 */
+export type PushCampaignStatus = 'draft' | 'scheduled' | 'paused' | 'sending' | 'done' | 'failed' | 'cancelled';
+
+/**
+ * 定时/周期字段（渠道推送与上架包推送共用）。
+ * 周期任务（repeatEveryDays>0）本身从不直接发送：scheduledAt 表示「下次运行时间」，
+ * 每次触发由服务端克隆一条子活动（parentId 指回父任务）去发，子活动各自有状态与统计。
+ */
+export interface PushRepeatFields {
+  /** 0/缺省=单次，1=每天，N=每 N 天。 */
+  repeatEveryDays?: number;
+  /** 截止时刻（含），缺省=不限。 */
+  repeatEndAt?: string;
+  /** 最多执行次数，0/缺省=不限。 */
+  repeatMaxRuns?: number;
+  /** 已触发次数。 */
+  runCount?: number;
+  lastRunAt?: string;
+  /** 子活动：所属周期任务 id。 */
+  parentId?: string;
+}
 
 /**
  * 推送活动（对应后端 push_campaign 表）。
  * id 类型与 Channel 等保持一致（后端数字主键，前端字符串化）。
  */
-export interface PushCampaign {
+export interface PushCampaign extends PushRepeatFields {
   id: string;
   name: string;
   title: string;
@@ -707,7 +726,7 @@ export interface ListingCampaignInput {
  * 注意：后端**没有编辑草稿的端点**（只有创建/列表/发送三个），Console 前端据此把
  * 创建后的活动视为不可再改——如需调整内容只能放弃当前草稿、重新创建一条。
  */
-export interface ListingCampaign {
+export interface ListingCampaign extends PushRepeatFields {
   id: string;
   kind: 'listing';
   name: string;
@@ -718,6 +737,7 @@ export interface ListingCampaign {
   extraData?: Record<string, string>;
   listingIds: string[];
   status: PushCampaignStatus;
+  scheduledAt?: string;
   sentAt?: string;
   totalDevices: number;
   successCount: number;

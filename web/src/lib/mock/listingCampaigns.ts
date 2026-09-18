@@ -1,5 +1,6 @@
 import type { ListingCampaign, ListingCampaignInput, ListingCampaignSendResult } from '../types';
 import { mockListingDb } from './listings';
+import { applyScheduleAction, type PushScheduleAction, type PushSchedulePayload } from '../pushSchedule';
 
 /**
  * 进程内 mock 上架包推送活动（09-listing.md §6）。与 mock/listings.ts、mock/db.ts
@@ -73,6 +74,29 @@ export const mockListingCampaignDb = {
     };
     campaigns = [c, ...campaigns];
     return { ...c };
+  },
+
+  schedule(id: string, p: PushSchedulePayload): ListingCampaign {
+    const idx = campaigns.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error('活动不存在');
+    if (campaigns[idx].status !== 'draft') throw new Error('仅 draft 可设置定时');
+    campaigns[idx] = {
+      ...campaigns[idx],
+      status: 'scheduled',
+      scheduledAt: p.scheduledAt,
+      repeatEveryDays: p.repeatEveryDays,
+      repeatEndAt: p.repeatEveryDays ? p.repeatEndAt : undefined,
+      repeatMaxRuns: p.repeatEveryDays ? p.repeatMaxRuns : 0,
+      runCount: 0,
+    };
+    return { ...campaigns[idx] };
+  },
+
+  scheduleAction(id: string, action: PushScheduleAction): ListingCampaign {
+    const idx = campaigns.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error('活动不存在');
+    campaigns[idx] = applyScheduleAction(campaigns[idx], action);
+    return { ...campaigns[idx] };
   },
 
   send(id: string, dryRun: boolean): ListingCampaignSendResult {

@@ -3,6 +3,7 @@ package handler
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -187,18 +188,46 @@ func (h *Handler) SendPushCampaign(c echo.Context) error {
 	return httpx.OK(c, v)
 }
 
-// scheduleCampaignReq 定时发送请求体。
+// scheduleCampaignReq 定时发送请求体。RepeatEveryDays 0=单次；1=每天；N=每 N 天（1..365）。
+// RepeatEndAt 为空串或不传表示不限；单次任务传了 repeatEndAt/repeatMaxRuns 会被服务端忽略清零。
 type scheduleCampaignReq struct {
-	ScheduledAt string `json:"scheduledAt"` // ISO8601
+	ScheduledAt     string `json:"scheduledAt"` // ISO8601
+	RepeatEveryDays int    `json:"repeatEveryDays"`
+	RepeatEndAt     string `json:"repeatEndAt"` // ISO8601，可选/空串=不限
+	RepeatMaxRuns   int    `json:"repeatMaxRuns"`
+}
+
+// parseScheduleReq 把请求体解析为 service.ScheduleCampaignInput（channel/listing 两个
+// schedule 端点共用），只做格式解析，取值范围等业务校验交给 service 层。
+func parseScheduleReq(req scheduleCampaignReq) (service.ScheduleCampaignInput, error) {
+	var in service.ScheduleCampaignInput
+	if req.ScheduledAt == "" {
+		return in, fmt.Errorf("scheduledAt (ISO8601) 不得为空")
+	}
+	t, err := time.Parse(time.RFC3339, req.ScheduledAt)
+	if err != nil {
+		return in, fmt.Errorf("scheduledAt 格式应为 ISO8601，例如 2026-07-01T10:00:00Z")
+	}
+	in.ScheduledAt = t
+	in.RepeatEveryDays = req.RepeatEveryDays
+	in.RepeatMaxRuns = req.RepeatMaxRuns
+	if strings.TrimSpace(req.RepeatEndAt) != "" {
+		endAt, err := time.Parse(time.RFC3339, req.RepeatEndAt)
+		if err != nil {
+			return in, fmt.Errorf("repeatEndAt 格式应为 ISO8601，例如 2026-07-01T10:00:00Z")
+		}
+		in.RepeatEndAt = &endAt
+	}
+	return in, nil
 }
 
 // SchedulePushCampaign godoc
-// @Summary  设置推送活动定时发送（operator）
+// @Summary  设置渠道推送活动定时发送（operator），支持单次/周期（每天/每 N 天）
 // @Tags     push
 // @Accept   json
 // @Produce  json
 // @Param    id    path  int                  true  "活动 ID"
-// @Param    body  body  scheduleCampaignReq  true  "定时时间 ISO8601"
+// @Param    body  body  scheduleCampaignReq  true  "定时时间 + 周期参数"
 // @Success  200   {object}  httpx.Envelope
 // @Security BearerAuth
 // @Router   /api/push/campaigns/{id}/schedule [post]
@@ -208,14 +237,90 @@ func (h *Handler) SchedulePushCampaign(c echo.Context) error {
 		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
 	}
 	var req scheduleCampaignReq
-	if err := c.Bind(&req); err != nil || req.ScheduledAt == "" {
-		return httpx.Fail(c, http.StatusBadRequest, "scheduledAt (ISO8601) 不得为空")
+	if err := c.Bind(&req); err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
 	}
-	t, err := time.Parse(time.RFC3339, req.ScheduledAt)
+	in, err := parseScheduleReq(req)
 	if err != nil {
-		return httpx.Fail(c, http.StatusBadRequest, "scheduledAt 格式应为 ISO8601，例如 2026-07-01T10:00:00Z")
+		return httpx.Fail(c, http.StatusBadRequest, err.Error())
 	}
-	v, err := h.svc.ScheduleCampaign(c.Request().Context(), id, t)
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	v, err := h.svc.ScheduleCampaign(c.Request().Context(), scope, id, in)
+	if err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, v)
+}
+
+// PausePushCampaign godoc
+// @Summary  暂停周期推送活动（operator），仅 scheduled 且为周期任务可暂停；对 channel/listing 两种 kind 都生效
+// @Tags     push
+// @Produce  json
+// @Param    id  path  int  true  "活动 ID"
+// @Success  200  {object}  httpx.Envelope
+// @Security BearerAuth
+// @Router   /api/push/campaigns/{id}/pause [post]
+func (h *Handler) PausePushCampaign(c echo.Context) error {
+	id, err := paramID(c)
+	if err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	v, err := h.svc.PauseCampaign(c.Request().Context(), scope, id)
+	if err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, v)
+}
+
+// ResumePushCampaign godoc
+// @Summary  恢复已暂停的周期推送活动（operator）；若原定时间已过去，按周期步进到下一个未来时间点
+// @Tags     push
+// @Produce  json
+// @Param    id  path  int  true  "活动 ID"
+// @Success  200  {object}  httpx.Envelope
+// @Security BearerAuth
+// @Router   /api/push/campaigns/{id}/resume [post]
+func (h *Handler) ResumePushCampaign(c echo.Context) error {
+	id, err := paramID(c)
+	if err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	v, err := h.svc.ResumeCampaign(c.Request().Context(), scope, id)
+	if err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, v)
+}
+
+// CancelPushCampaign godoc
+// @Summary  取消定时推送活动（operator），scheduled/paused 均可取消，单次与周期任务都适用
+// @Tags     push
+// @Produce  json
+// @Param    id  path  int  true  "活动 ID"
+// @Success  200  {object}  httpx.Envelope
+// @Security BearerAuth
+// @Router   /api/push/campaigns/{id}/cancel [post]
+func (h *Handler) CancelPushCampaign(c echo.Context) error {
+	id, err := paramID(c)
+	if err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	scope, err := h.callerScope(c)
+	if err != nil {
+		return fail(c, err)
+	}
+	v, err := h.svc.CancelCampaign(c.Request().Context(), scope, id)
 	if err != nil {
 		return fail(c, err)
 	}

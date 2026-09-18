@@ -10,9 +10,11 @@
  * 表单校验：lib/pushValidation.ts（仿 ChannelDrawer 的 useState+validation 模式）。
  * 图片上传：pushApi.uploadImage（复用 multipart 管线，推送封面单图，两个面板共用）。
  * Feature gate：GET /api/push/status → enabled=false 时顶部挂提示条，发送按钮置灰。
- * 历史列表：仿 BuildsPage 的 section-card 行布局。
+ * 历史列表：仿 BuildsPage 的 section-card 行布局；顶部「定时任务」区集中管理待触发的
+ *   单次定时 / 周期任务（暂停 · 恢复 · 取消），下方是实际发送记录（周期任务每次触发一条）。
+ * 定时规则：components/PushScheduleEditor（单次 / 每天 / 每 N 天 + 结束条件，自绘日期时间选择器）。
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   useChannels,
   useCreateListingCampaign,
@@ -20,8 +22,10 @@ import {
   useListings,
   usePushAudience,
   usePushCampaigns,
+  usePushScheduleAction,
   usePushStatus,
   useSavePushCampaign,
+  useScheduleListingCampaign,
   useSchedulePushCampaign,
   useSendListingCampaign,
   useSendPushCampaign,
@@ -47,7 +51,21 @@ import type {
 } from '@/lib/types';
 import { BrandTabs } from '@/components/BrandTabs';
 import { AppIcon, Button, Note, SectionHeading } from '@/components/ui';
-import { CalendarIcon, GridIcon, InfoIcon, LayersIcon, SendIcon, UploadIcon } from '@/components/icons';
+import { ClockIcon, GridIcon, InfoIcon, LayersIcon, SendIcon, UploadIcon } from '@/components/icons';
+import { PushScheduleEditor } from '@/components/PushScheduleEditor';
+import {
+  defaultScheduleDraft,
+  describeDraft,
+  isActiveSchedule,
+  isRecurring,
+  repeatLabel,
+  runProgressLabel,
+  toSchedulePayload,
+  validateSchedule,
+  type PushScheduleAction,
+  type PushScheduleDraft,
+} from '@/lib/pushSchedule';
+import { formatDateTimeCN, timeUntil } from '@/lib/dateTime';
 import { cn } from '@/lib/cn';
 import { timeAgo } from '@/lib/text';
 import { BRAND_META } from '@/lib/brands';
@@ -235,19 +253,164 @@ function AudienceBadge({ appIds }: { appIds: string[] }) {
 }
 
 // ── 推送活动状态徽标 ────────────────────────────────────────────────────────
-function StatusPill({ status }: { status: PushCampaign['status'] }) {
+function StatusPill({ status, recurring }: { status: PushCampaign['status']; recurring?: boolean }) {
   const map: Record<PushCampaign['status'], { cls: string; txt: string }> = {
     draft: { cls: 'text-[#475569] bg-[#e2e8f0]', txt: '草稿' },
-    scheduled: { cls: 'text-[#92681a] bg-[#fef3c7]', txt: '定时中' },
+    scheduled: { cls: 'text-[#92681a] bg-[#fef3c7]', txt: recurring ? '周期进行中' : '定时中' },
+    paused: { cls: 'text-[#6b21a8] bg-[#f3e8ff]', txt: '已暂停' },
     sending: { cls: 'text-[#1e40af] bg-[#dbeafe]', txt: '发送中' },
-    done: { cls: 'text-[#15803d] bg-[#dcfce7]', txt: '已完成' },
+    done: { cls: 'text-[#15803d] bg-[#dcfce7]', txt: recurring ? '周期已结束' : '已完成' },
     failed: { cls: 'text-[#b91c1c] bg-[#fee2e2]', txt: '失败' },
+    cancelled: { cls: 'text-[#64748b] bg-[#f1f5f9]', txt: '已取消' },
   };
-  const { cls, txt } = map[status];
+  const { cls, txt } = map[status] ?? map.draft;
   return (
     <span className={cn('text-[11px] font-semibold px-[9px] py-[3px] rounded-full whitespace-nowrap', cls)}>
       {txt}
     </span>
+  );
+}
+
+/** 历史行里的「周期来源 / 周期规则」小标签。 */
+function RepeatMeta({ campaign }: { campaign: PushCampaign | ListingCampaign }) {
+  if (campaign.parentId) {
+    return <span className="text-brand">↻ 来自周期任务 #{campaign.parentId}</span>;
+  }
+  if (isRecurring(campaign)) {
+    return (
+      <span>
+        ↻ {repeatLabel(campaign.repeatEveryDays ?? 0, campaign.scheduledAt ? new Date(campaign.scheduledAt) : null)} ·{' '}
+        {runProgressLabel(campaign)}
+      </span>
+    );
+  }
+  if (campaign.status === 'cancelled' && campaign.scheduledAt) {
+    return <span>原定 {formatDateTimeCN(new Date(campaign.scheduledAt))}</span>;
+  }
+  return null;
+}
+
+// ── 定时任务卡片（渠道 / 上架包共用）：下次时间、进度、暂停/恢复/取消 ────────────
+function ScheduledTaskCard({
+  campaign,
+  targetLabel,
+  accent,
+}: {
+  campaign: PushCampaign | ListingCampaign;
+  targetLabel: string;
+  accent: string;
+}) {
+  const canSend = useAuthStore((s) => s.hasPerm(PERM.PUSH_SEND));
+  const action = usePushScheduleAction();
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const recurring = isRecurring(campaign);
+  const paused = campaign.status === 'paused';
+  const next = campaign.scheduledAt ? new Date(campaign.scheduledAt) : null;
+
+  async function run(a: PushScheduleAction) {
+    setErr(null);
+    try {
+      await action.mutateAsync({ id: String(campaign.id), action: a });
+      setConfirmCancel(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '操作失败');
+    }
+  }
+
+  return (
+    <div className={cn('section-card', paused && 'bg-panel-2')}>
+      <div className="flex items-start gap-3 flex-wrap">
+        <div
+          className={cn('grid place-items-center w-8 h-8 rounded-lg text-white flex-none', paused && 'grayscale opacity-60')}
+          style={{ background: accent }}
+        >
+          <ClockIcon className="w-[17px] h-[17px]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-bold text-[14px] flex items-center gap-2 flex-wrap">
+            <span>{campaign.name}</span>
+            <StatusPill status={campaign.status} recurring={recurring} />
+            <span className="text-[11px] font-semibold px-2 py-[2px] rounded-md border border-line text-ink-2 whitespace-nowrap">
+              {repeatLabel(campaign.repeatEveryDays ?? 0, next)}
+            </span>
+          </div>
+          <div className="text-[12.5px] text-ink-2 mt-1 line-clamp-1">
+            {campaign.title} — {campaign.body}
+          </div>
+          <div className="mt-2 flex items-baseline gap-2 text-[12.5px] flex-wrap">
+            {paused ? (
+              <span className="text-muted">已暂停 · 恢复后从下一个周期点继续（期间错过的不补发）</span>
+            ) : next ? (
+              <>
+                <span className="text-muted">{recurring ? '下次发送' : '发送时间'}</span>
+                <strong className="text-ink tabular-nums">{formatDateTimeCN(next)}</strong>
+                <span className="text-[11.5px] text-brand">{timeUntil(next)}</span>
+              </>
+            ) : null}
+          </div>
+          <div className="text-[11.5px] text-muted mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+            {recurring && <span>{runProgressLabel(campaign)}</span>}
+            {campaign.lastRunAt && <span>上次 {timeAgo(campaign.lastRunAt)}</span>}
+            <span>{targetLabel}</span>
+            {campaign.createdBy && <span>by {campaign.createdBy}</span>}
+          </div>
+        </div>
+
+        {canSend && (
+          <div className="flex items-center gap-2 flex-none self-center">
+            {confirmCancel ? (
+              <>
+                <span className="text-[12px] text-ink-2">{recurring ? '停止后不可恢复，确认？' : '确认取消这次定时？'}</span>
+                <Button
+                  variant="ghost"
+                  className="!px-3 !py-1.5 text-[12px] !text-down"
+                  disabled={action.isPending}
+                  onClick={() => void run('cancel')}
+                >
+                  {recurring ? '确认停止' : '确认取消'}
+                </Button>
+                <Button variant="ghost" className="!px-3 !py-1.5 text-[12px]" onClick={() => setConfirmCancel(false)}>
+                  保留
+                </Button>
+              </>
+            ) : (
+              <>
+                {recurring && (
+                  <Button
+                    variant="ghost"
+                    className="!px-3 !py-1.5 text-[12px]"
+                    disabled={action.isPending}
+                    onClick={() => void run(paused ? 'resume' : 'pause')}
+                  >
+                    {paused ? '▶ 恢复' : '❚❚ 暂停'}
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  className="!px-3 !py-1.5 text-[12px]"
+                  disabled={action.isPending}
+                  onClick={() => setConfirmCancel(true)}
+                >
+                  {recurring ? '停止任务' : '取消定时'}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {err && <div className="mt-2 text-[12px] text-down">{err}</div>}
+    </div>
+  );
+}
+
+/** 历史面板的分区标题。 */
+function HistorySectionTitle({ children, count }: { children: ReactNode; count: number }) {
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <strong className="text-[13px] text-ink">{children}</strong>
+      <span className="text-[11.5px] text-muted bg-panel-2 border border-line rounded-full px-2 py-[1px]">{count}</span>
+    </div>
   );
 }
 
@@ -265,7 +428,7 @@ function CampaignRow({ campaign }: { campaign: PushCampaign }) {
         <div className="min-w-0 flex-1">
           <div className="font-bold text-[14px] flex items-center gap-2 flex-wrap">
             <span>{campaign.name}</span>
-            <StatusPill status={campaign.status} />
+            <StatusPill status={campaign.status} recurring={isRecurring(campaign)} />
           </div>
           <div className="text-[12.5px] text-ink-2 mt-1 line-clamp-1">
             {campaign.title} — {campaign.body}
@@ -273,9 +436,7 @@ function CampaignRow({ campaign }: { campaign: PushCampaign }) {
           <div className="text-[11.5px] text-muted mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
             <span>{campaign.targetAppIds.length} 个渠道包</span>
             {campaign.sentAt && <span>发送于 {timeAgo(campaign.sentAt)}</span>}
-            {campaign.scheduledAt && campaign.status === 'scheduled' && (
-              <span>定时 {new Date(campaign.scheduledAt).toLocaleString('zh-CN', { hour12: false })}</span>
-            )}
+            <RepeatMeta campaign={campaign} />
             {campaign.createdBy && <span>by {campaign.createdBy}</span>}
           </div>
         </div>
@@ -431,7 +592,9 @@ function EditPanel({
   const [extra, setExtra] = useState<Record<string, string>>({});
   const [pickedAppIds, setPickedAppIds] = useState<Set<string>>(new Set());
   const [sendMode, setSendMode] = useState<'instant' | 'scheduled'>('instant');
-  const [scheduledAt, setScheduledAt] = useState('');
+  const [schedule, setSchedule] = useState<PushScheduleDraft>(() => defaultScheduleDraft());
+  // 首次点「确认定时」后才亮出定时校验错误，避免一切过去就满屏红字
+  const [scheduleTouched, setScheduleTouched] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -468,7 +631,7 @@ function EditPanel({
   function resetForm() {
     setName(''); setTitle(''); setBody(''); setImageUrl(undefined);
     setDeeplinkPath(''); setExtra({}); setPickedAppIds(new Set());
-    setSendMode('instant'); setScheduledAt('');
+    setSendMode('instant'); setSchedule(defaultScheduleDraft()); setScheduleTouched(false);
     setDryRunResult(null);
   }
 
@@ -490,7 +653,13 @@ function EditPanel({
 
   /** 真实发送：保存草稿 → 即时发/定时，使用 result.campaign.status 反映结果。 */
   async function handleSend() {
-    if (!validate()) return;
+    const contentOk = validate();
+    // 定时规则先于保存草稿校验：规则不合法就别落一条孤儿草稿
+    if (sendMode === 'scheduled') {
+      setScheduleTouched(true);
+      if (validateSchedule(schedule)) return;
+    }
+    if (!contentOk) return;
     setSubmitErr(null);
     setSuccess(null);
     setDryRunResult(null);
@@ -501,9 +670,8 @@ function EditPanel({
         const st = result.campaign.status;
         setSuccess(st === 'done' ? '推送发送成功' : st === 'sending' ? '推送已触发，正在发送中' : '推送已提交');
       } else {
-        if (!scheduledAt) { setErrors((p) => ({ ...p, scheduledAt: '请选择定时时间' })); return; }
-        await scheduleMutation.mutateAsync({ id: saved.id, scheduledAt: new Date(scheduledAt).toISOString() });
-        setSuccess(`已定时：${new Date(scheduledAt).toLocaleString('zh-CN', { hour12: false })}`);
+        await scheduleMutation.mutateAsync({ id: saved.id, payload: toSchedulePayload(schedule) });
+        setSuccess(`${schedule.repeat === 'once' ? '已定时' : '周期任务已创建'}：${describeDraft(schedule)}。可在「发送历史 › 定时任务」暂停或取消。`);
       }
       resetForm();
     } catch (err) {
@@ -659,6 +827,7 @@ function EditPanel({
             {(['instant', 'scheduled'] as const).map((mode) => (
               <button
                 key={mode}
+                type="button"
                 onClick={() => setSendMode(mode)}
                 className={cn(
                   'flex-1 px-3 py-2 rounded-[10px] border text-[13px] font-medium transition',
@@ -667,32 +836,14 @@ function EditPanel({
                     : 'border-line text-muted hover:border-[#dfe6f0]',
                 )}
               >
-                {mode === 'instant' ? '即时发送' : '定时发送'}
+                {mode === 'instant' ? '即时发送' : '定时 / 周期'}
               </button>
             ))}
           </div>
 
           {sendMode === 'scheduled' && (
             <div className="mb-[14px]">
-              <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">
-                定时时间 <span className="text-down">*</span>
-              </label>
-              <div className="relative">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
-                <input
-                  type="datetime-local"
-                  className={cn('field-input pl-9', errors.scheduledAt && 'border-down')}
-                  value={scheduledAt}
-                  onChange={(e) => {
-                    setScheduledAt(e.target.value);
-                    setErrors((p) => ({ ...p, scheduledAt: '' }));
-                  }}
-                  min={new Date().toISOString().slice(0, 16)}
-                />
-              </div>
-              {errors.scheduledAt && (
-                <div className="mt-1 text-[12px] text-down">{errors.scheduledAt}</div>
-              )}
+              <PushScheduleEditor value={schedule} onChange={setSchedule} showErrors={scheduleTouched} />
             </div>
           )}
 
@@ -728,7 +879,9 @@ function EditPanel({
                   ? '处理中…'
                   : sendMode === 'instant'
                   ? `立即发送 (${pickedAppIds.size})`
-                  : '确认定时'}
+                  : schedule.repeat === 'once'
+                  ? '确认定时'
+                  : '创建周期任务'}
               </Button>
             )}
             {canCreate && (
@@ -775,8 +928,8 @@ function EditPanel({
   );
 }
 
-// ── 历史面板 ───────────────────────────────────────────────────────────────
-function HistoryPanel({ brand }: { brand: BrandCode }) {
+// ── 历史面板：上方「定时任务」（待触发，可暂停/恢复/取消），下方「发送记录」 ──────
+function HistoryPanel({ brand, accentColor }: { brand: BrandCode; accentColor: string }) {
   const { data: campaigns, isLoading } = usePushCampaigns(brand);
 
   if (isLoading) {
@@ -785,11 +938,28 @@ function HistoryPanel({ brand }: { brand: BrandCode }) {
   if (!campaigns?.length) {
     return <div className="text-center text-muted py-[60px]">暂无推送记录</div>;
   }
+  const tasks = campaigns.filter(isActiveSchedule);
+  const records = campaigns.filter((c) => !isActiveSchedule(c));
   return (
     <div className="flex flex-col gap-3">
-      {campaigns.map((c) => (
+      {tasks.length > 0 && (
+        <>
+          <HistorySectionTitle count={tasks.length}>定时任务</HistorySectionTitle>
+          {tasks.map((c) => (
+            <ScheduledTaskCard
+              key={c.id}
+              campaign={c}
+              targetLabel={`${c.targetAppIds.length} 个渠道包`}
+              accent={accentColor}
+            />
+          ))}
+          <HistorySectionTitle count={records.length}>发送记录</HistorySectionTitle>
+        </>
+      )}
+      {records.map((c) => (
         <CampaignRow key={c.id} campaign={c} />
       ))}
+      {records.length === 0 && <div className="text-center text-muted py-8 text-[12.5px]">暂无发送记录</div>}
     </div>
   );
 }
@@ -924,7 +1094,7 @@ function ListingCampaignRow({ campaign, listings }: { campaign: ListingCampaign;
         <div className="min-w-0 flex-1">
           <div className="font-bold text-[14px] flex items-center gap-2 flex-wrap">
             <span>{campaign.name}</span>
-            <StatusPill status={campaign.status} />
+            <StatusPill status={campaign.status} recurring={isRecurring(campaign)} />
           </div>
           <div className="text-[12.5px] text-ink-2 mt-1 line-clamp-1">
             {campaign.title} — {campaign.body}
@@ -932,6 +1102,7 @@ function ListingCampaignRow({ campaign, listings }: { campaign: ListingCampaign;
           <div className="text-[11.5px] text-muted mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
             <span>目标：{targetNames}</span>
             {campaign.sentAt && <span>发送于 {timeAgo(campaign.sentAt)}</span>}
+            <RepeatMeta campaign={campaign} />
             {campaign.createdBy && <span>by {campaign.createdBy}</span>}
           </div>
         </div>
@@ -974,9 +1145,14 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
   // 接口——一旦创建成功即锁定表单，避免「看起来能改但改了不会生效」的错觉。
   const [draftId, setDraftId] = useState<string | null>(null);
   const [dryRunResult, setDryRunResult] = useState<ListingCampaignSendResult | null>(null);
+  // 发送方式与定时规则不随草稿锁定：看完 B 面受众后仍可决定「立即发」还是「定时/周期」
+  const [sendMode, setSendMode] = useState<'instant' | 'scheduled'>('instant');
+  const [schedule, setSchedule] = useState<PushScheduleDraft>(() => defaultScheduleDraft());
+  const [scheduleTouched, setScheduleTouched] = useState(false);
 
   const createMutation = useCreateListingCampaign();
   const sendMutation = useSendListingCampaign();
+  const scheduleMutation = useScheduleListingCampaign();
 
   const selectedListingIds = useMemo(() => [...pickedListingIds], [pickedListingIds]);
   const locked = draftId !== null;
@@ -1014,6 +1190,9 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
     setErrors({});
     setSubmitErr(null);
     setSuccess(null);
+    setSendMode('instant');
+    setSchedule(defaultScheduleDraft());
+    setScheduleTouched(false);
   }
 
   /** 创建草稿（幂等）：已创建过就复用同一 id——后端没有编辑草稿的接口。 */
@@ -1041,18 +1220,29 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
   /** 正式发送：要求已看过一次预演结果（发送前必看 B 面受众数），避免误发给真实用户。 */
   async function handleSend() {
     if (!draftId || !dryRunResult) return;
+    if (sendMode === 'scheduled') {
+      setScheduleTouched(true);
+      if (validateSchedule(schedule)) return;
+    }
     setSubmitErr(null);
     setSuccess(null);
     try {
-      await sendMutation.mutateAsync({ id: draftId, dryRun: false });
-      setSuccess('推送已触发，正在发送中（仅投递最近判定为 B 面的设备）');
+      let msg: string;
+      if (sendMode === 'instant') {
+        await sendMutation.mutateAsync({ id: draftId, dryRun: false });
+        msg = '推送已触发，正在发送中（仅投递最近判定为 B 面的设备）';
+      } else {
+        await scheduleMutation.mutateAsync({ id: draftId, payload: toSchedulePayload(schedule) });
+        msg = `${schedule.repeat === 'once' ? '已定时' : '周期任务已创建'}：${describeDraft(schedule)}（每次到点按当时的 B 面设备投递）。`;
+      }
       resetForm();
+      setSuccess(msg);
     } catch (err) {
       setSubmitErr(err instanceof Error ? err.message : '发送失败');
     }
   }
 
-  const isPending = createMutation.isPending || sendMutation.isPending;
+  const isPending = createMutation.isPending || sendMutation.isPending || scheduleMutation.isPending;
   const canDryRun = canCreate && pickedListingIds.size > 0 && !isPending;
   const canFireSend = canSend && locked && dryRunResult != null && pushEnabled && !isPending;
 
@@ -1180,6 +1370,30 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
           <div className="section-card">
             <SectionHeading num="3">试算 & 发送</SectionHeading>
 
+            <div className="flex gap-2 mb-[14px]">
+              {(['instant', 'scheduled'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSendMode(m)}
+                  className={cn(
+                    'flex-1 px-3 py-2 rounded-[10px] border text-[13px] font-medium transition',
+                    sendMode === m
+                      ? 'border-brand bg-[rgba(99,102,241,.07)] text-ink'
+                      : 'border-line text-muted hover:border-[#dfe6f0]',
+                  )}
+                >
+                  {m === 'instant' ? '即时发送' : '定时 / 周期'}
+                </button>
+              ))}
+            </div>
+
+            {sendMode === 'scheduled' && (
+              <div className="mb-[14px]">
+                <PushScheduleEditor value={schedule} onChange={setSchedule} showErrors={scheduleTouched} />
+              </div>
+            )}
+
             {dryRunResult?.preview && (
               <div className="mb-3 rounded-[10px] border border-[rgba(99,102,241,.25)] bg-[rgba(99,102,241,.06)] px-3 py-2.5 text-[12.5px]">
                 <div className="font-semibold text-ink mb-1">
@@ -1194,7 +1408,9 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
                   ))}
                 </div>
                 <div className="mt-1.5 text-[11px] text-muted">
-                  确认无误后点击「正式发送」；数字有变化可点「重新预演」刷新。
+                  {sendMode === 'instant'
+                    ? '确认无误后点击「正式发送」；数字有变化可点「重新预演」刷新。'
+                    : '这是当前的 B 面受众；定时/周期任务每次到点都会按当时最新的 B 面设备重新计算。'}
                 </div>
               </div>
             )}
@@ -1225,7 +1441,13 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
                       onClick={() => void handleSend()}
                     >
                       <SendIcon className="w-4 h-4" />
-                      {isPending ? '处理中…' : '正式发送（仅投 B 面设备）'}
+                      {isPending
+                        ? '处理中…'
+                        : sendMode === 'instant'
+                        ? '正式发送（仅投 B 面设备）'
+                        : schedule.repeat === 'once'
+                        ? '确认定时（仅投 B 面设备）'
+                        : '创建周期任务（仅投 B 面设备）'}
                     </Button>
                   )}
                   {canCreate && (
@@ -1266,7 +1488,7 @@ function ListingEditPanel({ pushEnabled, listings }: { pushEnabled: boolean; lis
   );
 }
 
-// ── 上架包推送：历史面板 ──────────────────────────────────────────────────────
+// ── 上架包推送：历史面板（结构同渠道推送：定时任务 + 发送记录） ─────────────────
 function ListingHistoryPanel({ listings }: { listings: Listing[] }) {
   const { data: campaigns, isLoading } = useListingCampaigns();
 
@@ -1276,11 +1498,30 @@ function ListingHistoryPanel({ listings }: { listings: Listing[] }) {
   if (!campaigns?.length) {
     return <div className="text-center text-muted py-[60px]">暂无上架包推送记录</div>;
   }
+  const tasks = campaigns.filter(isActiveSchedule);
+  const records = campaigns.filter((c) => !isActiveSchedule(c));
+  const targetsOf = (c: ListingCampaign) =>
+    `目标：${c.listingIds.map((id) => listings.find((l) => l.id === id)?.name ?? `#${id}`).join('、') || '—'}`;
   return (
     <div className="flex flex-col gap-3">
-      {campaigns.map((c) => (
+      {tasks.length > 0 && (
+        <>
+          <HistorySectionTitle count={tasks.length}>定时任务</HistorySectionTitle>
+          {tasks.map((c) => (
+            <ScheduledTaskCard
+              key={c.id}
+              campaign={c}
+              targetLabel={`${targetsOf(c)} · 仅 B 面设备`}
+              accent="linear-gradient(135deg,#16a34a,#0ea5e9)"
+            />
+          ))}
+          <HistorySectionTitle count={records.length}>发送记录</HistorySectionTitle>
+        </>
+      )}
+      {records.map((c) => (
         <ListingCampaignRow key={c.id} campaign={c} listings={listings} />
       ))}
+      {records.length === 0 && <div className="text-center text-muted py-8 text-[12.5px]">暂无发送记录</div>}
     </div>
   );
 }
@@ -1409,7 +1650,7 @@ export function PushPage() {
           {subTab === 'edit' ? (
             <EditPanel pushEnabled={pushEnabled} brand={currentBrand} accentColor={accentColor} />
           ) : (
-            <HistoryPanel brand={currentBrand} />
+            <HistoryPanel brand={currentBrand} accentColor={accentColor} />
           )}
         </>
       ) : (

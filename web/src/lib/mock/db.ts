@@ -19,6 +19,7 @@ import { BRAND_META, BRAND_ORDER } from '../brands';
 import { parseChannelsCsv } from '../csv';
 import { countChannels } from '../validation';
 import { cap } from '../text';
+import { applyScheduleAction, type PushScheduleAction, type PushSchedulePayload } from '../pushSchedule';
 import { AP_CSV } from './channels.ap.csv';
 import { BP_CSV } from './channels.bp.csv';
 import { GP_CSV } from './channels.gp.csv';
@@ -176,7 +177,7 @@ function buildLogScript(job: BuildJob): string[] {
 // 推送管理 mock 数据（07-push.md）
 // =========================================================================
 
-let pushSeq = 10;
+let pushSeq = 20;
 
 const MOCK_PUSH_RECORDS: PushRecord[] = [
   { applicationId: 'com.arenaplus.ap01018', sent: 3200, failed: 12, finishedAt: '2026-06-20T09:15:00Z' },
@@ -184,7 +185,52 @@ const MOCK_PUSH_RECORDS: PushRecord[] = [
   { applicationId: 'com.gamezone.gzmkt001', sent: 900, failed: 30, errorSample: 'UNREGISTERED token', finishedAt: '2026-06-20T09:17:00Z' },
 ];
 
+/** 演示用：以「今天」为基准的周期任务时刻（每天 10:00，已跑 3 次）。 */
+function mockDailyAt(dayOffset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  d.setHours(10, 0, 0, 0);
+  return d.toISOString();
+}
+
 let pushCampaigns: (PushCampaign & { records?: PushRecord[] })[] = [
+  {
+    id: '11',
+    name: '每日签到提醒 · 第3次',
+    title: '今日签到奖励已到账',
+    body: '连续签到 7 天可领取额外福利，点击立即签到',
+    deeplinkPath: '/checkin',
+    targetAppIds: ['com.arenaplus.ap01018', 'com.arenaplus.ap01034'],
+    status: 'done',
+    parentId: '10',
+    sentAt: mockDailyAt(-1),
+    totalDevices: 4800,
+    successCount: 4781,
+    failureCount: 19,
+    createdBy: 'Daly',
+    createdAt: mockDailyAt(-1),
+    records: [],
+  },
+  {
+    id: '10',
+    name: '每日签到提醒',
+    title: '今日签到奖励已到账',
+    body: '连续签到 7 天可领取额外福利，点击立即签到',
+    deeplinkPath: '/checkin',
+    targetAppIds: ['com.arenaplus.ap01018', 'com.arenaplus.ap01034'],
+    status: 'scheduled',
+    scheduledAt: mockDailyAt(new Date().getHours() >= 10 ? 1 : 0),
+    repeatEveryDays: 1,
+    repeatMaxRuns: 14,
+    runCount: 3,
+    lastRunAt: mockDailyAt(-1),
+    totalDevices: 0,
+    successCount: 0,
+    failureCount: 0,
+    createdBy: 'Daly',
+    createdAt: mockDailyAt(-4),
+    records: [],
+  },
   {
     id: '9',
     name: '618 大促活动',
@@ -430,10 +476,27 @@ export const mockDb = {
     };
   },
 
-  schedulePushCampaign(id: string, scheduledAt: string): PushCampaign {
+  schedulePushCampaign(id: string, p: PushSchedulePayload): PushCampaign {
     const idx = pushCampaigns.findIndex((c) => c.id === id);
     if (idx < 0) throw new Error('Campaign not found');
-    pushCampaigns[idx] = { ...pushCampaigns[idx], status: 'scheduled', scheduledAt };
+    if (pushCampaigns[idx].status !== 'draft') throw new Error('仅 draft 可设置定时');
+    pushCampaigns[idx] = {
+      ...pushCampaigns[idx],
+      status: 'scheduled',
+      scheduledAt: p.scheduledAt,
+      repeatEveryDays: p.repeatEveryDays,
+      repeatEndAt: p.repeatEveryDays ? p.repeatEndAt : undefined,
+      repeatMaxRuns: p.repeatEveryDays ? p.repeatMaxRuns : 0,
+      runCount: 0,
+    };
+    const { records: _r, ...c } = pushCampaigns[idx];
+    return { ...c } as PushCampaign;
+  },
+
+  pushScheduleAction(id: string, action: PushScheduleAction): PushCampaign {
+    const idx = pushCampaigns.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error('Campaign not found');
+    pushCampaigns[idx] = applyScheduleAction(pushCampaigns[idx], action);
     const { records: _r, ...c } = pushCampaigns[idx];
     return { ...c } as PushCampaign;
   },

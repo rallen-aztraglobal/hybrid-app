@@ -14,6 +14,7 @@ import {
   usersApi,
 } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import type { PushScheduleAction, PushSchedulePayload } from '@/lib/pushSchedule';
 import type {
   AdminUserInput,
   BrandCode,
@@ -317,8 +318,8 @@ export function useListingGateLogs(id: string | null, enabled: boolean) {
 export function useSchedulePushCampaign() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, scheduledAt }: { id: string; scheduledAt: string }) =>
-      pushApi.scheduleCampaign(id, scheduledAt),
+    mutationFn: ({ id, payload }: { id: string; payload: PushSchedulePayload }) =>
+      pushApi.scheduleCampaign(id, payload),
     onSuccess: (campaign) => {
       void qc.invalidateQueries({ queryKey: ['push', 'campaigns'] });
       void qc.invalidateQueries({ queryKey: qk.pushCampaign(campaign.id) });
@@ -342,6 +343,29 @@ export function useCreateListingCampaign() {
     mutationFn: (input: ListingCampaignInput) => listingCampaignApi.createCampaign(input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.listingCampaigns });
+    },
+  });
+}
+
+/** 上架包活动设置定时 / 周期（仅 draft；到点同样只投 B 面设备）。 */
+export function useScheduleListingCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: PushSchedulePayload }) =>
+      listingCampaignApi.scheduleCampaign(id, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.listingCampaigns });
+    },
+  });
+}
+
+/** 定时任务 暂停 / 恢复 / 取消（渠道与上架包共用端点），成功后两类列表都刷新。 */
+export function usePushScheduleAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: PushScheduleAction }) => pushApi.scheduleAction(id, action),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['push'] });
     },
   });
 }

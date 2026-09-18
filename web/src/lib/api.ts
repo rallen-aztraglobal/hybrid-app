@@ -48,6 +48,7 @@ import { mockDb } from './mock/db';
 import { devicesByFilter, devicesByIds, queryDevices } from './mock/devices';
 import { mockListingDb } from './mock/listings';
 import { mockListingCampaignDb } from './mock/listingCampaigns';
+import type { PushScheduleAction, PushSchedulePayload } from './pushSchedule';
 import { mockRbacDb } from './mock/rbac';
 import { BRAND_META } from './brands';
 
@@ -946,7 +947,14 @@ interface ListingCampaignDTO {
   extraData?: Record<string, string>;
   listingIds?: number[];
   status: ListingCampaign['status'];
+  scheduledAt?: string;
   sentAt?: string;
+  repeatEveryDays?: number;
+  repeatEndAt?: string;
+  repeatMaxRuns?: number;
+  runCount?: number;
+  lastRunAt?: string;
+  parentId?: number;
   totalDevices: number;
   successCount: number;
   failureCount: number;
@@ -965,7 +973,14 @@ function adaptListingCampaign(c: ListingCampaignDTO): ListingCampaign {
     extraData: c.extraData && Object.keys(c.extraData).length ? c.extraData : undefined,
     listingIds: (c.listingIds ?? []).map(String),
     status: c.status,
+    scheduledAt: c.scheduledAt || undefined,
     sentAt: c.sentAt || undefined,
+    repeatEveryDays: c.repeatEveryDays ?? 0,
+    repeatEndAt: c.repeatEndAt || undefined,
+    repeatMaxRuns: c.repeatMaxRuns ?? 0,
+    runCount: c.runCount ?? 0,
+    lastRunAt: c.lastRunAt || undefined,
+    parentId: c.parentId != null ? String(c.parentId) : undefined,
     totalDevices: c.totalDevices,
     successCount: c.successCount,
     failureCount: c.failureCount,
@@ -1021,6 +1036,23 @@ export const listingCampaignApi = {
           body: JSON.stringify({ dryRun }),
         }),
       () => mockListingCampaignDb.send(id, dryRun),
+    );
+  },
+
+  /**
+   * 定时 / 周期发送（POST /api/push/listing-campaigns/:id/schedule，仅 draft）。
+   * 到点触发时同样强制只投 B 面设备；周期任务每次触发派生一条子活动。
+   */
+  scheduleCampaign(id: string, payload: PushSchedulePayload): Promise<ListingCampaign> {
+    return withFallback(
+      async () =>
+        adaptListingCampaign(
+          await request<ListingCampaignDTO>(`/push/listing-campaigns/${id}/schedule`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          }),
+        ),
+      () => mockListingCampaignDb.schedule(id, payload),
     );
   },
 };
@@ -1510,6 +1542,13 @@ export function brandAccent(code: BrandCode): string {
 // =========================================================================
 // 推送管理（07-push.md）
 // =========================================================================
+
+/** mock：定时任务控制按 id 前缀分派（上架包 mock 活动 id 形如 lc-N）。 */
+function mockScheduleAction(id: string, action: PushScheduleAction): PushCampaign {
+  if (id.startsWith('lc-')) return mockListingCampaignDb.scheduleAction(id, action) as unknown as PushCampaign;
+  return mockDb.pushScheduleAction(id, action);
+}
+
 export const pushApi = {
   /** 功能门控：读 FCM 配置状态（feature gate）。 */
   getStatus(): Promise<PushStatus> {
@@ -1564,15 +1603,28 @@ export const pushApi = {
     );
   },
 
-  /** 定时发送。 */
-  scheduleCampaign(id: string, scheduledAt: string): Promise<PushCampaign> {
+  /** 定时发送：单次 / 每天 / 每 N 天（repeatEveryDays），可带截止时间或次数上限。仅 draft。 */
+  scheduleCampaign(id: string, payload: PushSchedulePayload): Promise<PushCampaign> {
     return withFallback(
       () =>
         request<PushCampaign>(`/push/campaigns/${id}/schedule`, {
           method: 'POST',
-          body: JSON.stringify({ scheduledAt }),
+          body: JSON.stringify(payload),
         }),
-      () => mockDb.schedulePushCampaign(id, scheduledAt),
+      () => mockDb.schedulePushCampaign(id, payload),
+    );
+  },
+
+  /**
+   * 定时任务控制（渠道 / 上架包活动通用，走同一组端点）：
+   *  pause  周期任务 scheduled → paused
+   *  resume paused → scheduled（下次时间已过则顺延到下一个周期点）
+   *  cancel scheduled|paused → cancelled
+   */
+  scheduleAction(id: string, action: PushScheduleAction): Promise<PushCampaign> {
+    return withFallback(
+      () => request<PushCampaign>(`/push/campaigns/${id}/${action}`, { method: 'POST' }),
+      () => mockScheduleAction(id, action),
     );
   },
 

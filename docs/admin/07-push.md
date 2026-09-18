@@ -76,8 +76,38 @@ GET /api/push/audience?appIds=...      预估目标活跃设备数（发送前�
 - 复用：JWT 中间件 + `RequireRole`、`Storage` 接口（图片）、统一 Envelope 响应、swag 注解生成 OpenAPI。
 
 ### 2.3 定时发送（cron）
-- 复用 `cmd/server/main.go` 既有 `robfig/cron`：`@every 1m` 扫 `status=scheduled AND scheduled_at<=now` → 置 `sending` → 发送 → `done/failed`。
+- 复用 `cmd/server/main.go` 既有 `robfig/cron`：`@every 1m` 扫 `status=scheduled AND scheduled_at<=now`。
 - 受 `PUSH_CRON_ENABLE` 开关控制。
+
+### 2.3b 周期定时（单次 / 每天 / 每 N 天）
+
+`push_campaign` 新增 `repeat_every_days`（0=单次，N=每 N 天，1..365）、`repeat_end_at`（截止时间，含）、
+`repeat_max_runs`（最多执行次数，0=不限，上限 1000）、`run_count`（已触发次数）、`last_run_at`、
+`parent_id`（子活动指向父任务）；`status` 新增 `paused`/`cancelled`（仅周期任务会进入 `paused`）。
+
+**父子模型**：周期任务本体（父任务）从不直接发送，`scheduled_at` 语义是「下次运行时间」；每次
+到期触发都由 cron **克隆一条 `parent_id` 指向自己、`repeat_every_days=0` 的子活动**去真发，子活动
+拥有独立的 `status`/统计/`push_record` 历史，父任务只负责推进 `run_count`/`scheduled_at` 与判断
+是否结束（达 `repeat_max_runs` 或下次运行时间超过 `repeat_end_at` → 父任务终态 `done`）。
+父任务与子活动都会出现在 `GET /api/push/campaigns` 列表里（子活动带 `parentId`）。
+
+**并发安全**：cron 用 `UPDATE ... WHERE id=? AND status='scheduled' AND scheduled_at=<旧值>` 的
+CAS 认领某一轮触发，`RowsAffected=0` 说明已被别处认领，本轮放弃——避免同一次触发被发送两次。
+
+**漏跑不补发**：宕机/`PUSH_ENABLED=false` 期间错过的运行不会逐次补发，下次 tick 直接按周期步进到
+第一个晚于当前时间的时间点（只补最后一次，不刷屏式补发历史消息）。
+
+**状态机新增动作**（`POST /api/push/campaigns/:id/{action}`，channel 与 listing 两种 kind 通用）：
+- `schedule`（channel 用 `/api/push/campaigns/:id/schedule`，listing 用
+  `/api/push/listing-campaigns/:id/schedule`）：仅 `draft` 可设置，body 为
+  `{scheduledAt, repeatEveryDays, repeatEndAt, repeatMaxRuns}`；`repeatEveryDays=0` 时后两个字段会
+  被服务端忽略清零。
+- `pause`：仅 `scheduled` 且为周期任务（`repeatEveryDays>0`）可暂停；单次任务不支持暂停，只能取消。
+- `resume`：仅 `paused` 可恢复；若原定时间已过去，按周期步进到第一个未来时间点；若步进后已超出
+  `repeatEndAt` 或 `runCount` 已达 `repeatMaxRuns`，返回 400「周期已结束，无剩余执行」。
+- `cancel`：`scheduled`/`paused` 均可取消，单次与周期任务都适用。
+- 真发（`send` 非 dry-run）额外拒绝 `paused`/`cancelled` 状态，以及周期任务本体
+  （`repeatEveryDays>0`）——父任务不可被直接发送；dry-run 预览不受此限。
 
 ### 2.4 配置（config.go 新增）
 ```

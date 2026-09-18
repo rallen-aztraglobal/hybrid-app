@@ -140,9 +140,10 @@ func (r *Repo) CreateCampaign(ctx context.Context, c *model.PushCampaign) error 
 // 只看 kind=channel 的活动（PushCampaignTarget.ApplicationID 非空的那些）；kind=listing 的
 // 活动走独立的 ListListingCampaigns，不受渠道数据权限约束（listing 走品牌范围，这里不重复处理）。
 type CampaignFilter struct {
-	Brand string // 按 brand code 筛选（内联查 push_campaign_target → channel.brand_id）
-	Kind  string // 按种类筛选（channel/listing）；空 = 不限
-	Limit int
+	Brand    string   // 按 brand code 筛选（内联查 push_campaign_target → channel.brand_id）
+	Kind     string   // 按种类筛选（channel/listing）；空 = 不限
+	Statuses []string // 按状态筛选；空 = 不限
+	Limit    int
 
 	ScopeRestricted bool
 	ScopeAllBrands  bool
@@ -159,6 +160,9 @@ func (r *Repo) ListCampaigns(ctx context.Context, f CampaignFilter) ([]model.Pus
 		Order("id desc").Limit(f.Limit)
 	if f.Kind != "" {
 		q = q.Where("kind = ?", f.Kind)
+	}
+	if len(f.Statuses) > 0 {
+		q = q.Where("status IN ?", f.Statuses)
 	}
 	if f.Brand != "" {
 		// 过滤：该活动至少有一个 target 属于指定 brand。
@@ -244,6 +248,20 @@ func (r *Repo) UpdateCampaignFields(ctx context.Context, id uint64, fields map[s
 	return nil
 }
 
+// UpdateCampaignFieldsIfStatus 仅当活动当前状态等于 fromStatus 时才写入 fields（CAS）。
+// 返回 false 表示状态已被别处（cron 触发 / 另一个操作者）改掉，调用方应提示刷新而不是覆盖——
+// 否则「取消」可能盖掉 cron 刚置的 sending（推送照发、界面却显示已取消），「暂停」可能把刚 done
+// 的周期任务又拉回 paused。
+func (r *Repo) UpdateCampaignFieldsIfStatus(ctx context.Context, id uint64, fromStatus string, fields map[string]any) (bool, error) {
+	res := r.db.WithContext(ctx).Model(&model.PushCampaign{}).
+		Where("id = ? AND status = ?", id, fromStatus).
+		Updates(fields)
+	if res.Error != nil {
+		return false, fmt.Errorf("更新推送活动字段失败: %w", res.Error)
+	}
+	return res.RowsAffected > 0, nil
+}
+
 // ReplaceCampaignTargets 事务性替换活动目标 appId 列表。
 func (r *Repo) ReplaceCampaignTargets(ctx context.Context, campaignID uint64, appIDs []string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -264,16 +282,79 @@ func (r *Repo) ReplaceCampaignTargets(ctx context.Context, campaignID uint64, ap
 	})
 }
 
-// ListScheduledCampaigns 取 status=scheduled 且 scheduled_at<=now 的活动，供 cron 触发。
+// ListScheduledCampaigns 取 status=scheduled 且 scheduled_at<=now 的活动（含 channel 与 listing
+// 两种 kind），供 cron 触发；具体按单次/周期、按 kind 分派发送是 service 层的事。
 func (r *Repo) ListScheduledCampaigns(ctx context.Context) ([]model.PushCampaign, error) {
 	var list []model.PushCampaign
 	if err := r.db.WithContext(ctx).
 		Preload("Targets").
-		Where("status = ? AND scheduled_at <= ?", model.CampaignScheduled, time.Now()).
+		// 一律按 UTC 比较：SQLite 把 time 存成带偏移的文本、按字符串比大小，写入与比较的时区
+		// 不一致会让「+08:00 的 now」提前 8 小时命中「+00:00 的 scheduled_at」（MySQL 经驱动 loc
+		// 转换不受影响，统一 UTC 也无副作用）。
+		Where("status = ? AND scheduled_at <= ?", model.CampaignScheduled, time.Now().UTC()).
 		Find(&list).Error; err != nil {
 		return nil, fmt.Errorf("查询定时活动失败: %w", err)
 	}
 	return list, nil
+}
+
+// RecurringClaim 是周期任务一次触发要原子写入的字段（见 ClaimRecurringCampaignRun）。
+type RecurringClaim struct {
+	RunCount        int
+	LastRunAt       time.Time
+	NextScheduledAt time.Time
+	Status          string // 未结束仍为 scheduled；达到 maxRuns/endAt 则置 done
+}
+
+// ClaimRecurringCampaignRun 在**同一事务**里认领周期任务的一次触发并落子活动：
+//  1. CAS（WHERE status=scheduled AND scheduled_at=prevScheduledAt）推进父任务：scheduled_at→下次、
+//     run_count+1、写 last_run_at、按是否结束置终态。RowsAffected==0 说明这一轮已被别处（多进程/
+//     并发 tick）认领，返回 false，调用方放弃——防止同一次触发被发送两次；
+//  2. 写入子活动（child，调用方填好内容与 parent_id）及其目标（appIDs 或 listingIDs 二选一）。
+//
+// 任一步失败整体回滚：父任务不会出现「次数已记、子活动却没建出来」而白白耗掉一次执行。
+func (r *Repo) ClaimRecurringCampaignRun(ctx context.Context, id uint64, prevScheduledAt time.Time, claim RecurringClaim,
+	child *model.PushCampaign, appIDs []string, listingIDs []uint64) (bool, error) {
+	claimed := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&model.PushCampaign{}).
+			Where("id = ? AND status = ? AND scheduled_at = ?", id, model.CampaignScheduled, prevScheduledAt.UTC()).
+			Updates(map[string]any{
+				"run_count":    claim.RunCount,
+				"last_run_at":  claim.LastRunAt,
+				"scheduled_at": claim.NextScheduledAt.UTC(),
+				"status":       claim.Status,
+			})
+		if res.Error != nil {
+			return fmt.Errorf("认领周期推送活动失败: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return nil // 已被别处认领：不建子活动，事务无改动
+		}
+		if err := tx.Create(child).Error; err != nil {
+			return fmt.Errorf("创建周期子活动失败: %w", err)
+		}
+		targets := make([]model.PushCampaignTarget, 0, len(appIDs)+len(listingIDs))
+		for _, a := range appIDs {
+			targets = append(targets, model.PushCampaignTarget{CampaignID: child.ID, ApplicationID: a})
+		}
+		for _, lid := range listingIDs {
+			lid := lid
+			targets = append(targets, model.PushCampaignTarget{CampaignID: child.ID, ListingID: &lid})
+		}
+		if len(targets) == 0 {
+			return fmt.Errorf("周期任务 %d 没有目标，拒绝派生空子活动", id)
+		}
+		if err := tx.Create(&targets).Error; err != nil {
+			return fmt.Errorf("写入周期子活动目标失败: %w", err)
+		}
+		claimed = true
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return claimed, nil
 }
 
 // ---------- PushRecord ----------

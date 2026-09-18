@@ -125,6 +125,14 @@ func (s *Service) SendListingCampaign(ctx context.Context, id uint64, dryRun boo
 		return &PushSendResult{DryRun: true, Preview: &DryRunPreview{TotalDevices: total, ByApp: preview}}, nil
 	}
 
+	// 周期任务本体（父任务）不可被直接发送，真正发送的是每次触发克隆出的子活动（见
+	// service/push.go tickRecurringCampaign）；dry-run 预览不受此限。
+	if c.RepeatEveryDays > 0 {
+		return nil, errBadRequest("周期任务本体不可直接发送，请等待定时触发，或在历史里查看已发送的子活动")
+	}
+	if c.Status == model.CampaignPaused || c.Status == model.CampaignCancelled {
+		return nil, errBadRequest(fmt.Sprintf("活动已%s，不可发送", c.Status))
+	}
 	if c.Status == model.CampaignSending || c.Status == model.CampaignDone {
 		return nil, errBadRequest(fmt.Sprintf("活动已处于 %s 状态，不可重复发送", c.Status))
 	}
@@ -132,7 +140,8 @@ func (s *Service) SendListingCampaign(ctx context.Context, id uint64, dryRun boo
 		return nil, NewError(http.StatusUnprocessableEntity, "推送未启用：PUSH_ENABLED=false")
 	}
 
-	if err := s.repo.UpdateCampaignFields(ctx, id, map[string]any{
+	// CAS 于读到的状态，与取消/暂停互斥（见 casCampaignStatus）。
+	if err := s.casCampaignStatus(ctx, id, c.Status, map[string]any{
 		"status":        model.CampaignSending,
 		"total_devices": total,
 	}); err != nil {

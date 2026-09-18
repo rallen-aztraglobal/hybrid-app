@@ -439,6 +439,36 @@ func (h *Handler) SendListingCampaign(c echo.Context) error {
 	return httpx.OK(c, res)
 }
 
+// ScheduleListingCampaign godoc
+// @Summary  设置上架包推送活动定时发送（operator），支持单次/周期（每天/每 N 天）
+// @Tags     listings
+// @Accept   json
+// @Produce  json
+// @Param    id    path  int                  true  "活动 ID"
+// @Param    body  body  scheduleCampaignReq  true  "定时时间 + 周期参数"
+// @Success  200   {object}  httpx.Envelope
+// @Security BearerAuth
+// @Router   /api/push/listing-campaigns/{id}/schedule [post]
+func (h *Handler) ScheduleListingCampaign(c echo.Context) error {
+	id, err := paramID(c)
+	if err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "非法 id")
+	}
+	var req scheduleCampaignReq
+	if err := c.Bind(&req); err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, "请求参数解析失败")
+	}
+	in, err := parseScheduleReq(req)
+	if err != nil {
+		return httpx.Fail(c, http.StatusBadRequest, err.Error())
+	}
+	v, err := h.svc.ScheduleListingCampaign(c.Request().Context(), id, in)
+	if err != nil {
+		return fail(c, err)
+	}
+	return httpx.OK(c, v)
+}
+
 type registerListingTokenReq struct {
 	Platform    string `json:"platform"`
 	BundleID    string `json:"bundleId"`
