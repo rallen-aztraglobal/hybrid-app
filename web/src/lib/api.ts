@@ -1449,6 +1449,7 @@ export const buildApi = {
             versionName: req.versionName,
             name: req.jobName,
             testEvents: req.testEvents,
+            adiRegistration: req.adiRegistration || undefined,
           }),
         });
         return adaptRecordToJob(rec);
@@ -1493,6 +1494,7 @@ interface BuildRecordDTO {
   brandCode: BrandCode;
   flavors: string; // JSON 字符串
   testEvents: boolean;
+  adiRegistration?: string;
   status: 'queued' | 'running' | 'success' | 'failed';
   operator?: string;
   versionName?: string;
@@ -1516,6 +1518,7 @@ function adaptRecordToJob(r: BuildRecordDTO): BuildJob {
     flavors,
     versionName: r.versionName ?? '',
     testEvents: r.testEvents,
+    adiRegistration: r.adiRegistration || undefined,
     status: r.status,
     operator: r.operator,
     artifacts,

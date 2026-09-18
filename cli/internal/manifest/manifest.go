@@ -196,6 +196,9 @@ type BuildJob struct {
 	VersionName string `json:"versionName"`
 	// TaskName 任务展示名（可空；ADR-0008 默认 <品牌code>-<versionName>-<时间>）。
 	TaskName string `json:"taskName,omitempty"`
+	// ADIRegistration Android 开发者验证（包名注册）标识（可空）。非空时 runner 打包前写入各 flavor 的
+	// assets/adi-registration.properties；空则清掉工作区里上次任务的残留（见 render.SyncADIRegistration）。
+	ADIRegistration string `json:"adiRegistration,omitempty"`
 }
 
 // JobStatusUpdate 是 `POST /api/build/jobs/{id}/status` 的请求体。

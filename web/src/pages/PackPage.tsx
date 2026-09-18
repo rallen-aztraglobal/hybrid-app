@@ -14,7 +14,7 @@ import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { PERM } from '@/lib/permissions';
 import { iconInitials } from '@/lib/brands';
-import { defaultJobName, validateVersionName } from '@/lib/validation';
+import { defaultJobName, validateAdiRegistration, validateVersionName } from '@/lib/validation';
 import type { Channel } from '@/lib/types';
 import { BrandTabs } from '@/components/BrandTabs';
 import { AppIcon, Button, SectionHeading, SigningKeyBadge, Switch } from '@/components/ui';
@@ -46,9 +46,12 @@ export function PackPage() {
   // 任务名：用户改过就别再被默认值覆盖。
   const [jobName, setJobName] = useState('');
   const [jobNameTouched, setJobNameTouched] = useState(false);
+  // Android 开发者验证（包名注册）标识：选填，填了才往产物里放 adi-registration.properties。
+  const [adiRegistration, setAdiRegistration] = useState('');
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
   const versionErr = validateVersionName(versionName);
+  const adiErr = validateAdiRegistration(adiRegistration);
   const computedDefaultName = defaultJobName(currentBrand, versionErr ? DEFAULT_VERSION : versionName);
 
   // 切品牌：清空选择 + 重置日志，任务名回到默认。
@@ -79,7 +82,7 @@ export function PackPage() {
   }
 
   const selected = list.filter((c) => picked.has(c.id));
-  const canRun = canSubmit && selected.length > 0 && !versionErr && !submit.isPending && !log.streaming;
+  const canRun = canSubmit && selected.length > 0 && !versionErr && !adiErr && !submit.isPending && !log.streaming;
 
   async function run() {
     setSubmitErr(null);
@@ -91,6 +94,10 @@ export function PackPage() {
       setSubmitErr(versionErr);
       return;
     }
+    if (adiErr) {
+      setSubmitErr(adiErr);
+      return;
+    }
     log.reset();
     try {
       const job = await submit.mutateAsync({
@@ -99,6 +106,7 @@ export function PackPage() {
         versionName: versionName.trim(),
         jobName: jobName.trim() || undefined,
         testEvents,
+        adiRegistration: adiRegistration.trim() || undefined,
       });
       // 任务已入队，开始拉日志流。
       log.start(job.id);
@@ -241,6 +249,30 @@ export function PackPage() {
                 <div className="text-[13px] font-semibold">测试事件</div>
                 <div className="text-[11.5px] text-muted">首次安装一次性发送全部 AppsFlyer + Adjust 事件（Adjust 走 Sandbox，见测试控制台；仅对已绑定 Adjust 的渠道生效）</div>
               </div>
+            </div>
+
+            {/* Android 开发者验证（包名注册） */}
+            <div className="mb-[13px]">
+              <label className="block text-[12.5px] font-semibold text-ink-2 mb-[6px]">
+                开发者验证标识{' '}
+                <span className="font-normal text-muted text-[11.5px]">选填 · Google 包名注册用</span>
+              </label>
+              <input
+                className="field-input mono"
+                value={adiRegistration}
+                placeholder="如 C7V2CUSU2IP4YAAAAAAAAAAAAA"
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => setAdiRegistration(e.target.value)}
+              />
+              {adiErr ? (
+                <div className="mt-1 text-[12px] text-down">{adiErr}</div>
+              ) : (
+                <div className="mt-1 text-[11.5px] text-muted">
+                  填了才会在所选渠道的包里放入 assets/adi-registration.properties；把产物上传到 Google
+                  控制台完成包名注册。留空 = 正常包。证书指纹须与该渠道的签名 key 一致。
+                </div>
+              )}
             </div>
 
             <div className="mb-[13px]">

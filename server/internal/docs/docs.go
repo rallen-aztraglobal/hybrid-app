@@ -546,7 +546,7 @@ const docTemplate = `{
                 "summary": "入队一个构建任务（Web 打包中心触发；状态机 queued→running→success/failed）",
                 "parameters": [
                     {
-                        "description": "brand/flavors/versionName(X.Y.Z)/testEvents/name?",
+                        "description": "brand/flavors/versionName(X.Y.Z)/testEvents/name?/adiRegistration?",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -3078,6 +3078,10 @@ const docTemplate = `{
                 "versionName"
             ],
             "properties": {
+                "adiRegistration": {
+                    "description": "可空：Android 开发者验证（包名注册）标识，见 model.BuildRecord.ADIRegistration。",
+                    "type": "string"
+                },
                 "brand": {
                     "type": "string"
                 },

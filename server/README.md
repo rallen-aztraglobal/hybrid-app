@@ -59,7 +59,7 @@ go test ./...
 - 管理面（JWT + RBAC）：`/api/brands*`、`/api/channels*`、`/api/channels/:id/icon|splash|res.zip`、`/api/channels/:id/latest-apk`。
 - 打包（ADR-0008）：
   - `GET /api/build/manifest?brand=`（供 CLI 拉全量）。
-  - `POST /api/build/jobs`（入队：`brand,flavors,versionName(X.Y.Z),testEvents,name?`；状态机 queued→running→success/failed）。
+  - `POST /api/build/jobs`（入队：`brand,flavors,versionName(X.Y.Z),testEvents,name?,adiRegistration?`（`adiRegistration` 选填：Android 开发者验证「包名注册」标识，构建机据此往各 flavor 的 assets 写 `adi-registration.properties`）；状态机 queued→running→success/failed）。
   - `GET /api/build/records[?brand=&status=&limit=]`、`GET /api/build/records/:id`（含 APK 产物）。
   - `GET /api/build/records/:id/logs?offset=`（分段/流式日志，轮询 `next` 直到 `done`）。
   - runner（构建机）：`POST /api/build/claim`（原子领取 queued）、`POST /api/build/records/:id/status`、

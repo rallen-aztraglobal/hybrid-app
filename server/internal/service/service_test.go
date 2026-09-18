@@ -327,6 +327,40 @@ func TestVersionNameValidation(t *testing.T) {
 	}
 }
 
+// TestBuildJobADIRegistration 选填的开发者验证标识：合法值 trim 后落库并随领取带给 runner；
+// 含换行/路径字符等非法值整单拒绝（它会被原样写进 APK 的 assets 文件）。
+func TestBuildJobADIRegistration(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+	if _, err := svc.CreateChannel(ctx, CreateChannelInput{
+		BrandCode: "ap", FlavorName: "ap01018", PalCode: "PAL1", AppName: "A",
+	}); err != nil {
+		t.Fatalf("创建渠道失败: %v", err)
+	}
+
+	for _, bad := range []string{"AB CD", "AB\nCD", "../x", strings.Repeat("A", 129)} {
+		if _, err := svc.CreateBuildJob(ctx, auth.FullScope(), CreateBuildJobInput{
+			Brand: "ap", Flavors: []string{"ap01018"}, VersionName: "1.0.0", ADIRegistration: bad,
+		}); err == nil {
+			t.Errorf("adiRegistration=%q 应被拒", bad)
+		}
+	}
+
+	if _, err := svc.CreateBuildJob(ctx, auth.FullScope(), CreateBuildJobInput{
+		Brand: "ap", Flavors: []string{"ap01018"}, VersionName: "1.0.0",
+		ADIRegistration: "  C7V2CUSU2IP4YAAAAAAAAAAAAA\n",
+	}); err != nil {
+		t.Fatalf("合法 adiRegistration 入队失败: %v", err)
+	}
+	claimed, err := svc.ClaimBuild(ctx, "runner-1")
+	if err != nil || claimed == nil {
+		t.Fatalf("领取失败: %v", err)
+	}
+	if claimed.ADIRegistration != "C7V2CUSU2IP4YAAAAAAAAAAAAA" {
+		t.Errorf("领取到的 adiRegistration 应为 trim 后的原值，实际 %q", claimed.ADIRegistration)
+	}
+}
+
 // TestBuildJobLifecycle 跑通：入队 → 领取 → 上报日志 → 产物 → 成功 → 渠道最新包可取。
 func TestBuildJobLifecycle(t *testing.T) {
 	svc, _ := newTestService(t)

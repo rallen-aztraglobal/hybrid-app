@@ -364,6 +364,7 @@ export const mockDb = {
       flavors: req.flavors,
       versionName: req.versionName,
       testEvents: req.testEvents,
+      adiRegistration: req.adiRegistration || undefined,
       status: 'running',
       operator: 'Daly',
       artifacts: [],

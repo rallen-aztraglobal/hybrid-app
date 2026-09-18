@@ -116,6 +116,14 @@ function JobRow({ job }: { job: BuildJob }) {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {job.adiRegistration && (
+            <span
+              className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1]"
+              title={`产物内含 assets/adi-registration.properties：${job.adiRegistration}`}
+            >
+              开发者验证
+            </span>
+          )}
           {job.testEvents && (
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ede9fe] text-[#6d28d9]">
               测试事件

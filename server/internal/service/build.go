@@ -19,6 +19,11 @@ var versionNameRe = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 // validVersionName 返回 versionName 是否形如 X.Y.Z。
 func validVersionName(v string) bool { return versionNameRe.MatchString(v) }
 
+// adiRegistrationRe 校验 Android 开发者验证（包名注册）标识：Google 控制台给的是一段不透明 token
+// （如 C7V2CUSU2IP4YAAAAAAAAAAAAA）。它会被原样写进 APK 的 assets 文件，故只放行单行的
+// 字母数字与 _ - =，挡掉空白/换行/路径字符；长度与 DB 列 varchar(128) 对齐。
+var adiRegistrationRe = regexp.MustCompile(`^[A-Za-z0-9_=-]{1,128}$`)
+
 // CreateBuildJobInput 是 POST /api/build/jobs 入参（Web「打包中心」触发）。
 type CreateBuildJobInput struct {
 	Brand       string   `json:"brand" validate:"required"`
@@ -26,6 +31,8 @@ type CreateBuildJobInput struct {
 	VersionName string   `json:"versionName" validate:"required"`
 	TestEvents  bool     `json:"testEvents"`
 	Name        string   `json:"name"` // 可空，默认 <brand>-<versionName>-<YYYYMMDD-HHmm>
+	// ADIRegistration 可空：Android 开发者验证（包名注册）标识，见 model.BuildRecord.ADIRegistration。
+	ADIRegistration string `json:"adiRegistration"`
 }
 
 // defaultJobName 生成默认任务名 <brand>-<versionName>-<YYYYMMDD-HHmm>（ADR-0008）。
@@ -42,12 +49,16 @@ func (s *Service) CreateBuildJob(ctx context.Context, scope auth.Scope, in Creat
 	in.Brand = strings.TrimSpace(in.Brand)
 	in.VersionName = strings.TrimSpace(in.VersionName)
 	in.Name = strings.TrimSpace(in.Name)
+	in.ADIRegistration = strings.TrimSpace(in.ADIRegistration)
 
 	if in.Brand == "" || len(in.Flavors) == 0 || in.VersionName == "" {
 		return nil, errBadRequest("brand / flavors / versionName 必填")
 	}
 	if !validVersionName(in.VersionName) {
 		return nil, errBadRequest(fmt.Sprintf("versionName %q 非法（应形如 X.Y.Z）", in.VersionName))
+	}
+	if in.ADIRegistration != "" && !adiRegistrationRe.MatchString(in.ADIRegistration) {
+		return nil, errBadRequest("adiRegistration 非法（应为 Google 控制台复制的单行标识，仅字母数字，最长 128）")
 	}
 	brand, err := s.repo.GetBrandByCode(ctx, in.Brand)
 	if err != nil {
@@ -96,13 +107,14 @@ func (s *Service) CreateBuildJob(ctx context.Context, scope auth.Scope, in Creat
 	flavorsJSON, _ := json.Marshal(flavors)
 
 	rec := &model.BuildRecord{
-		Name:        name,
-		BrandCode:   brand.Code,
-		Flavors:     string(flavorsJSON),
-		TestEvents:  in.TestEvents,
-		Status:      model.BuildQueued,
-		VersionName: in.VersionName,
-		ApkURLs:     "[]",
+		Name:            name,
+		BrandCode:       brand.Code,
+		Flavors:         string(flavorsJSON),
+		TestEvents:      in.TestEvents,
+		ADIRegistration: in.ADIRegistration,
+		Status:          model.BuildQueued,
+		VersionName:     in.VersionName,
+		ApkURLs:         "[]",
 	}
 	if err := s.repo.CreateBuildRecord(ctx, rec); err != nil {
 		return nil, err

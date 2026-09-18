@@ -228,6 +228,18 @@ export function validateVersionName(v: string): string | null {
 }
 
 /**
+ * Android 开发者验证（包名注册）标识校验：选填；填了须是 Google 控制台复制的单行 token。
+ * 规则与后端 service.adiRegistrationRe 保持一致（它会被原样写进 APK 的 assets 文件）。
+ */
+const ADI_REGISTRATION_RE = /^[A-Za-z0-9_=-]{1,128}$/;
+export function validateAdiRegistration(v: string): string | null {
+  const s = v.trim();
+  if (!s) return null;
+  if (!ADI_REGISTRATION_RE.test(s)) return '标识格式不对：应为 Google 控制台复制的一段字母数字，不含空格/换行';
+  return null;
+}
+
+/**
  * 默认任务名（ADR-0008）：`<品牌code>-<versionName>-<YYYYMMDD-HHmm>`。
  * 打包中心初始填入、可改；留空则后端用同规则生成。
  */

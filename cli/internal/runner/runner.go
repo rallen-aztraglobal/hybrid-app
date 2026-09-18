@@ -286,6 +286,18 @@ func processJob(ctx context.Context, r *repo.Repo, be Backend, job *manifest.Bui
 		step("    警告: google-services.json 写入失败（%v），本次构建将无推送能力", err)
 	}
 
+	// 1c) Android 开发者验证（包名注册）文件：任务带了标识就写进各 flavor 的 assets，没带就清掉工作区里
+	// 上次任务的残留。失败即终止——带标识的任务打出不含注册文件的包没有意义，残留清不掉则会污染正式包。
+	if job.ADIRegistration != "" {
+		step("→ [#%d] 写入开发者验证文件 adi-registration.properties ...", job.ID)
+	}
+	if err := render.SyncADIRegistration(r, job.Brand, job.Flavors, job.ADIRegistration, render.Options{
+		Logf: func(f string, a ...any) { step("    "+f, a...) },
+	}); err != nil {
+		fail(ctx, be, job.ID, "", fmt.Errorf("同步开发者验证文件失败: %w", err))
+		return err
+	}
+
 	// 2) gradlew assemble<Flavor>Release（+签名）。stdout/stderr 实时回传 + 末尾摘要随结果回传。
 	step("→ [#%d] assemble %v (version=%s) ...", job.ID, job.Flavors, job.VersionName)
 	res, buildErr := opt.build(ctx, r, build.Options{

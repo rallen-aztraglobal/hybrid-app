@@ -254,6 +254,8 @@ export interface BuildJob {
   flavors: string[];
   versionName: string;
   testEvents: boolean;
+  /** Android 开发者验证（包名注册）标识：非空 = 本次产物带 assets/adi-registration.properties。 */
+  adiRegistration?: string;
   status: BuildStatus;
   operator?: string;
   /** 每个 APK 一条产物（含下载地址）。 */
@@ -285,6 +287,8 @@ export interface BuildJobRequest {
   /** 可空：留空后端用默认名 */
   jobName?: string;
   testEvents: boolean;
+  /** 可空：Google 控制台「包名注册」给的账号标识，填了才往 APK 里放注册文件 */
+  adiRegistration?: string;
 }
 
 /** 一段构建日志（GET /api/build/jobs/:id/logs?after= 增量拉取）。 */

@@ -80,6 +80,12 @@ func (r *Repo) FlavorBootstrap(brand, flavor string) string {
 	return filepath.Join(r.FlavorAssetsDir(brand, flavor), "bootstrap.json")
 }
 
+// FlavorADIRegistration 返回某 flavor 的 Android 开发者验证（包名注册）文件路径。
+// 文件名是 Google 规定的，必须一字不差。
+func (r *Repo) FlavorADIRegistration(brand, flavor string) string {
+	return filepath.Join(r.FlavorAssetsDir(brand, flavor), "adi-registration.properties")
+}
+
 // LocalProperties 返回 local.properties 路径（keystore 配置所在，绝不上传）。
 func (r *Repo) LocalProperties() string {
 	return filepath.Join(r.Root, "local.properties")

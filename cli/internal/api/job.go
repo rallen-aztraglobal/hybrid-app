@@ -33,6 +33,8 @@ type claimedRecord struct {
 	Flavors     string `json:"flavors"` // JSON 数组字符串，如 "[\"ap01018\"]"
 	TestEvents  bool   `json:"testEvents"`
 	VersionName string `json:"versionName"`
+	// ADIRegistration 见 manifest.BuildJob.ADIRegistration。
+	ADIRegistration string `json:"adiRegistration"`
 }
 
 // ClaimBuildJob 向队列领取一个待构建任务：POST /api/build/claim。
@@ -51,6 +53,8 @@ func (c *Client) ClaimBuildJob(ctx context.Context, runnerID string) (*manifest.
 		TestEvents:  rec.TestEvents,
 		VersionName: rec.VersionName,
 		TaskName:    rec.Name,
+
+		ADIRegistration: strings.TrimSpace(rec.ADIRegistration),
 	}
 	if strings.TrimSpace(rec.Flavors) != "" {
 		if err := json.Unmarshal([]byte(rec.Flavors), &job.Flavors); err != nil {

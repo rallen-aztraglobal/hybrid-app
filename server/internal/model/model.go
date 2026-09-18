@@ -235,6 +235,11 @@ type BuildRecord struct {
 	StartedAt   time.Time  `gorm:"column:started_at;autoCreateTime" json:"startedAt"`
 	FinishedAt  *time.Time `gorm:"column:finished_at" json:"finishedAt"`
 
+	// ADIRegistration Android 开发者验证（包名注册）的账号标识：打包中心选填。非空时构建机在打包前把它写入
+	// 本任务各 flavor 的 assets/adi-registration.properties（Google 据此 + 签名证书登记包名归属）；
+	// 空串 = 不带该文件。任务级而非渠道级：标识属于 Google 账号，同账号下各包名共用。
+	ADIRegistration string `gorm:"column:adi_registration;type:varchar(128);not null;default:''" json:"adiRegistration,omitempty"`
+
 	Artifacts []BuildArtifact `gorm:"foreignKey:BuildRecordID;constraint:OnDelete:CASCADE" json:"artifacts,omitempty"`
 }
 

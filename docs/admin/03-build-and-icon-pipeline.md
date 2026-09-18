@@ -79,6 +79,12 @@ hybrid-pack doctor                    # 检查 JDK/Android SDK/keystore/网络
   写**全量**渠道（含 `false`）：Gradle 侧「键缺失」的语义是回落默认规则（品牌整体开 HMS 或 `_hw` 华为商店包），不是关闭。
   渠道级开关的存在是因为有「已上架华为商店、flavor 却不带 `_hw` 后缀」的老渠道（如 ap01018），按名字推断会漏集成 OAID
   → 华为设备无 GAID、AppsFlyer 归因丢事件。开关在 Console 的渠道表单里。
+- **adi-registration.properties**（Android 开发者验证「包名注册」，仅服务器端构建）：Google 要求上传一个
+  「assets 里带账号标识文件 + 用已登记证书签名」的 APK 来证明包名归属。打包中心有选填项「开发者验证标识」
+  （任务级 `build_record.adi_registration`，标识属于 Google 账号、同账号各包名共用）。runner 在 pull 之后、
+  Gradle 之前按任务同步各 flavor 的 `assets/adi-registration.properties`：填了就写入，**没填就删掉残留**
+  （构建机工作区跨任务复用，不清理会混进之后的正式包）。只是往 flavor sourceSet 的 assets 放文件，不动 Gradle。
+  注意登记的证书指纹要与该渠道实际签名 key 一致：默认 key（CN=bingo）或渠道 `signingKey` 指定的那把（ADR-0016）。
 - **调用 Gradle**：用 `os/exec` 跨平台执行；Windows 调 `gradlew.bat`，macOS/Linux 调 `./gradlew`，task 名 `assemble<Cap(flavor)>Release`（复刻 package.sh 的 `cap` 逻辑）。
 - **产物收集**：扫描 `app/build/outputs/apk/<flavor>/release/*.apk`，可选重命名（沿用 build.sh 的 `应用名_release_版本.apk`）、上传后台、写 `build_record`。
 - **健壮性**：`doctor` 预检 JDK 版本、`ANDROID_HOME`、keystore（`local.properties`）、与后台连通性；`pull` 做漂移检测，提示「本地 CSV 与后台不一致」。

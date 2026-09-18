@@ -106,6 +106,9 @@ definitions:
     type: object
   github_com_hybrid-app_server_internal_service.CreateBuildJobInput:
     properties:
+      adiRegistration:
+        description: 可空：Android 开发者验证（包名注册）标识，见 model.BuildRecord.ADIRegistration。
+        type: string
       brand:
         type: string
       flavors:
@@ -974,7 +977,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: brand/flavors/versionName(X.Y.Z)/testEvents/name?
+      - description: brand/flavors/versionName(X.Y.Z)/testEvents/name?/adiRegistration?
         in: body
         name: body
         required: true

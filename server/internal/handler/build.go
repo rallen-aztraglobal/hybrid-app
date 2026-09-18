@@ -40,7 +40,7 @@ func (h *Handler) BuildManifest(c echo.Context) error {
 // @Tags     build
 // @Accept   json
 // @Produce  json
-// @Param    body  body      service.CreateBuildJobInput  true  "brand/flavors/versionName(X.Y.Z)/testEvents/name?"
+// @Param    body  body      service.CreateBuildJobInput  true  "brand/flavors/versionName(X.Y.Z)/testEvents/name?/adiRegistration?"
 // @Success  201   {object}  httpx.Envelope
 // @Security BearerAuth
 // @Router   /api/build/jobs [post]
