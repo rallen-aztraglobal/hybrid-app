@@ -754,6 +754,8 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     }
 
     override fun showToast(text: String) {
+        // 调试 Toast 仅在开启测试事件（Console 打包「测试事件」开关）时展示，生产包一律静默
+        if (!BuildConfig.ENABLE_TEST_EVENTS) return
         Toast.makeText(this@WebViewActivity, text, Toast.LENGTH_LONG).show()
     }
 
@@ -767,18 +769,12 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             object : AppsFlyerRequestListener {
                 override fun onSuccess() {
                     Log.d("Appsflyer", "Sent event SUCCESS: $eventName")
-                    // Toast 仅在开启测试事件时展示，生产包静默发送
-                    if (BuildConfig.ENABLE_TEST_EVENTS) {
-                        runOnUiThread { showToast("事件发送成功: $eventName") }
-                    }
+                    runOnUiThread { showToast("事件发送成功: $eventName") }
                 }
 
                 override fun onError(errorCode: Int, p1: String) {
                     Log.e("Appsflyer", "Sent event FAILED: $eventName, errorCode: $errorCode, message: $p1")
-                    // Toast 仅在开启测试事件时展示，生产包静默发送
-                    if (BuildConfig.ENABLE_TEST_EVENTS) {
-                        runOnUiThread { showToast("事件发送失败: $p1") }
-                    }
+                    runOnUiThread { showToast("事件发送失败: $p1") }
                 }
             }
         )

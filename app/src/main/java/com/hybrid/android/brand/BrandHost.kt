@@ -35,6 +35,6 @@ interface BrandHost {
     /** 发送一个 AppsFlyer 事件（携带已累加的事件参数） */
     fun sendAFEvent(eventName: String)
 
-    /** 显示 Toast */
+    /** 显示调试 Toast：仅开启测试事件（BuildConfig.ENABLE_TEST_EVENTS）的包才展示，生产包静默 */
     fun showToast(text: String)
 }
