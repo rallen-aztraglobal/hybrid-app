@@ -364,5 +364,11 @@ func AllModels() []any {
 		&ListingGateLog{},
 		// 渠道设备上报
 		&ChannelDevice{},
+		// 马甲包弹窗模块（ADR-0019）
+		&Popup{},
+		&PopupCard{},
+		&PopupPosition{},
+		&PopupStatDaily{},
+		&PopupEventBatch{},
 	}
 }

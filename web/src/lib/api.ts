@@ -28,6 +28,16 @@ import type {
   LoginResponse,
   MeResponse,
   PermCatalogModule,
+  Popup,
+  PopupInput,
+  PopupListFilter,
+  PopupPosition,
+  PopupPositionCode,
+  PopupRuntimePayload,
+  PopupStatRow,
+  PopupStatsResult,
+  PopupStatsQuery,
+  PopupUploadResult,
   ProbeResult,
   PushAudience,
   PushCampaign,
@@ -48,6 +58,7 @@ import { mockDb } from './mock/db';
 import { devicesByFilter, devicesByIds, queryDevices } from './mock/devices';
 import { mockListingDb } from './mock/listings';
 import { mockListingCampaignDb } from './mock/listingCampaigns';
+import { mockPopupDb, mockUploadPopupImage } from './mock/popups';
 import type { PushScheduleAction, PushSchedulePayload } from './pushSchedule';
 import { mockRbacDb } from './mock/rbac';
 import { BRAND_META } from './brands';
@@ -1691,3 +1702,125 @@ function inputToChannel(input: ChannelInput): Channel {
     adjustBpRawEvents: input.adjustBpRawEvents ?? false,
   };
 }
+
+// =========================================================================
+// 弹窗管理（12-popup.md §3）
+// =========================================================================
+function qs(params: Record<string, string | number | undefined>): string {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') sp.set(k, String(v));
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
+
+export const popupApi = {
+  /** 8 个位置开关。 */
+  listPositions(): Promise<PopupPosition[]> {
+    return withFallback(
+      () => request<PopupPosition[]>('/popups/positions'),
+      () => mockPopupDb.listPositions(),
+    );
+  },
+
+  /** 改位置开关：全局生效，需 popup:edit + 全量数据范围（受限账号后端 403）。 */
+  setPositionEnabled(code: PopupPositionCode, enabled: boolean): Promise<PopupPosition> {
+    return realOnly(
+      () => request<PopupPosition>(`/popups/positions/${code}`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
+      () => mockPopupDb.setPosition(code, enabled),
+    );
+  },
+
+  list(filter: PopupListFilter = {}): Promise<Popup[]> {
+    return withFallback(
+      async () =>
+        (await request<Popup[]>(
+          `/popups${qs({ position: filter.position, brand: filter.brand, status: filter.status, keyword: filter.keyword?.trim() })}`,
+        )) ?? [],
+      () => mockPopupDb.list(filter),
+    );
+  },
+
+  get(id: number): Promise<Popup> {
+    return realOnly(
+      () => request<Popup>(`/popups/${id}`),
+      () => mockPopupDb.get(id),
+    );
+  },
+
+  create(input: PopupInput): Promise<Popup> {
+    return realOnly(
+      () => request<Popup>('/popups', { method: 'POST', body: JSON.stringify(input) }),
+      () => mockPopupDb.save(undefined, input),
+    );
+  },
+
+  /** 全量更新；卡片按 id 合并（带 id 原地更新，不带 id 新建，缺席删除）。 */
+  update(id: number, input: PopupInput): Promise<Popup> {
+    return realOnly(
+      () => request<Popup>(`/popups/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+      () => mockPopupDb.save(id, input),
+    );
+  },
+
+  setEnabled(id: number, enabled: boolean): Promise<Popup> {
+    return realOnly(
+      () => request<Popup>(`/popups/${id}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
+      () => mockPopupDb.setEnabled(id, enabled),
+    );
+  },
+
+  remove(id: number): Promise<void> {
+    return realOnly(
+      async () => {
+        await request<unknown>(`/popups/${id}`, { method: 'DELETE' });
+      },
+      () => mockPopupDb.remove(id),
+    );
+  },
+
+  /** 上传素材（multipart `file`；png/jpeg/webp/gif，≤3MB）。每次上传都是新文件名，换图必换 URL。 */
+  async uploadImage(file: File): Promise<PopupUploadResult> {
+    if (FORCE_MOCK) return delay(await mockUploadPopupImage(file));
+    {
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      const token = getToken();
+      const res = await fetch('/api/popups/upload-image', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: fd,
+      });
+      let json: ApiEnvelope<PopupUploadResult> | undefined;
+      try {
+        json = (await res.json()) as ApiEnvelope<PopupUploadResult>;
+      } catch {
+        /* 空响应体 */
+      }
+      if (!res.ok) throw new ApiError(json?.message || `HTTP ${res.status} ${res.statusText}`, res.status);
+      if (json && json.code !== 0 && json.code !== 200) throw new ApiError(json.message || '上传失败', json.code);
+      return json!.data;
+    }
+  },
+
+  stats(q: PopupStatsQuery): Promise<PopupStatsResult> {
+    return withFallback(
+      async () => {
+        const r = await request<{ popups: PopupStatRow[]; tz?: string; tzOffsetMinutes?: number; from?: string; to?: string }>(
+          `/popups/stats${qs({ from: q.from, to: q.to, brand: q.brand, appId: q.appId, popupId: q.popupId, position: q.position })}`,
+        );
+        return { rows: r?.popups ?? [], tz: r?.tz, tzOffsetMinutes: r?.tzOffsetMinutes, from: r?.from, to: r?.to };
+      },
+      () => ({ rows: mockPopupDb.stats(q), tz: 'Asia/Manila', tzOffsetMinutes: 480, from: q.from, to: q.to }),
+    );
+  },
+
+  /** 运营核对：这个包（+国家）现在会拿到什么，payload 与 App 端完全一致。 */
+  runtimePreview(appId: string, country?: string): Promise<PopupRuntimePayload> {
+    return realOnly(
+      () => request<PopupRuntimePayload>(`/popups/runtime-preview${qs({ appId, country })}`),
+      () => mockPopupDb.runtimePreview(appId, country),
+    );
+  },
+};

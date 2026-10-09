@@ -11,6 +11,7 @@ import { PackPage } from '@/pages/PackPage';
 import { BuildsPage } from '@/pages/BuildsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { PushPage } from '@/pages/PushPage';
+import { PopupsPage } from '@/pages/PopupsPage';
 import { DevicesPage } from '@/pages/DevicesPage';
 import { RolesPage } from '@/pages/RolesPage';
 import { UsersPage } from '@/pages/UsersPage';
@@ -22,6 +23,7 @@ const PAGES: Record<string, JSX.Element> = {
   '/listings': <ListingsPage />,
   '/domains': <DomainsPage />,
   '/push': <PushPage />,
+  '/popups': <PopupsPage />,
   '/devices': <DevicesPage />,
   '/pack': <PackPage />,
   '/builds': <BuildsPage />,

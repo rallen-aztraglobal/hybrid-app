@@ -101,6 +101,11 @@ func build(cfg *config.Config) (*application, error) {
 		return nil, err
 	}
 
+	// 弹窗位置开关：缺行补行、已存在不覆盖；同 EnsureRBAC 属无条件自愈数据。
+	if err := seed.EnsurePopupPositions(ctx, db); err != nil {
+		return nil, err
+	}
+
 	// seed。
 	if cfg.AutoSeed {
 		if err := seed.EnsureBrands(ctx, db); err != nil {
@@ -172,7 +177,7 @@ func runServer(cfg *config.Config, app *application) {
 
 	// 域名巡检 cron（ADR-0003，进程内）。
 	var c *cron.Cron
-	if cfg.DomainProbeEnable || cfg.PushCronEnable || cfg.GeoIPRefreshEnable {
+	if cfg.DomainProbeEnable || cfg.PushCronEnable || cfg.GeoIPRefreshEnable || cfg.PopupCronEnable {
 		c = cron.New()
 		if cfg.DomainProbeEnable {
 			_, _ = c.AddFunc("@every 5m", func() {
@@ -190,6 +195,20 @@ func runServer(cfg *config.Config, app *application) {
 				app.svc.RunScheduledCampaigns(ctx)
 			})
 			log.Printf("[cron] 推送定时任务已启用（每 1 分钟）")
+		}
+		// 弹窗埋点幂等表清理（ADR-0019）：每天 03:30 清 7 天前的 popup_event_batch。
+		if cfg.PopupCronEnable {
+			_, _ = c.AddFunc("30 3 * * *", func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				n, err := app.svc.PurgePopupEventBatches(ctx)
+				if err != nil {
+					log.Printf("[cron] 清理弹窗上报批次失败: %v", err)
+					return
+				}
+				log.Printf("[cron] 已清理 %d 条 7 天前的弹窗上报批次", n)
+			})
+			log.Printf("[cron] 弹窗上报批次清理已启用（每天 03:30）")
 		}
 		// GeoIP 库月度更新（DB-IP 免费库，无需凭据）：每月 3 号 04:00 拉新覆盖。
 		// 选 3 号是留出月初库发布的余量；Refresh 内部本月拿不到会自动回退上月。

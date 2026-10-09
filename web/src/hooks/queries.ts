@@ -7,6 +7,7 @@ import {
   listingApi,
   listingCampaignApi,
   permsApi,
+  popupApi,
   pushApi,
   rolesApi,
   signingKeyApi,
@@ -25,6 +26,10 @@ import type {
   ListingCampaignInput,
   ListingCampaignSendResult,
   ListingInput,
+  PopupInput,
+  PopupListFilter,
+  PopupPositionCode,
+  PopupStatsQuery,
   PushCampaignInput,
   PushSendResult,
   RoleInput,
@@ -54,6 +59,12 @@ export const qk = {
   listingGateLogs: (id: string) => ['listings', id, 'gateLogs'] as const,
   listingCampaigns: ['push', 'listing-campaigns'] as const,
   permsCatalog: ['perms', 'catalog'] as const,
+  popupPositions: ['popups', 'positions'] as const,
+  popups: (f: PopupListFilter) => ['popups', 'list', f.position ?? '', f.brand ?? '', f.status ?? '', f.keyword ?? ''] as const,
+  popup: (id: number) => ['popups', 'detail', id] as const,
+  popupStats: (q: PopupStatsQuery) =>
+    ['popups', 'stats', q.from ?? '', q.to ?? '', q.brand ?? '', q.appId ?? '', q.popupId ?? 0, q.position ?? ''] as const,
+  popupRuntime: (appId: string, country: string) => ['popups', 'runtime', appId, country] as const,
   roles: ['roles'] as const,
   users: ['users'] as const,
   devices: (filter: DeviceFilter) =>
@@ -477,5 +488,92 @@ export function useDevices(filter: DeviceFilter) {
     queryKey: qk.devices(filter),
     queryFn: () => deviceApi.listDevices(filter),
     placeholderData: keepPreviousData,
+  });
+}
+
+// ---------- 弹窗管理（12-popup.md） ----------
+
+export function usePopupPositions() {
+  return useQuery({ queryKey: qk.popupPositions, queryFn: popupApi.listPositions });
+}
+
+export function useSetPopupPosition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ code, enabled }: { code: PopupPositionCode; enabled: boolean }) =>
+      popupApi.setPositionEnabled(code, enabled),
+    onSuccess: () => {
+      // 位置开关会改变每个弹窗的 positionEnabled 回显，列表一并失效
+      void qc.invalidateQueries({ queryKey: ['popups'] });
+    },
+  });
+}
+
+export function usePopups(filter: PopupListFilter) {
+  return useQuery({ queryKey: qk.popups(filter), queryFn: () => popupApi.list(filter), placeholderData: keepPreviousData });
+}
+
+/** 全量弹窗（不带筛选）：位置开关条的计数、看板的弹窗名解析共用。 */
+export function useAllPopups() {
+  return usePopups({});
+}
+
+export function usePopupDetail(id: number | null) {
+  return useQuery({
+    queryKey: id ? qk.popup(id) : ['popups', 'detail', 'none'],
+    queryFn: () => popupApi.get(id!),
+    enabled: !!id,
+    staleTime: 0,
+    gcTime: 0, // 编辑抽屉每次打开都要拿最新详情，不复用旧缓存
+  });
+}
+
+export function useSavePopup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: number; input: PopupInput }) =>
+      id ? popupApi.update(id, input) : popupApi.create(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['popups'] });
+    },
+  });
+}
+
+export function useSetPopupEnabled() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => popupApi.setEnabled(id, enabled),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['popups'] });
+    },
+  });
+}
+
+export function useDeletePopup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => popupApi.remove(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['popups'] });
+    },
+  });
+}
+
+export function usePopupStats(q: PopupStatsQuery, enabled = true) {
+  return useQuery({
+    queryKey: qk.popupStats(q),
+    queryFn: () => popupApi.stats(q),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 运行时预览：手动触发（appId 为空不请求）。 */
+export function usePopupRuntimePreview(appId: string, country: string, nonce: number) {
+  return useQuery({
+    queryKey: [...qk.popupRuntime(appId, country), nonce],
+    queryFn: () => popupApi.runtimePreview(appId, country || undefined),
+    enabled: !!appId && nonce > 0,
+    staleTime: 0,
   });
 }

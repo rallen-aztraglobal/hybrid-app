@@ -22,3 +22,4 @@
 | [0016](./0016-multi-signing-key.md) | 多签名 key：Console 只存 ID、构建机打包后按渠道 apksigner 重签、fail-closed | 已采纳 |
 | [0017](./0017-listing-only-brand.md) | 品牌分两条产线：渠道 APK 品牌 vs 只做上架包的品牌（wp），后端 fail-closed | 已采纳 |
 | [0018](./0018-adjust-bp-raw-events.md) | Adjust「BP 原始事件」模式：按渠道编译期开关切换事件逻辑分支、H5 scheme 三入口统一上报 | 已采纳 |
+| [0019](./0019-popup-module.md) | 马甲包弹窗：后台只管开关与素材、频控写死客户端、埋点入库即按天聚合 | 提议 |

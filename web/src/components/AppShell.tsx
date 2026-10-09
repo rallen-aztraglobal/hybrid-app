@@ -6,6 +6,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useBrands } from '@/hooks/queries';
 import { useAuthStore } from '@/store/authStore';
 import { useUiStore } from '@/store/uiStore';
+import { Toaster } from './Toaster';
 import { PERM } from '@/lib/permissions';
 import { cn } from '@/lib/cn';
 import {
@@ -18,6 +19,7 @@ import {
   LogoutIcon,
   MegaphoneIcon,
   PackageIcon,
+  PopupIcon,
   SearchIcon,
   SettingsIcon,
   ShieldIcon,
@@ -38,6 +40,7 @@ const META: Record<string, { title: string; crumb: string }> = {
   '/listings': { title: '上架包管理', crumb: '运营 / ColorStack / DeckTallyPro 等已上架应用 + AB 面网关' },
   '/domains': { title: '域名配置', crumb: '运营 / 主域名 + 备用域名 + 健康巡检' },
   '/push': { title: '推送管理', crumb: '运营 / FCM 推送活动编辑、渠道批量发送、历史查看' },
+  '/popups': { title: '弹窗管理', crumb: '运营 / 马甲包原生弹窗：位置开关 · 素材 · 定向 · 数据' },
   '/devices': { title: '设备管理', crumb: '运营 / 渠道包设备注册流水查看与导出' },
   '/pack': { title: '打包中心', crumb: '交付 / 拉取后台配置并跨平台打包' },
   '/builds': { title: '构建记录', crumb: '交付 / CLI 回传的打包历史' },
@@ -63,6 +66,7 @@ export function AppShell() {
     { to: '/listings', label: '上架包', icon: LayersIcon, group: '运营', perm: PERM.PAGE_LISTINGS },
     { to: '/domains', label: '域名配置', icon: GlobeIcon, group: '运营', perm: PERM.PAGE_DOMAINS },
     { to: '/push', label: '推送管理', icon: MegaphoneIcon, group: '运营', perm: PERM.PAGE_PUSH },
+    { to: '/popups', label: '弹窗管理', icon: PopupIcon, group: '运营', perm: PERM.PAGE_POPUPS },
     { to: '/devices', label: '设备管理', icon: DeviceIcon, group: '运营', perm: PERM.PAGE_DEVICES },
     { to: '/pack', label: '打包中心', icon: PackageIcon, group: '交付', perm: PERM.PAGE_PACK },
     { to: '/builds', label: '构建记录', icon: ClockIcon, group: '交付', perm: PERM.PAGE_BUILDS },
@@ -204,6 +208,7 @@ export function AppShell() {
           </div>
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

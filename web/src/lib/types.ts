@@ -811,3 +811,205 @@ export interface ListingCampaignSendResult {
     byApp: Record<string, number>;
   };
 }
+
+// =========================================================================
+// 弹窗管理（docs/admin/12-popup.md，实现契约）
+// =========================================================================
+
+/** 位置码，直接用 PRD 编号字符串（客户端遇未知位置码忽略）。 */
+export type PopupPositionCode = 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7' | 'P8';
+export type PopupStatus = 'active' | 'scheduled' | 'ended' | 'disabled';
+export type PopupUserType = 'all' | 'new' | 'old';
+export type PopupOpenMode = 'webview' | 'browser' | 'store';
+
+/** 位置开关（GET /api/popups/positions）。 */
+export interface PopupPosition {
+  code: PopupPositionCode;
+  name: string;
+  enabled: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+/** 素材卡片；带 id 的卡片编辑时原地更新（ID 不变，统计连续）。 */
+export interface PopupCard {
+  id?: number;
+  sort: number;
+  imageUrl: string;
+  linkUrl: string;
+  buttonText: string;
+  title: string;
+  description: string;
+}
+
+/** 弹窗（管理端收发）。时间为 RFC3339 带偏移；版本为 X.Y.Z 字符串（空 = 不限）。 */
+export interface Popup {
+  id: number;
+  name: string;
+  position: PopupPositionCode;
+  enabled: boolean;
+  priority: number;
+  startAt: string | null;
+  endAt: string | null;
+  brandCodes: BrandCode[];
+  appIds: string[];
+  minVersion: string;
+  maxVersion: string;
+  userType: PopupUserType;
+  countries: string[];
+  tabEnabled: boolean;
+  tabIconUrl: string;
+  tabText: string;
+  countdown: boolean;
+  maskClosable: boolean;
+  closable: boolean;
+  openMode: PopupOpenMode;
+  autoplaySeconds: number;
+  resumeGapMinutes: number;
+  badge: boolean;
+  cards: PopupCard[];
+  /** 服务端计算：disabled > ended > scheduled > active。 */
+  status: PopupStatus;
+  /** 所属位置开关回显：false 时提示「位置未开启 · 不下发」。 */
+  positionEnabled: boolean;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** 新建/更新入参：服务端计算的字段不提交。 */
+export type PopupInput = Omit<
+  Popup,
+  'id' | 'status' | 'positionEnabled' | 'createdBy' | 'createdAt' | 'updatedAt'
+>;
+
+export interface PopupListFilter {
+  position?: PopupPositionCode;
+  brand?: BrandCode;
+  status?: PopupStatus;
+  keyword?: string;
+}
+
+/** POST /api/popups/upload-image 返回。 */
+export interface PopupUploadResult {
+  url: string;
+  key: string;
+  width: number;
+  height: number;
+  size: number;
+}
+
+export interface PopupFilteredBreakdown {
+  frequency: number;
+  mutex: number;
+  targeting: number;
+  time: number;
+}
+
+export interface PopupCloseByMethod {
+  button: number;
+  mask: number;
+  back: number;
+}
+
+export interface PopupStatRates {
+  showRate: number;
+  ctr: number;
+  closeRate: number;
+  loadFailRate: number;
+  carouselDepth: number;
+  recoveryRate: number;
+  tabAbandonRate: number;
+  totalCtr: number;
+}
+
+export interface PopupCardStat {
+  cardId: number;
+  cardIndex: number;
+  imageUrl: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+}
+
+export interface PopupDailyStat {
+  date: string;
+  trigger: number;
+  displays: number;
+  impressions: number;
+  clicks: number;
+}
+
+/** GET /api/popups/stats 的一行（按弹窗）。 */
+export interface PopupStatRow {
+  popupId: number;
+  name: string;
+  position: PopupPositionCode;
+  deleted: boolean;
+  trigger: number;
+  displays: number;
+  impressions: number;
+  /** Σ impression(card_index=0)，含便条重开；关闭率 / 轮播深度的分母。旧后端可能缺失。 */
+  displaysAll?: number;
+  clicks: number;
+  closes: number;
+  loadFails: number;
+  collapses: number;
+  tabImpressions: number;
+  tabClicks: number;
+  tabDismisses: number;
+  slides: number;
+  filtered: PopupFilteredBreakdown;
+  closeByMethod: PopupCloseByMethod;
+  rates: PopupStatRates;
+  cards: PopupCardStat[];
+  daily: PopupDailyStat[];
+}
+
+export interface PopupStatsQuery {
+  from?: string;
+  to?: string;
+  brand?: BrandCode;
+  appId?: string;
+  popupId?: number;
+  position?: PopupPositionCode;
+}
+
+/** GET /api/popups/runtime-preview：与 App 端 /api/app/popups 完全相同的 payload。 */
+export interface PopupRuntimePayload {
+  appId: string;
+  configVersion: string;
+  serverTime: number;
+  tzOffsetMinutes: number;
+  popups: {
+    id: number;
+    position: PopupPositionCode;
+    priority: number;
+    startAt: number;
+    endAt: number;
+    minVersionCode: number;
+    maxVersionCode: number;
+    userType: PopupUserType;
+    openMode: PopupOpenMode;
+    closable: boolean;
+    maskClosable: boolean;
+    countdown: boolean;
+    tabEnabled: boolean;
+    tabIconUrl: string;
+    tabText: string;
+    autoplaySeconds: number;
+    resumeGapMinutes: number;
+    badge: boolean;
+    cards: { id: number; imageUrl: string; linkUrl: string; buttonText: string; title: string; description: string }[];
+  }[];
+}
+
+/** GET /api/popups/stats 完整响应。 */
+export interface PopupStatsResult {
+  rows: PopupStatRow[];
+  /** 统计归日时区（如 Asia/Manila）；旧后端缺失。 */
+  tz?: string;
+  tzOffsetMinutes?: number;
+  from?: string;
+  to?: string;
+}

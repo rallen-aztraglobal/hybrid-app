@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // 内嵌时区库：精简镜像无系统 zoneinfo 时 POPUP_TZ 仍可解析
 )
 
 // Config 是后端全部运行期配置。
@@ -87,6 +88,10 @@ type Config struct {
 	TrustedProxyCIDRs []string // TRUSTED_PROXY_CIDRS，逗号分隔
 	// GateLogEnable：是否把每次网关判定落 listing_gate_log（排查用；量大时可关）。
 	GateLogEnable bool // GATE_LOG_ENABLE，默认 true
+
+	// 马甲包弹窗模块（ADR-0019）。PopupTZ 用于埋点 stat_date 换算与下发 tzOffsetMinutes。
+	PopupTZ         string // POPUP_TZ，默认 Asia/Manila
+	PopupCronEnable bool   // POPUP_CRON_ENABLE，默认 true：每天清理 7 天前的上报批次
 }
 
 // Load 从环境变量装配 Config，缺省值保证本机可零配置启动。
@@ -148,6 +153,9 @@ func Load() *Config {
 		GeoIPRefreshEnable: envBool("GEOIP_REFRESH_ENABLE", true),
 		TrustedProxyCIDRs:  splitCSV(env("TRUSTED_PROXY_CIDRS", "")),
 		GateLogEnable:      envBool("GATE_LOG_ENABLE", true),
+
+		PopupTZ:         env("POPUP_TZ", "Asia/Manila"),
+		PopupCronEnable: envBool("POPUP_CRON_ENABLE", true),
 	}
 	// JWT_SECRET 未设置时自动生成随机密钥：兑现 compose「留空→自动生成」的承诺，
 	// 同时去掉可被伪造的硬编码弱默认值（评审 S2）。注意：随机密钥重启后失效 → 需重新登录；
@@ -182,6 +190,9 @@ func (c *Config) Validate() error {
 	}
 	if c.StorageKind == "minio" && c.MinIOEndpoint == "" {
 		return fmt.Errorf("STORAGE_KIND=minio 时必须设置 MINIO_ENDPOINT")
+	}
+	if _, err := time.LoadLocation(c.PopupTZ); err != nil {
+		return fmt.Errorf("POPUP_TZ 非法时区 %q: %w", c.PopupTZ, err)
 	}
 	if c.AppConfigTTLSecs <= 0 {
 		return fmt.Errorf("APP_CONFIG_TTL_SECONDS 必须为正")

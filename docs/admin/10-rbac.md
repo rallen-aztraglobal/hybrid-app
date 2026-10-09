@@ -28,6 +28,8 @@
 | 推送管理 | `push:create` | button | 新建/编辑活动、上传图片 |
 | 推送管理 | `push:send` | button | 发送/定时发送(含上架包活动发送) |
 | 推送管理 | `push:config` | button | 上传 google-services.json |
+| 弹窗管理 | `page:popups` | route | 弹窗列表/详情/数据看板/运行时预览 |
+| 弹窗管理 | `popup:edit` | button | 新建/编辑/删除/开关弹窗、上传素材、位置开关(位置开关另需全量数据范围) |
 | 上架包 | `page:listings` | route | 上架包列表/详情/判定流水查看 |
 | 上架包 | `listing:edit` | button | 新建/编辑/删除上架包、改域名 |
 | 上架包 | `listing:gate` | button | AB 面网关配置与试算 |
@@ -235,9 +237,13 @@ role_channel   role_id, channel_id    -- 仅 scope_all_channels=false 时生效,
   → `device:export`;`GET /api/devices/export.csv` 不进 JWT 组,凭 export-token 签发的 5 分钟
   scope 短 token(query 传递)验签放行,不认普通 access token(细节见 [11-devices.md](11-devices.md));
   `POST /api/app/device/register` 是 APK 端公开上报口,与其它 `/api/app/*` 一样零鉴权。
+- 弹窗管理:`GET /popups*`、`/popups/stats`、`/popups/runtime-preview` → `page:popups`;新建/编辑/启停/删除/
+  `upload-image` → `popup:edit`;`PUT /popups/positions/:code` 除 `popup:edit` 外还要求调用者**全量数据范围**
+  (位置开关全局生效,品牌受限账号 403)。弹窗定向按推送活动同口径 ALL-match 收窄(见 [12-popup.md](12-popup.md) §3)。
+  `GET /api/app/popups`、`POST /api/app/popups/events` 是 APK 公开端点,零鉴权。
 - 跨模块基础数据读接口用 any-of 放宽,不能只按「自己所在页面」收权:
-  `GET /api/channels` → any-of(`page:channels`,`page:pack`,`page:push`,`page:settings`)
-  (打包中心选渠道、推送受众、设置页运行时预览都依赖渠道清单);
+  `GET /api/channels` → any-of(`page:channels`,`page:pack`,`page:push`,`page:settings`,`page:popups`)
+  (打包中心选渠道、推送受众、设置页运行时预览、弹窗定向/看板筛选/运行时预览都依赖渠道清单);
   `GET /api/listings` → any-of(`page:listings`,`page:push`)(推送页上架包活动面板依赖)。
 - `RequireActiveAccount()`:比 `RequirePerm` 更轻量的中间件,不要求任何具体权限点,只确认账号仍
   存在。`GET /api/auth/me`、`GET /api/perms/catalog`、`GET /api/brands`、`GET /api/stores` 这四条

@@ -25,6 +25,9 @@ export const PERM = {
   PUSH_SEND: 'push:send',
   PUSH_CONFIG: 'push:config',
 
+  PAGE_POPUPS: 'page:popups',
+  POPUP_EDIT: 'popup:edit',
+
   PAGE_LISTINGS: 'page:listings',
   LISTING_EDIT: 'listing:edit',
   LISTING_GATE: 'listing:gate',
@@ -84,6 +87,14 @@ export const PERM_CATALOG: PermCatalogModule[] = [
     ],
   },
   {
+    module: 'popups',
+    label: '弹窗管理',
+    perms: [
+      { code: PERM.PAGE_POPUPS, label: '弹窗列表/详情/数据看板/运行时预览', kind: 'route' },
+      { code: PERM.POPUP_EDIT, label: '新建/编辑/删除/开关/上传素材/位置开关', kind: 'button' },
+    ],
+  },
+  {
     module: 'listings',
     label: '上架包',
     perms: [
@@ -132,6 +143,7 @@ export const ROUTE_PERM_ORDER: { path: string; perm: string }[] = [
   { path: '/listings', perm: PERM.PAGE_LISTINGS },
   { path: '/domains', perm: PERM.PAGE_DOMAINS },
   { path: '/push', perm: PERM.PAGE_PUSH },
+  { path: '/popups', perm: PERM.PAGE_POPUPS },
   { path: '/devices', perm: PERM.PAGE_DEVICES },
   { path: '/pack', perm: PERM.PAGE_PACK },
   { path: '/builds', perm: PERM.PAGE_BUILDS },

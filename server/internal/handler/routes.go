@@ -34,6 +34,9 @@ func (h *Handler) Register(e *echo.Echo) {
 	e.GET("/api/app/config", h.AppConfig)
 	// APK 推送 token 注册（公开，校验 appId 对应渠道存在，ADR-0012）。
 	e.POST("/api/app/push/register-token", h.RegisterPushToken)
+	// 弹窗运行时配置 + 埋点上报（公开，按 appId 校验渠道存在，ADR-0019；配置按 IP 判地区，不缓存）。
+	e.GET("/api/app/popups", h.AppPopups)
+	e.POST("/api/app/popups/events", h.AppPopupEvents)
 	// APK 设备信息上报（公开，校验 appId 对应渠道存在）。
 	e.POST("/api/app/device/register", h.RegisterDevice)
 	// 设备 CSV 导出下载（公开路由，但用 export-token 换来的 scoped token 鉴权，不接受 access
@@ -115,7 +118,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	// 小渠道 CRUD。
 	// 渠道列表放宽为 any-of：打包中心选渠道、推送页受众、设置页运行时预览都要读它,
 	// 否则「打包专员」这类自定义角色(仅 page:pack)一个渠道都选不到,页面完全不可用。
-	api.GET("/channels", h.ListChannels, need(perm.PageChannels, perm.PagePack, perm.PagePush, perm.PageSettings))
+	api.GET("/channels", h.ListChannels, need(perm.PageChannels, perm.PagePack, perm.PagePush, perm.PageSettings, perm.PagePopups))
 	api.POST("/channels", h.CreateChannel, need(perm.ChannelCreate))
 	api.GET("/channels/:id", h.GetChannel, need(perm.PageChannels))
 	api.PUT("/channels/:id", h.UpdateChannel, need(perm.ChannelEdit))
@@ -165,6 +168,20 @@ func (h *Handler) Register(e *echo.Echo) {
 	api.GET("/push/audience", h.GetPushAudience, need(perm.PagePush))
 	// google-services.json 上传（push:config；GET 公开已在上方注册）。
 	api.POST("/push/google-services", h.UploadGoogleServices, need(perm.PushConfig))
+
+	// 弹窗管理（ADR-0019）。静态路径（positions/stats/upload-image/runtime-preview）先于 :id 注册；
+	// 位置开关是全局设置，service 层额外要求全量数据范围。
+	api.GET("/popups/positions", h.ListPopupPositions, need(perm.PagePopups))
+	api.PUT("/popups/positions/:code", h.SetPopupPosition, need(perm.PopupEdit))
+	api.GET("/popups/stats", h.PopupStats, need(perm.PagePopups))
+	api.GET("/popups/runtime-preview", h.PopupRuntimePreview, need(perm.PagePopups))
+	api.POST("/popups/upload-image", h.UploadPopupImage, need(perm.PopupEdit))
+	api.GET("/popups", h.ListPopups, need(perm.PagePopups))
+	api.POST("/popups", h.CreatePopup, need(perm.PopupEdit))
+	api.GET("/popups/:id", h.GetPopup, need(perm.PagePopups))
+	api.PUT("/popups/:id", h.UpdatePopup, need(perm.PopupEdit))
+	api.PUT("/popups/:id/enabled", h.SetPopupEnabled, need(perm.PopupEdit))
+	api.DELETE("/popups/:id", h.DeletePopup, need(perm.PopupEdit))
 
 	// 设备管理（渠道设备上报列表 + CSV 导出；导出下载端点 export.csv 走 scoped token，
 	// 不进 JWT 组，已在上方公开区注册）。

@@ -56,6 +56,8 @@ import com.hybrid.android.domain.DomainResolver
 import com.hybrid.android.domain.ErrorKind
 import com.hybrid.android.domain.ErrorView
 import com.hybrid.android.domain.ResolveResult
+import com.hybrid.android.popup.PopupManager
+import com.hybrid.android.popup.PopupRuntime
 import com.hybrid.android.push.HybridMessagingService
 import com.hybrid.android.push.PushBootstrap
 import com.hybrid.android.push.TokenRegistrar
@@ -76,6 +78,15 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     private lateinit var rootLayout: FrameLayout
     private lateinit var splashImageView: ImageView
     private lateinit var errorView: ErrorView
+
+    /** 马甲包弹窗模块（docs/admin/12-popup.md）：编排 P1~P8 与便条、埋点。 */
+    private lateinit var popupManager: PopupManager
+
+    /** 本次主框架加载是否出错（onReceivedError / 主框架 5xx）；出错时不评估 / 展示弹窗。 */
+    private var mainFrameFailed = false
+
+    /** P6 被 X / 遮罩关闭后：下一次顶层返回直接退出（不再出「Press back again」）。 */
+    private val exitGate = com.hybrid.android.popup.ExitGate()
 
     private var currentPathValue: String? = null
     private val eventValues = HashMap<String, Any>()
@@ -131,12 +142,18 @@ class WebViewActivity : ComponentActivity(), BrandHost {
     // BP 原始事件模式：所有站点加载（首屏、运行中容灾、BpStrategy/ApStrategy 强刷钱包页、
     // window.open/外链路由）统一在此追加 appSource，H5 才能在任何入口都正确识别「在壳内」。
     // 非本模式恒等（原样返回），与关闭时行为一致。
+    // 弹窗配置的绝对 http(s) 链接：与 H5 内链接同口径，先过 BrandStrategy.shouldOverrideUrl。
+    override fun openWebUrl(url: String) = routeExternalUrl(url)
+
     override fun decorateLoadUrl(url: String): String =
         if (AdjustBootstrap.bpRawMode) BpRawAdjustTracker.appendAppSource(url) else url
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 弹窗模块：必须在下面写入 install_tracked 之前，用它区分「升级老用户」与「全新安装」。
+        PopupRuntime.prepare(this)
 
         // 推送通知点击时携带的相对 deeplink path（无通知点击则为 null）。
         // 必须在 startResolve() 之前读取，解析完域名后再拼成完整 URL。
@@ -217,6 +234,21 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         rootLayout.addView(errorView)
         setContentView(rootLayout)
 
+        // 弹窗层插在 errorView 之下（WebView < 非遮罩层 < 遮罩层 < errorView）；冷启动必拉配置。
+        popupManager = PopupManager(
+            activity = this,
+            host = this,
+            rootLayout = rootLayout,
+            errorView = errorView,
+            isErrorShowing = { errorView.visibility == View.VISIBLE || mainFrameFailed },
+            performDefaultBack = { handleDefaultBack() },
+            scope = lifecycleScope,
+            recreated = savedInstanceState != null,
+            exitApp = { finish() },
+            markExitOnNextBack = { exitGate.arm() },
+        )
+        popupManager.start()
+
         // 沉浸式状态栏 + 品牌固定系统栏配色（加载期即生效，避免白闪）
         enterImmersiveMode()
         applyBrandSystemBars()
@@ -241,6 +273,10 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             }
             insets
         }
+
+        // 弹窗模块：便条随页面触摸 / 滚动停止恢复展开（只观察，不消费事件）。
+        _webView.setOnTouchListener { _, _ -> popupManager.onWebViewTouch(); false }
+        _webView.setOnScrollChangeListener { _, _, _, _, _ -> popupManager.onWebViewScroll() }
 
         // 注入 JSBridge
         _webView.addJavascriptInterface(
@@ -324,6 +360,12 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         }
 
         _webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                mainFrameFailed = false
+                exitGate.disarm() // 发生导航：P6 之后「下一次返回直接退出」失效
+            }
+
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
                 injectInterceptor()
@@ -342,6 +384,9 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                 splashImageView.visibility = View.GONE
 
                 hideAppDownloadEntry(view)
+
+                // 弹窗模块：首屏完成（错误页已隐藏）后评估冷启动弹窗。
+                popupManager.onPageFinished(url, mainFrameFailed)
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -362,6 +407,7 @@ class WebViewActivity : ComponentActivity(), BrandHost {
             ) {
                 super.onReceivedError(view, request, error)
                 if (request?.isForMainFrame == true) {
+                    mainFrameFailed = true
                     Log.w("DomainResolver", "主框架 onReceivedError → 触发运行中容灾")
                     onMainFrameError()
                 }
@@ -376,6 +422,7 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                 // 仅对主框架的 5xx 触发容灾（4xx 多为页面级，不应换域名）。
                 val code = errorResponse?.statusCode ?: 0
                 if (request?.isForMainFrame == true && code in 500..599) {
+                    mainFrameFailed = true
                     Log.w("DomainResolver", "主框架 onReceivedHttpError $code → 触发运行中容灾")
                     onMainFrameError()
                 }
@@ -404,22 +451,28 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         // 返回键
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (_webView.canGoBack()) {
-                    _webView.goBack()
-                    return
-                }
-                // 顶层路由：2s 内再按一次才退出，否则居中提示。
-                val now = System.currentTimeMillis()
-                if (now - lastBackPressedAtMs <= exitConfirmWindowMs) {
-                    exitHintView?.removeCallbacks(hideExitHint)
-                    exitHintView?.visibility = View.GONE
-                    finish()
-                } else {
-                    lastBackPressedAtMs = now
-                    showExitHint()
-                }
+                // 弹窗优先：遮罩弹窗返回键关闭（P4 强制除外）；顶层页的 P6 退出挽留。
+                if (popupManager.onBackPressed()) return
+                handleDefaultBack()
             }
         })
+    }
+
+    /** 原返回键流程：WebView 可后退则后退；顶层路由 2s 内再按一次才退出，否则居中提示。 */
+    private fun handleDefaultBack() {
+        if (_webView.canGoBack()) {
+            _webView.goBack()
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (exitGate.armed || now - lastBackPressedAtMs <= exitConfirmWindowMs) {
+            exitHintView?.removeCallbacks(hideExitHint)
+            exitHintView?.visibility = View.GONE
+            finish()
+        } else {
+            lastBackPressedAtMs = now
+            showExitHint()
+        }
     }
 
     /** 屏幕居中展示「再按一次退出」提示（自绘 toast，2s 后自动隐藏）。 */
@@ -462,6 +515,7 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                     if (splashImageView.visibility != View.VISIBLE) {
                         splashImageView.alpha = 1f
                         splashImageView.visibility = View.VISIBLE
+                        popupManager.setLayersVisible(false) // splash 重新出现：隐藏弹窗层，页面完成后恢复
                     }
                     // 推送点击深链：有 pendingPushPath 时用其覆盖加载 URL（相对 path + palcode）。
                     // 域名来自 DomainResolver（运行时值），绝不编译期硬编码（守 ADR-0002）。
@@ -486,6 +540,7 @@ class WebViewActivity : ComponentActivity(), BrandHost {
 
     /** 刷新/自动重试：隐藏错误页、重新展示 splash，再走一次容灾。 */
     private fun retryResolve() {
+        popupManager.setLayersVisible(false)
         errorView.visibility = View.GONE
         splashImageView.alpha = 1f
         splashImageView.visibility = View.VISIBLE
@@ -494,6 +549,7 @@ class WebViewActivity : ComponentActivity(), BrandHost {
 
     /** 显示原生错误页（非网页）：图标 + 文案 + 刷新；并注册网络恢复自动重试。 */
     private fun showErrorView(kind: ErrorKind) {
+        popupManager.setLayersVisible(false)
         splashImageView.visibility = View.GONE
         errorView.bind(kind)
         errorView.visibility = View.VISIBLE
@@ -634,12 +690,30 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         intent?.data?.let { strategy.onDeepLinkIntent(it, this) }
     }
 
+    override fun onStart() {
+        super.onStart()
+        popupManager.onStart()
+    }
+
+    override fun onStop() {
+        exitGate.disarm()
+        popupManager.onStop()
+        super.onStop()
+    }
+
+    override fun onPause() {
+        popupManager.onPause()
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
         strategy.onResume(this)
+        popupManager.onResume()
     }
 
     override fun onDestroy() {
+        popupManager.onDestroy()
         unregisterNetworkRecovery()
         popupWebView?.destroy()
         popupWebView = null

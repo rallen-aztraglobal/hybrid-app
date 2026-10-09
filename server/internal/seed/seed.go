@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/hybrid-app/server/internal/auth"
 	"github.com/hybrid-app/server/internal/model"
@@ -414,4 +415,30 @@ func ImportCSV(ctx context.Context, r *repo.Repo, brandCode string, csv io.Reade
 		return nil, fmt.Errorf("读取 CSV 失败: %w", err)
 	}
 	return rep, nil
+}
+
+// popupPositionDefaults 弹窗 8 个位置的默认开关（契约 §1：P1/P2/P8 开，其余关）。
+var popupPositionDefaults = []struct {
+	Code    string
+	Enabled bool
+}{
+	{model.PopupP1, true}, {model.PopupP2, true}, {model.PopupP3, false}, {model.PopupP4, false},
+	{model.PopupP5, false}, {model.PopupP6, false}, {model.PopupP7, false}, {model.PopupP8, true},
+}
+
+// EnsurePopupPositions 幂等 seed 弹窗位置开关：缺哪行补哪行，已存在的行不覆盖（尊重运营已改的开关）。
+// 与 EnsureRBAC 同属无条件自愈数据——位置表为空会让所有弹窗被判「位置未开」，故不受 DB_AUTOSEED 影响。
+func EnsurePopupPositions(ctx context.Context, db *gorm.DB) error {
+	for _, d := range popupPositionDefaults {
+		// DoNothing：多实例并发启动时撞主键也不报错，已存在的行不覆盖。
+		res := db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).
+			Create(&model.PopupPosition{Code: d.Code, Enabled: d.Enabled})
+		if res.Error != nil {
+			return fmt.Errorf("创建弹窗位置 %s 失败: %w", d.Code, res.Error)
+		}
+		if res.RowsAffected > 0 {
+			log.Printf("[seed] 已创建弹窗位置 %s (enabled=%v)", d.Code, d.Enabled)
+		}
+	}
+	return nil
 }

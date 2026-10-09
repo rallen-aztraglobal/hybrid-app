@@ -32,6 +32,13 @@ interface BrandHost {
      */
     fun decorateLoadUrl(url: String): String = url
 
+    /**
+     * 站内入口之外的 http(s) 地址（如弹窗配置的绝对链接）：与 H5 内链接同口径——
+     * 交给 BrandStrategy.shouldOverrideUrl 判定，策略不接管才在主 WebView 加载（经 [decorateLoadUrl]）。
+     * 默认直接主 WebView 加载；由 WebViewActivity 覆写为走策略。
+     */
+    fun openWebUrl(url: String) { webView.loadUrl(decorateLoadUrl(url)) }
+
     /** 发送一个 AppsFlyer 事件（携带已累加的事件参数） */
     fun sendAFEvent(eventName: String)
 

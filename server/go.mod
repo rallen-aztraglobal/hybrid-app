@@ -17,6 +17,7 @@ require (
 	golang.org/x/oauth2 v0.36.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
+	golang.org/x/image v0.38.0
 )
 
 require (
@@ -61,7 +62,6 @@ require (
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/image v0.38.0 // indirect
 	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect

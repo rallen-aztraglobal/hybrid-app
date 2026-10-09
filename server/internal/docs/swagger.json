@@ -179,6 +179,68 @@
                 }
             }
         },
+        "/api/app/popups": {
+            "get": {
+                "description": "按 appId 解析品牌 / 包定向，并按请求真实 IP 的国家做地区定向；版本 / 新老用户 / 生效时间由客户端过滤。\n裸 JSON（非 Envelope），Cache-Control: no-store（地区定向按 IP，不可被 CDN 共享缓存）。未知 / 已归档 appId → 404。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "app"
+                ],
+                "summary": "弹窗运行时配置（App 公开消费，不缓存）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "渠道 applicationId",
+                        "name": "appId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupAppConfig"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/app/popups/events": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "app"
+                ],
+                "summary": "弹窗埋点批量上报（App 公开，batchId 幂等，每批 ≤100 条）",
+                "parameters": [
+                    {
+                        "description": "批次",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupEventsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/app/push/register-token": {
             "post": {
                 "consumes": [
@@ -1933,6 +1995,450 @@
                 }
             }
         },
+        "/api/popups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "弹窗列表（page:popups；按数据权限 ALL-match 过滤）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "位置码 P1~P8",
+                        "name": "position",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌 code（含未限定品牌的弹窗）",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "active|scheduled|ended|disabled",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "名称关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "新建弹窗（popup:edit；保存时按位置能力矩阵归一化）",
+                "parameters": [
+                    {
+                        "description": "弹窗内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/popups/positions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "弹窗位置开关列表（page:popups）",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/popups/positions/{code}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "开关弹窗位置（popup:edit + 全量数据范围，受限账号 403）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "位置码 P1~P8",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "开关",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.enabledReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/popups/runtime-preview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "运行时预览（page:popups）：返回与 App 端完全相同的 payload，country 用参数模拟",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "渠道 applicationId",
+                        "name": "appId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "模拟国家码（ISO-3166 二位）",
+                        "name": "country",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/popups/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "弹窗统计（page:popups；受限账号只统计其范围内渠道包）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD（含），默认近 7 天",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD（含），跨度 ≤ 92 天",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌 code",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "渠道 applicationId",
+                        "name": "appId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "弹窗 ID",
+                        "name": "popupId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "位置码",
+                        "name": "position",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/popups/upload-image": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "上传弹窗素材（popup:edit；png/jpeg/webp/gif，≤3MB，每次都是新文件名）",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "图片文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/popups/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "弹窗详情（page:popups）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "弹窗 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "全量更新弹窗（popup:edit；卡片按 id 原地合并，缺席的删除）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "弹窗 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "弹窗内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "软删弹窗（popup:edit；统计仍保留名称）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "弹窗 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/popups/{id}/enabled": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "popup"
+                ],
+                "summary": "弹窗行内快速开关（popup:edit）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "弹窗 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "开关",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.enabledReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/push/audience": {
             "get": {
                 "security": [
@@ -2110,6 +2616,105 @@
                 }
             }
         },
+        "/api/push/campaigns/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "push"
+                ],
+                "summary": "取消定时推送活动（operator），scheduled/paused 均可取消，单次与周期任务都适用",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "活动 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/push/campaigns/{id}/pause": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "push"
+                ],
+                "summary": "暂停周期推送活动（operator），仅 scheduled 且为周期任务可暂停；对 channel/listing 两种 kind 都生效",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "活动 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/push/campaigns/{id}/resume": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "push"
+                ],
+                "summary": "恢复已暂停的周期推送活动（operator）；若原定时间已过去，按周期步进到下一个未来时间点",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "活动 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/push/campaigns/{id}/schedule": {
             "post": {
                 "security": [
@@ -2126,7 +2731,7 @@
                 "tags": [
                     "push"
                 ],
-                "summary": "设置推送活动定时发送（operator）",
+                "summary": "设置渠道推送活动定时发送（operator），支持单次/周期（每天/每 N 天）",
                 "parameters": [
                     {
                         "type": "integer",
@@ -2136,7 +2741,7 @@
                         "required": true
                     },
                     {
-                        "description": "定时时间 ISO8601",
+                        "description": "定时时间 + 周期参数",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2296,6 +2901,51 @@
                 "responses": {
                     "201": {
                         "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/push/listing-campaigns/{id}/schedule": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "listings"
+                ],
+                "summary": "设置上架包推送活动定时发送（operator），支持单次/周期（每天/每 N 天）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "活动 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "定时时间 + 周期参数",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.scheduleCampaignReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/github_com_hybrid-app_server_internal_httpx.Envelope"
                         }
@@ -3072,7 +3722,7 @@
             ],
             "properties": {
                 "adiRegistration": {
-                    "description": "可空：Android 开发者验证（包名注册）标识，见 model.BuildRecord.ADIRegistration。",
+                    "description": "ADIRegistration 可空：Android 开发者验证（包名注册）标识，见 model.BuildRecord.ADIRegistration。",
                     "type": "string"
                 },
                 "brand": {
@@ -3238,6 +3888,295 @@
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.PopupAppCard": {
+            "type": "object",
+            "properties": {
+                "buttonText": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "imageUrl": {
+                    "type": "string"
+                },
+                "linkUrl": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.PopupAppConfig": {
+            "type": "object",
+            "properties": {
+                "appId": {
+                    "type": "string"
+                },
+                "configVersion": {
+                    "type": "string"
+                },
+                "popups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupAppItem"
+                    }
+                },
+                "serverTime": {
+                    "type": "integer"
+                },
+                "tzOffsetMinutes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.PopupAppItem": {
+            "type": "object",
+            "properties": {
+                "autoplaySeconds": {
+                    "type": "integer"
+                },
+                "badge": {
+                    "type": "boolean"
+                },
+                "cards": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupAppCard"
+                    }
+                },
+                "closable": {
+                    "type": "boolean"
+                },
+                "countdown": {
+                    "type": "boolean"
+                },
+                "endAt": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "maskClosable": {
+                    "type": "boolean"
+                },
+                "maxVersionCode": {
+                    "type": "integer"
+                },
+                "minVersionCode": {
+                    "type": "integer"
+                },
+                "openMode": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "resumeGapMinutes": {
+                    "type": "integer"
+                },
+                "startAt": {
+                    "description": "毫秒时间戳，0 = 不限",
+                    "type": "integer"
+                },
+                "tabEnabled": {
+                    "type": "boolean"
+                },
+                "tabIconUrl": {
+                    "type": "string"
+                },
+                "tabText": {
+                    "type": "string"
+                },
+                "userType": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.PopupCardInput": {
+            "type": "object",
+            "properties": {
+                "buttonText": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "imageUrl": {
+                    "type": "string"
+                },
+                "linkUrl": {
+                    "type": "string"
+                },
+                "sort": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.PopupEventIn": {
+            "type": "object",
+            "properties": {
+                "cardId": {
+                    "type": "integer"
+                },
+                "cardIndex": {
+                    "type": "integer"
+                },
+                "display": {
+                    "type": "string"
+                },
+                "event": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "integer"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "popupId": {
+                    "type": "integer"
+                },
+                "position": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "integer"
+                },
+                "ts": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.PopupEventsRequest": {
+            "type": "object",
+            "properties": {
+                "appId": {
+                    "type": "string"
+                },
+                "appVersion": {
+                    "type": "string"
+                },
+                "batchId": {
+                    "type": "string"
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupEventIn"
+                    }
+                },
+                "palcode": {
+                    "type": "string"
+                },
+                "versionCode": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_hybrid-app_server_internal_service.PopupInput": {
+            "type": "object",
+            "properties": {
+                "appIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "autoplaySeconds": {
+                    "type": "integer"
+                },
+                "badge": {
+                    "type": "boolean"
+                },
+                "brandCodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "cards": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_hybrid-app_server_internal_service.PopupCardInput"
+                    }
+                },
+                "closable": {
+                    "description": "缺省 = true",
+                    "type": "boolean"
+                },
+                "countdown": {
+                    "type": "boolean"
+                },
+                "countries": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "endAt": {
+                    "type": "string"
+                },
+                "maskClosable": {
+                    "type": "boolean"
+                },
+                "maxVersion": {
+                    "type": "string"
+                },
+                "minVersion": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "openMode": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "resumeGapMinutes": {
+                    "type": "integer"
+                },
+                "startAt": {
+                    "type": "string"
+                },
+                "tabEnabled": {
+                    "type": "boolean"
+                },
+                "tabIconUrl": {
+                    "type": "string"
+                },
+                "tabText": {
+                    "type": "string"
+                },
+                "userType": {
                     "type": "string"
                 }
             }
@@ -3479,6 +4418,14 @@
                 }
             }
         },
+        "internal_handler.enabledReq": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
         "internal_handler.exportDevicesByIDsReq": {
             "type": "object",
             "properties": {
@@ -3652,6 +4599,16 @@
         "internal_handler.scheduleCampaignReq": {
             "type": "object",
             "properties": {
+                "repeatEndAt": {
+                    "description": "ISO8601，可选/空串=不限",
+                    "type": "string"
+                },
+                "repeatEveryDays": {
+                    "type": "integer"
+                },
+                "repeatMaxRuns": {
+                    "type": "integer"
+                },
                 "scheduledAt": {
                     "description": "ISO8601",
                     "type": "string"

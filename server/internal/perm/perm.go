@@ -34,6 +34,10 @@ const (
 	PushSend   = "push:send"
 	PushConfig = "push:config"
 
+	// 弹窗管理
+	PagePopups = "page:popups"
+	PopupEdit  = "popup:edit"
+
 	// 上架包
 	PageListings = "page:listings"
 	ListingEdit  = "listing:edit"
@@ -93,6 +97,10 @@ var catalog = []Module{
 		{Code: PushCreate, Label: "新建/编辑活动、上传图片", Kind: KindButton},
 		{Code: PushSend, Label: "发送/定时发送(含上架包活动发送)", Kind: KindButton},
 		{Code: PushConfig, Label: "上传 google-services.json", Kind: KindButton},
+	}},
+	{Module: "popups", Label: "弹窗管理", Perms: []Perm{
+		{Code: PagePopups, Label: "弹窗列表/详情/数据看板/运行时预览", Kind: KindRoute},
+		{Code: PopupEdit, Label: "新建/编辑/删除/开关/上传素材/位置开关", Kind: KindButton},
 	}},
 	{Module: "listings", Label: "上架包", Perms: []Perm{
 		{Code: PageListings, Label: "上架包列表/详情/判定流水查看", Kind: KindRoute},

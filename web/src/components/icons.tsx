@@ -203,3 +203,88 @@ export const UsersIcon = (p: IconProps) => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
+
+// ---------- 弹窗管理新增图标（path 取自 docs/admin/ui/popup.html） ----------
+
+/** 弹窗管理导航图标。 */
+export const PopupIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <rect x="7" y="8" width="10" height="8" rx="1.5" />
+  </svg>
+);
+
+export const ChartIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 3v18h18" />
+    <path d="m7 15 4-4 3 3 5-6" />
+  </svg>
+);
+
+export const ListIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+  </svg>
+);
+
+export const LockIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="11" width="16" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </svg>
+);
+
+export const AlertIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+    <path d="M12 9v4M12 17h.01" />
+  </svg>
+);
+
+export const ImageIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="m21 15-5-5L5 21" />
+  </svg>
+);
+
+export const ChevronUpIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m18 15-6-6-6 6" />
+  </svg>
+);
+
+export const ChevronDownIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
+export const EyeIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+export const TimerIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="13" r="8" />
+    <path d="M12 9v4l2 2M9 2h6" />
+  </svg>
+);
+
+/** 便条（收起态）图标。 */
+export const TabNoteIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M21 8H10a4 4 0 0 0 0 8h11" />
+    <circle cx="10" cy="12" r="1.6" />
+  </svg>
+);
+
+export const ZapIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M13 2 3 14h9l-1 8 10-12h-9z" />
+  </svg>
+);

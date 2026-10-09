@@ -31,6 +31,8 @@ type Service struct {
 	// 这里只用它的无缓存方法（ResolveFresh/RolePermCodes），不共享 handler 那份带缓存的实例——
 	// 角色/用户管理写操作低频，值得每次现查现算，不依赖 30s 缓存的及时失效。
 	rbac *auth.RBAC
+	// popup 弹窗模块的进程内缓存（生效弹窗 / 位置开关 / 弹窗元数据），后台写操作后主动失效。
+	popup popupState
 }
 
 // New 创建 Service（同时初始化 FCM Manager，加载失败只警告不崩）。
