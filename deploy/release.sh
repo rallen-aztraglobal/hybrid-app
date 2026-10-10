@@ -159,7 +159,12 @@ done
 HEALTH_HOST=$(ssh_box "grep -E '^DOMAIN=' '$REMOTE_DIR/deploy/.env' | head -1 | cut -d= -f2- | tr -d '\"' | awk '{print \$1}'" 2>/dev/null || true)
 [ -n "$HEALTH_HOST" ] || HEALTH_HOST="$BOX_HOST"
 if [ "$CODE" = "200" ]; then
-  printf '\n\033[1;32m✓ 发版完成 → http://%s/\033[0m  (admin 首登请改密；HTTP 明文，建议尽快上 TLS)\n' "$HEALTH_HOST"
+  # 域名经 Cloudflare 接入，TLS 在 Cloudflare 终止 → 展示 https；只有裸 IP 部署才是 http。
+  if [[ "$HEALTH_HOST" =~ ^[0-9.]+$ ]]; then
+    printf '\n\033[1;32m✓ 发版完成 → http://%s/\033[0m  (admin 首登请改密；裸 IP 为 HTTP 明文，建议上域名 + TLS)\n' "$HEALTH_HOST"
+  else
+    printf '\n\033[1;32m✓ 发版完成 → https://%s/\033[0m  (admin 首登请改密)\n' "$HEALTH_HOST"
+  fi
 else
   printf '\n\033[1;31m✗ healthz=%s（容器内自测 http://127.0.0.1/healthz），未就绪。诊断：\033[0m\n' "$CODE"
   ssh_box "cd '$REMOTE_DIR/deploy' && docker compose -f docker-compose.allinone.yml --env-file .env ps; echo '--- go-api 日志 ---'; docker logs --tail 25 hybrid-go-api-1 2>&1; echo '--- nginx 状态 ---'; docker inspect hybrid-nginx-1 --format '{{.State.Status}} / {{.State.Error}}' 2>&1"

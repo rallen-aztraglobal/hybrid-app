@@ -19,11 +19,13 @@ rsync 源码 → 服务器上构建镜像 → `compose up -d` → 轮询 healthz
    - 缺 keystore → 让用户把签名 keystore 放到 `deploy/secrets/release.keystore`。
 2. **执行**：用 Bash 的 `run_in_background` 跑 `bash deploy/release.sh`（构建数分钟）。不要在前台 sleep 等待。
 3. **收尾**：任务结束读输出——
-   - 出现 `✓ 发版完成 → http://<IP>/` 即成功，把地址回报用户。
+   - 出现 `✓ 发版完成 → https://<域名>/`（裸 IP 部署时是 `http://<IP>/`）即成功，把地址回报用户。
    - 出现 `✗ healthz=...` → 把脚本贴出的 `compose ps` + go-api 日志拿来定位（常见：端口被占、磁盘满、镜像构建失败、安全组没放行）。
 4. 若用户本次改了 `cli/` 或 `deploy/Dockerfile.builder`，提示 build-runner 镜像会重建（Android SDK 走层缓存，仍需数分钟）。
 
 ## 每次发版后视情况提醒
-- 当前对外是 **HTTP/IP**：admin 口令明文传输；建议尽快上域名 + TLS（见 `docs/admin/05` 文末「升级 TLS」），或安全组把 80 端口限到办公 IP。
+- 生产域名经 **Cloudflare** 接入，HTTPS 已可用（TLS 在 Cloudflare 终止），**不要**再提醒「HTTP 明文 / 上 TLS」。
+  HTTP→HTTPS 自动跳转靠 Cloudflare 后台 SSL/TLS → Edge Certificates → **Always Use HTTPS**（用户在 Cloudflare 操作）；
+  不要在服务器 nginx 上加 301——宿主 80 在共享边缘 adsystem-edge 之后，Cloudflare 若用 HTTP 回源会形成重定向死循环。
 - 发版**不影响**已入队/在跑的打包任务；构建机随容器重启会自动重连后端继续轮询。
 - 改了 Android `app/` 代码后，发版只是更新了「打包用的源码」；要产出新 APK 仍需在 Console「打包中心」触发构建（或调 `POST /api/build/jobs`）。

@@ -21,7 +21,7 @@ curl -fsS http://<本机IP>/healthz           # 期望 {"ok":true,...}
 
 要点：
 - **无 `API_BASE_URL`**：单机内 go-api 地址固定，部署时不用填后端地址；`RUNNER_TOKEN` 一份，go-api 与 build-runner 共用、天然一致。
-- 当前 **HTTP/IP（80 端口）**：⚠️ admin 口令**明文传输**，仅作临时/内网用；拿到域名后启用 443 TLS（见文末「升级 TLS」）。
+- 生产已用域名经 **Cloudflare** 接入，HTTPS 在 Cloudflare 终止；HTTP→HTTPS 跳转用 Cloudflare 的 **Always Use HTTPS** 开关，服务器 nginx 不做 301（宿主 80 在共享边缘之后，HTTP 回源时会死循环）。裸 IP 访问仍是 HTTP 明文，仅作临时/内网用；不经 Cloudflare 的部署见文末「升级 TLS」。
 - 首启自动导入 80 渠道 + 图标/启动页（ADR-0011）；打包由 build-runner 自动轮询本机 go-api 出包，落 `/apks`，「构建记录」下载。
 
 > 若要把「APK 拉域名配置端点（要稳/公网）」与「运营 Console（重/内网）」分到不同机器/规格，用下面的 **方案 B**。两者镜像相同、只是编排不同。
