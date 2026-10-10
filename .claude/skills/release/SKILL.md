@@ -25,7 +25,8 @@ rsync 源码 → 服务器上构建镜像 → `compose up -d` → 轮询 healthz
 
 ## 每次发版后视情况提醒
 - 生产域名经 **Cloudflare** 接入，HTTPS 已可用（TLS 在 Cloudflare 终止），**不要**再提醒「HTTP 明文 / 上 TLS」。
-  HTTP→HTTPS 自动跳转靠 Cloudflare 后台 SSL/TLS → Edge Certificates → **Always Use HTTPS**（用户在 Cloudflare 操作）；
-  不要在服务器 nginx 上加 301——宿主 80 在共享边缘 adsystem-edge 之后，Cloudflare 若用 HTTP 回源会形成重定向死循环。
+  HTTP→HTTPS 跳转在 `deploy/nginx.allinone.conf.template` 里按 Cloudflare 的 `CF-Visitor` 头做（原始请求是 http 才跳，
+  GET/HEAD 301、其余 308；无该头的内网/构建机/探活不跳）。**不要**改成无条件 301——宿主 80 在共享边缘 adsystem-edge 之后，
+  到本 nginx 时 $scheme 永远是 http，无条件跳会死循环。发版后可用 `curl -I http://<域名>/` 确认返回 301。
 - 发版**不影响**已入队/在跑的打包任务；构建机随容器重启会自动重连后端继续轮询。
 - 改了 Android `app/` 代码后，发版只是更新了「打包用的源码」；要产出新 APK 仍需在 Console「打包中心」触发构建（或调 `POST /api/build/jobs`）。

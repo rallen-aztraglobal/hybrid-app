@@ -2,15 +2,26 @@
 # deploy/nginx.allinone.conf.template —— 单机合并部署（A+B 同机）唯一对外 nginx
 #   决策：用户选「A+B 合并单机部署」——免 API_BASE_URL 注入（见 docs/admin/05）。
 #
-# 【当前模式：HTTP/IP（暂无域名、无证书，仅监听 80）】
+# 【当前模式：仅监听 80；生产域名经 Cloudflare 接入，TLS 在 Cloudflare 终止，HTTP→HTTPS 按 CF-Visitor 跳转】
 #   /api、/healthz、/swagger、/static → 内网 go-api:8090（含公开 /api/app/config?appId=）。
 #   /apks/ → 构建产物卷（APK 下载）。   /  → web（React dist）。
 #   关键：/api 直接反代【内网 go-api 上游】，go-api 地址固定 go-api:8090，部署零后端配置。
 #
-# ⚠️ 安全：HTTP 明文下管理员登录口令明文传输；仅作临时/内网用。拿到域名后启用 TLS：
-#   取消下方 80-only server，恢复「80→301→443 + 443 ssl」两段并挂 ./certs（见 docs/admin/05）。
+# ⚠️ 安全：裸 IP 直连仍是 HTTP 明文（管理员口令明文传输），仅作临时/内网用。不经 Cloudflare 的部署要
+#   自带 TLS 时：取消下方 80-only server，恢复「80→301→443 + 443 ssl」两段并挂 ./certs（见 docs/admin/05）。
 # ${DOMAIN} 由 compose 注入（填本机 IP 或 _），官方 nginx 镜像启动期 envsubst 渲染。
 # ============================================================================
+
+# ---- HTTP → HTTPS 跳转（生产经 Cloudflare 接入，TLS 在 Cloudflare 终止）----
+# 链路：浏览器 → Cloudflare → 共享边缘 adsystem-edge:80 → 本 nginx:80，到这里 $scheme 永远是 http，
+# 所以不能无条件 301（HTTPS 访问也会被再跳一次 → 死循环）。只认 Cloudflare 的 CF-Visitor 头：
+# 明确是 "scheme":"http" 才跳；没有该头（构建机内网、容器内 healthz 探活、裸 IP 直连）一律不跳。
+# GET/HEAD 用 301；其余方法用 308 保留请求方法与 body（301 会让客户端把 POST 改成 GET）。
+map "$http_cf_visitor|$request_method" $https_redirect {
+    default                                   0;
+    "~\"scheme\":\"http\".*\|(GET|HEAD)$"     301;
+    "~\"scheme\":\"http\""                    308;
+}
 
 upstream go_api {
     server go-api:8090;
@@ -32,6 +43,10 @@ server {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript application/xml image/svg+xml;
     gzip_min_length 1024;
+
+    # Cloudflare 侧原始请求是 HTTP 才跳 HTTPS（见文件头 map 注释）。
+    if ($https_redirect = 301) { return 301 https://$host$request_uri; }
+    if ($https_redirect = 308) { return 308 https://$host$request_uri; }
 
     # ---- API → 内网 go-api（含公开 /api/app/config?appId= + 管理面 + 构建机接口）----
     location /api/ {
