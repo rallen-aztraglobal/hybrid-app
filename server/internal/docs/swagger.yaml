@@ -188,7 +188,7 @@ definitions:
         description: 仅 mode=B 时有值："internal"（内开）| "external"（外开）
         type: string
       url:
-        description: 仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode=，客户端原样打开）
+        description: 仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode= + 自定义附加参数，客户端原样打开）
         type: string
     type: object
   github_com_hybrid-app_server_internal_service.ManifestChannel:
@@ -570,6 +570,8 @@ definitions:
         type: string
       displayName:
         type: string
+      extraQuery:
+        type: string
       name:
         type: string
       openMode:
@@ -829,6 +831,8 @@ definitions:
       brandCode:
         type: string
       displayName:
+        type: string
+      extraQuery:
         type: string
       gateEnabled:
         type: boolean

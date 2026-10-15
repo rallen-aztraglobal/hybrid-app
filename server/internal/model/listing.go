@@ -141,6 +141,11 @@ type ListingApp struct {
 	// 上架包用它拼 B 面 /?palcode=。不再关联具体渠道记录，直接存值。新建/更新由 Service 层强制必填。
 	PalCode string `gorm:"column:pal_code;type:varchar(64);not null;default:'';index" json:"palCode"`
 
+	// ExtraQuery B 面链接的自定义附加参数（选填），存规范化后的 query 串、不带前导 ?，如 "channel=fb&lang=en"。
+	// 服务端拼在 palcode 之后下发：${主域名}/?palcode=X&channel=fb&lang=en。客户端原样打开 URL，
+	// 故改参数只需后台改一处、不用重新上架。palcode 只能由 PalCode 字段提供，此处禁止重复出现。
+	ExtraQuery string `gorm:"column:extra_query;type:varchar(1024);not null;default:''" json:"extraQuery"`
+
 	// GateEnabled 是 AB 面总开关。false = 该包永远只有 A 面（网关直接返回 mode=A，不做任何判定）。
 	// 这是「默认安全」的第一道闸：新建的上架包默认关闭，运营确认规则无误后再手动打开。
 	GateEnabled bool `gorm:"column:gate_enabled;not null;default:false" json:"gateEnabled"`

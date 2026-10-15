@@ -370,6 +370,7 @@ interface ListingDTO {
   openMode?: ListingOpenMode | null;
   useBrandDomains: boolean;
   palCode?: string | null;
+  extraQuery?: string | null;
   gateEnabled: boolean;
   afDevKey: string;
   afAppId: string;
@@ -409,6 +410,7 @@ function adaptListing(l: ListingDTO): Listing {
     openMode: l.openMode === 'external' ? 'external' : 'internal',
     useBrandDomains: l.useBrandDomains,
     palCode: l.palCode || undefined,
+    extraQuery: l.extraQuery || undefined,
     gateEnabled: l.gateEnabled,
     afDevKey: l.afDevKey || '',
     afAppId: l.afAppId || '',
@@ -831,6 +833,7 @@ export const listingApi = {
             storeUrl: input.storeUrl.trim(),
             openMode: input.openMode,
             palCode: input.palCode.trim(),
+            extraQuery: input.extraQuery.trim(),
             afDevKey: input.afDevKey.trim(),
             afAppId: input.afAppId.trim(),
             // *string：始终携带（空串亦然）以「声明意图」，与 updateListingReq 的解绑约定保持一致。
@@ -859,6 +862,7 @@ export const listingApi = {
             status: input.status,
             openMode: input.openMode,
             palCode: input.palCode.trim(),
+            extraQuery: input.extraQuery.trim(),
             afDevKey: input.afDevKey.trim(),
             afAppId: input.afAppId.trim(),
             adjustAppToken: input.adjustAppToken?.trim() ?? '',

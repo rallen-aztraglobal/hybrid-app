@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,15 +11,109 @@ import (
 	"github.com/hybrid-app/server/internal/repo"
 )
 
-// buildListingBSideURL 把参考渠道包 PAL_CODE 拼到 B 面主域名后，
-// 与渠道 APK 启动加载 ${DOMAIN}/?palcode=${PAL_CODE} 同一口径。
+// buildListingBSideURL 把参考渠道包 PAL_CODE 与自定义附加参数拼到 B 面主域名后，
+// palcode 段与渠道 APK 启动加载 ${DOMAIN}/?palcode=${PAL_CODE} 同一口径，附加参数紧随其后。
 // 客户端拿到即原样打开，不自行拼参（客户端零内置 B 面配置）。
-// palCode 为空（历史行 AutoMigrate 默认 ''）时原样返回域名，不产生悬空的 ?palcode=。
-func buildListingBSideURL(domain, palCode string) string {
-	if palCode == "" {
+// extraQuery 须是 normalizeListingExtraQuery 规范化后的值（已转义、无前导 ?），此处原样拼接。
+// 两者都为空（历史行 AutoMigrate 默认空串）时原样返回域名，不产生悬空的 ?。
+func buildListingBSideURL(domain, palCode, extraQuery string) string {
+	parts := make([]string, 0, 2)
+	if palCode != "" {
+		parts = append(parts, "palcode="+url.QueryEscape(palCode))
+	}
+	if extraQuery != "" {
+		parts = append(parts, extraQuery)
+	}
+	if len(parts) == 0 {
 		return domain
 	}
-	return strings.TrimRight(domain, "/") + "/?palcode=" + url.QueryEscape(palCode)
+	return strings.TrimRight(domain, "/") + "/?" + strings.Join(parts, "&")
+}
+
+// listingExtraQueryMaxLen 与 listing_app.extra_query 列宽一致。
+const listingExtraQueryMaxLen = 1024
+
+// normalizeListingExtraQuery 校验并规范化 B 面自定义附加参数。
+//
+// 运营直接从 ? 开始手输（如 "?channel=fb&lang=en"），前导 ?/& 可有可无。规范化规则：
+//   - 去空白与前导 ?，丢弃空段（"a=1&&b=2&" → "a=1&b=2"），保留运营输入的参数顺序；
+//   - query 中合法的字符（含 / : = 等）原样保留，空格、中文、# 等非法字符按 UTF-8 转义，
+//     保证下发的 URL 两端客户端都能直接解析；已有的 %XX 转义须合法，否则报错；
+//   - 参数名不能为空，且不能是 palcode（大小写不敏感）——palcode 只由 PAL_CODE 字段提供，
+//     重复出现时 B 面 web 取哪个值不确定。
+//
+// 空串合法，表示不加附加参数。
+func normalizeListingExtraQuery(raw string) (string, error) {
+	s := strings.TrimLeft(strings.TrimSpace(raw), "?&")
+	if s == "" {
+		return "", nil
+	}
+	pairs := make([]string, 0, 4)
+	for _, seg := range strings.Split(s, "&") {
+		if seg == "" {
+			continue
+		}
+		escaped, err := escapeQuerySegment(seg)
+		if err != nil {
+			return "", errBadRequest(fmt.Sprintf("B 面附加参数 %q 有误：%s", seg, err.Error()))
+		}
+		rawKey, _, _ := strings.Cut(escaped, "=")
+		key, err := url.QueryUnescape(rawKey)
+		if err != nil {
+			return "", errBadRequest(fmt.Sprintf("B 面附加参数 %q 有误：参数名转义不合法", seg))
+		}
+		if strings.TrimSpace(key) == "" {
+			return "", errBadRequest(fmt.Sprintf("B 面附加参数 %q 缺少参数名", seg))
+		}
+		if strings.EqualFold(strings.TrimSpace(key), "palcode") {
+			return "", errBadRequest("B 面附加参数里不能再写 palcode，请填在「参考渠道包 PAL_CODE」字段")
+		}
+		pairs = append(pairs, escaped)
+	}
+	out := strings.Join(pairs, "&")
+	if len(out) > listingExtraQueryMaxLen {
+		return "", errBadRequest(fmt.Sprintf("B 面附加参数过长（转义后 %d 字符，上限 %d）", len(out), listingExtraQueryMaxLen))
+	}
+	return out, nil
+}
+
+// escapeQuerySegment 对一个 key=value 段做「最小转义」：RFC 3986 query 允许的字符原样保留，
+// 其余字节（空格、非 ASCII、# 等）转成 %XX；已有的 % 必须跟两位十六进制，否则报错。
+// '&' 已被调用方用作分隔符，不会出现在 seg 中。
+func escapeQuerySegment(seg string) (string, error) {
+	const hex = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(seg); i++ {
+		c := seg[i]
+		switch {
+		case c == '%':
+			if i+2 >= len(seg) || !isHexDigit(seg[i+1]) || !isHexDigit(seg[i+2]) {
+				return "", errors.New("% 后须跟两位十六进制（要表示 % 本身请写 %25）")
+			}
+			b.WriteString(seg[i : i+3])
+			i += 2
+		case isQueryChar(c):
+			b.WriteByte(c)
+		default:
+			b.WriteByte('%')
+			b.WriteByte(hex[c>>4])
+			b.WriteByte(hex[c&0x0f])
+		}
+	}
+	return b.String(), nil
+}
+
+// isQueryChar 判断字节是否属于 RFC 3986 query 可直接出现的字符（unreserved / sub-delims / : @ / ?）。
+func isQueryChar(c byte) bool {
+	switch {
+	case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9':
+		return true
+	}
+	return strings.IndexByte("-._~!$'()*+,;=:@/?", c) >= 0
+}
+
+func isHexDigit(c byte) bool {
+	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
 }
 
 // repoListingFilter 把 handler 传来的原始筛选参数规范化为 repo 过滤器。

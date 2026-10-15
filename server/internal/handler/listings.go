@@ -69,6 +69,7 @@ type createListingReq struct {
 	DisplayName    string             `json:"displayName"`
 	StoreURL       string             `json:"storeUrl"`
 	PalCode        string             `json:"palCode"`
+	ExtraQuery     string             `json:"extraQuery"`
 	OpenMode       string             `json:"openMode"`
 	AfDevKey       string             `json:"afDevKey"`
 	AfAppID        string             `json:"afAppId"`
@@ -99,6 +100,7 @@ func (h *Handler) CreateListing(c echo.Context) error {
 		DisplayName:    req.DisplayName,
 		StoreURL:       req.StoreURL,
 		PalCode:        req.PalCode,
+		ExtraQuery:     req.ExtraQuery,
 		OpenMode:       req.OpenMode,
 		AfDevKey:       req.AfDevKey,
 		AfAppID:        req.AfAppID,
@@ -122,6 +124,7 @@ type updateListingReq struct {
 	StoreURL       *string             `json:"storeUrl"`
 	Status         *string             `json:"status"`
 	PalCode        *string             `json:"palCode"`
+	ExtraQuery     *string             `json:"extraQuery"`
 	GateEnabled    *bool               `json:"gateEnabled"`
 	OpenMode       *string             `json:"openMode"`
 	AfDevKey       *string             `json:"afDevKey"`
@@ -157,6 +160,7 @@ func (h *Handler) UpdateListing(c echo.Context) error {
 		StoreURL:       req.StoreURL,
 		Status:         req.Status,
 		PalCode:        req.PalCode,
+		ExtraQuery:     req.ExtraQuery,
 		GateEnabled:    req.GateEnabled,
 		OpenMode:       req.OpenMode,
 		AfDevKey:       req.AfDevKey,

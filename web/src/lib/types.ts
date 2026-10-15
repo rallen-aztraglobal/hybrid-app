@@ -616,6 +616,8 @@ export interface Listing {
   useBrandDomains: boolean;
   /** 参考渠道包的 PAL_CODE（运营手填，纯数字串），拼 B 面 /?palcode=。 */
   palCode?: string;
+  /** B 面链接自定义附加参数（后端规范化后、不带前导 ?），拼在 palcode 之后；空 = 无。 */
+  extraQuery?: string;
   /** AB 面总开关；打开前后端强制校验国家白名单非空（ADR-0014）。新建恒为 false。 */
   gateEnabled: boolean;
   /** AppsFlyer 账号级 Dev Key，可空 = 未接 AF */
@@ -652,6 +654,8 @@ export interface ListingInput {
   storeUrl: string;
   /** 参考渠道包的 PAL_CODE（运营手填，纯数字串），必填；拼 B 面 /?palcode=。 */
   palCode: string;
+  /** B 面链接自定义附加参数，运营从 ? 开始手输（如 ?channel=fb&lang=en）；空串 = 清空。 */
+  extraQuery: string;
   /** 新建时后端恒置 enabled，此字段仅编辑态下发。 */
   status: ListingStatus;
   /** B 面打开方式，internal 内开/external 外开；随基本信息一起提交，不属于网关规则。 */

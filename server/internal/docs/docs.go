@@ -3835,7 +3835,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "url": {
-                    "description": "仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode=，客户端原样打开）",
+                    "description": "仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode= + 自定义附加参数，客户端原样打开）",
                     "type": "string"
                 }
             }
@@ -4391,6 +4391,9 @@ const docTemplate = `{
                 "displayName": {
                     "type": "string"
                 },
+                "extraQuery": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -4789,6 +4792,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "displayName": {
+                    "type": "string"
+                },
+                "extraQuery": {
                     "type": "string"
                 },
                 "gateEnabled": {

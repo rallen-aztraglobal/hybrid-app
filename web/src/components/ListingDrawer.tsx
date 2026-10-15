@@ -40,6 +40,7 @@ interface ListingFormState {
   name: string;
   displayName: string;
   palCode: string;
+  extraQuery: string;
   storeUrl: string;
   status: ListingStatus;
   openMode: ListingOpenMode;
@@ -109,6 +110,7 @@ export function ListingDrawer({
         name: editListing.name,
         displayName: editListing.displayName,
         palCode: editListing.palCode ?? '',
+        extraQuery: editListing.extraQuery ? `?${editListing.extraQuery}` : '',
         storeUrl: editListing.storeUrl,
         status: editListing.status,
         openMode: editListing.openMode ?? 'internal',
@@ -147,6 +149,16 @@ export function ListingDrawer({
     }));
   }, [selectedBrand, form.brandCode]);
 
+  // B 面链接预览：取生效域名里第一个启用的主域名（与后端 effectiveListingDomains 同口径），拼 palcode + 附加参数。
+  const bSidePreview = useMemo(() => {
+    const list = form.useBrandDomains ? inheritedDomains : form.domains;
+    const primary = [...list]
+      .sort((a, b) => a.position - b.position)
+      .find((d) => d.enabled && d.url.trim());
+    if (!primary) return null;
+    return previewBSideUrl(primary.url.trim(), form.palCode.trim(), form.extraQuery);
+  }, [form.useBrandDomains, inheritedDomains, form.domains, form.palCode, form.extraQuery]);
+
   const domainError = useMemo(() => {
     if (form.useBrandDomains) return null;
     return validateDomains(form.domains)[0] ?? null;
@@ -173,6 +185,7 @@ export function ListingDrawer({
       name: form.name.trim(),
       displayName: form.displayName.trim(),
       palCode: form.palCode.trim(),
+      extraQuery: form.extraQuery.trim(),
       storeUrl: form.storeUrl.trim(),
       status: form.status,
       openMode: form.openMode,
@@ -292,6 +305,22 @@ export function ListingDrawer({
                 value={form.palCode}
                 onChange={(e) => set('palCode', e.target.value)}
               />
+            </Field>
+            <Field
+              label="B 面链接附加参数"
+              hint="选填，从 ? 开始写，拼在 palcode 之后；保存即生效，无需重新上架"
+            >
+              <input
+                className="field-input mono"
+                placeholder="?channel=fb&lang=en"
+                value={form.extraQuery}
+                onChange={(e) => set('extraQuery', e.target.value)}
+              />
+              {bSidePreview && (
+                <div className="mt-1 text-[11.5px] text-muted break-all">
+                  B 面链接预览：<span className="mono text-ink-2">{bSidePreview}</span>
+                </div>
+              )}
             </Field>
             {editing && (
               <Field label="状态">
@@ -435,6 +464,7 @@ function blankForm(platform: ListingPlatform): ListingFormState {
     name: '',
     displayName: '',
     palCode: '',
+    extraQuery: '',
     storeUrl: '',
     status: 'enabled',
     openMode: 'internal',
@@ -461,6 +491,8 @@ function validate(form: ListingFormState, editing: boolean): string[] {
   const pal = form.palCode.trim();
   if (!pal) errors.push('参考渠道包 PAL_CODE 必填');
   else if (!/^\d+$/.test(pal)) errors.push('参考渠道包 PAL_CODE 应为纯数字串');
+  const extraError = validateExtraQuery(form.extraQuery);
+  if (extraError) errors.push(extraError);
   if (!form.useBrandDomains) {
     const de = validateDomains(form.domains);
     if (de.length) errors.push(de[0]);
@@ -469,4 +501,68 @@ function validate(form: ListingFormState, editing: boolean): string[] {
     errors.push('开启 AB 面前必须配置国家白名单');
   }
   return errors;
+}
+
+/** 去掉前导 ?/& 与空段，按输入顺序拆成 key=value 段。 */
+function splitExtraQuery(raw: string): string[] {
+  return raw.trim().replace(/^[?&]+/, '').split('&').filter(Boolean);
+}
+
+/** RFC 3986 query 可直接出现的字符（与后端 isQueryChar 一致）。 */
+const QUERY_CHAR = /[A-Za-z0-9\-._~!$'()*+,;=:@/?]/;
+
+/**
+ * 对一段做「最小转义」，与后端 escapeQuerySegment 同口径：合法字符原样保留，空格/中文/# 等转 %XX；
+ * 已有的 %XX 保留，悬空 % 返回 null（后端会拒绝）。
+ */
+function escapeQuerySegment(seg: string): string | null {
+  let out = '';
+  for (let i = 0; i < seg.length; i++) {
+    const c = seg[i];
+    if (c === '%') {
+      if (!/^[0-9A-Fa-f]{2}$/.test(seg.slice(i + 1, i + 3))) return null;
+      out += seg.slice(i, i + 3);
+      i += 2;
+    } else if (QUERY_CHAR.test(c)) {
+      out += c;
+    } else {
+      // 代理对（emoji 等）要整体编码，单独编码半个会抛错。
+      const cp = seg.codePointAt(i)!;
+      const ch = String.fromCodePoint(cp);
+      out += encodeURIComponent(ch);
+      i += ch.length - 1;
+    }
+  }
+  return out;
+}
+
+/** 附加参数轻量校验（与后端 normalizeListingExtraQuery 对齐，后端为准）。 */
+function validateExtraQuery(raw: string): string | null {
+  for (const seg of splitExtraQuery(raw)) {
+    const escaped = escapeQuerySegment(seg);
+    if (escaped === null) return `B 面附加参数「${seg}」有误：% 后须跟两位十六进制（要表示 % 本身请写 %25）`;
+    const rawKey = escaped.split('=')[0].replace(/\+/g, ' ');
+    let key = rawKey;
+    try {
+      key = decodeURIComponent(rawKey);
+    } catch {
+      // %FF 之类非 UTF-8 序列：后端按字节放行，这里不拦，只按原样比较。
+    }
+    key = key.trim();
+    if (!key) return `B 面附加参数「${seg}」缺少参数名`;
+    if (key.toLowerCase() === 'palcode') {
+      return 'B 面附加参数里不能再写 palcode，请填在「参考渠道包 PAL_CODE」字段';
+    }
+  }
+  return null;
+}
+
+/** 拼 B 面链接预览，口径同后端 buildListingBSideURL：${主域名}/?palcode=X&附加参数（已转义）。 */
+function previewBSideUrl(domain: string, palCode: string, extraQuery: string): string {
+  const extra = splitExtraQuery(extraQuery)
+    .map((seg) => escapeQuerySegment(seg) ?? seg)
+    .join('&');
+  const parts = [palCode ? `palcode=${encodeURIComponent(palCode)}` : '', extra].filter(Boolean);
+  if (!parts.length) return domain;
+  return `${domain.replace(/\/+$/, '')}/?${parts.join('&')}`;
 }

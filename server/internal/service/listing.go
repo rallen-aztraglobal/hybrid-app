@@ -37,7 +37,7 @@ type GateRequest struct {
 // 绝不返回判定原因、命中的规则、国家码等任何可反推规则的信息——审核方也会调这个接口。
 type GateResponse struct {
 	Mode     string `json:"mode"`               // "A" | "B"
-	URL      string `json:"url,omitempty"`      // 仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode=，客户端原样打开）
+	URL      string `json:"url,omitempty"`      // 仅 mode=B 时有值：B 面完整地址（主域名 + /?palcode= + 自定义附加参数，客户端原样打开）
 	OpenMode string `json:"openMode,omitempty"` // 仅 mode=B 时有值："internal"（内开）| "external"（外开）
 }
 
@@ -97,7 +97,7 @@ func (s *Service) EvaluateListingGate(ctx context.Context, req GateRequest) (*Ga
 
 	return &GateResponse{
 		Mode:     model.GateModeB,
-		URL:      buildListingBSideURL(domains[0], listing.PalCode),
+		URL:      buildListingBSideURL(domains[0], listing.PalCode, listing.ExtraQuery),
 		OpenMode: model.NormalizeOpenMode(listing.OpenMode),
 	}, nil
 }
@@ -180,6 +180,7 @@ type CreateListingInput struct {
 	DisplayName    string
 	StoreURL       string
 	PalCode        string // 参考渠道包的 PAL_CODE，运营手填，必填、纯数字串（拼 B 面 /?palcode=）
+	ExtraQuery     string // B 面链接自定义附加参数，选填，运营从 ? 开始手输（见 normalizeListingExtraQuery）
 	OpenMode       string // B 面打开方式：internal/external，空/非法归一化为 internal（见 model.NormalizeOpenMode）
 	AfDevKey       string
 	AfAppID        string
@@ -214,6 +215,10 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*mo
 	if err != nil {
 		return nil, err
 	}
+	extraQuery, err := normalizeListingExtraQuery(in.ExtraQuery)
+	if err != nil {
+		return nil, err
+	}
 
 	n, err := s.repo.CountListingsByPlatformBundle(ctx, platform, bundle, 0)
 	if err != nil {
@@ -236,6 +241,7 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*mo
 		DisplayName:     strings.TrimSpace(in.DisplayName),
 		StoreURL:        strings.TrimSpace(in.StoreURL),
 		PalCode:         palCode,
+		ExtraQuery:      extraQuery,
 		Status:          model.ListingEnabled,
 		UseBrandDomains: true,  // 默认继承品牌域名
 		GateEnabled:     false, // 默认只有 A 面
@@ -261,6 +267,7 @@ type UpdateListingInput struct {
 	StoreURL       *string
 	Status         *string
 	PalCode        *string // 非 nil = 改参考渠道包 PAL_CODE；仍强制非空纯数字
+	ExtraQuery     *string // 非 nil = 改 B 面链接自定义附加参数；空串 = 清空
 	GateEnabled    *bool
 	OpenMode       *string // 非 nil = 改 B 面打开方式；空/非法归一化为 internal（见 model.NormalizeOpenMode）
 	AfDevKey       *string
@@ -305,6 +312,13 @@ func (s *Service) UpdateListing(ctx context.Context, id uint64, in UpdateListing
 			return nil, err
 		}
 		fields["pal_code"] = palCode
+	}
+	if in.ExtraQuery != nil {
+		extraQuery, err := normalizeListingExtraQuery(*in.ExtraQuery)
+		if err != nil {
+			return nil, err
+		}
+		fields["extra_query"] = extraQuery
 	}
 	if in.OpenMode != nil {
 		fields["open_mode"] = model.NormalizeOpenMode(*in.OpenMode)
