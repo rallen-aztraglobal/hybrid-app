@@ -258,10 +258,12 @@ class WebViewActivity : ComponentActivity(), BrandHost {
         settings.mediaPlaybackRequiresUserGesture = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         // BP 原始事件模式：支持 window.open 弹出新窗口，配合下面 WebChromeClient.onCreateWindow
-        // 拦截目标 URL（Adjust H5 事件优先消费，否则回退主 WebView 加载）。非本模式两项设置不改。
+        // 拦截目标 URL（Adjust H5 事件优先消费，否则回退主 WebView 加载）；UA 末尾追加
+        // `<包名>/<versionName>` 供 H5 识别是哪个包。非本模式三项设置都不改。
         if (AdjustBootstrap.bpRawMode) {
             settings.setSupportMultipleWindows(true)
             settings.javaScriptCanOpenWindowsAutomatically = true
+            settings.userAgentString = BpRawAdjustTracker.appendUserAgent(settings.userAgentString, packageName)
         }
 
         // window insets（状态栏/导航栏 padding）
@@ -317,6 +319,9 @@ class WebViewActivity : ComponentActivity(), BrandHost {
                 }
                 val popup = popupWebView ?: WebView(this@WebViewActivity).apply {
                     settings.javaScriptEnabled = true
+                    // 与主 WebView 同一 UA：popup 虽不渲染，POST 表单等兜底场景的首个请求仍由它发出
+                    settings.userAgentString =
+                        BpRawAdjustTracker.appendUserAgent(settings.userAgentString, context.packageName)
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
                             webView: WebView,

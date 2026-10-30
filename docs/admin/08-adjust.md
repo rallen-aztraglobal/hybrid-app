@@ -383,6 +383,8 @@ Dm(...) → <a href=r>.click()   // 页面跳转入口
 
 三点结论：白名单外的 appSource 一个事件都不发；H5 实际只发 `updateCustomerId` / `register` / `deposit` 三种 action（`ad_web_login`、`ad_web_pageview` 等由 H5 自己的 web SDK 报，不经壳）；触发方式是 `<a>.click()`，走 `shouldOverrideUrlLoading`。
 
+H5 如何识别「是哪个包」：bpRawMode 下 WebView UA 末尾追加 ` <applicationId>/<versionName>`（`BpRawAdjustTracker.appendUserAgent`，主 WebView 与 popup WebView 都设；PRD 见 [马甲包UserAgent设置说明](../prd/马甲包UserAgent设置说明.md)）。包名照实传，与 `appSource` 无关、不进白名单判定（白名单只读 URL 的 `appSource`）。2026-10-29 在真机壳内（r20261014）核对：H5 读 UA 只判断是否含 `com.bingoplus.lite`（命中则隐藏三方登录与 App 下载条），不解析版本号；`getPackageName`、URL `package=` 都不用于识别马甲包（`package` 只用于 SRR OEM 包与带 `os` 参数的原生 App），故壳不提供。
+
 为什么必须排在 BpStrategy 之前：BpStrategy 对未知 scheme 会 `startActivity` 失败后 `return false`，WebView 会去加载 `adjusth5event://` → 主框架 `ERR_UNKNOWN_URL_SCHEME` → `onMainFrameError` → **误触发域名容灾**。
 
 `handleH5Url(uri)` 规则：
@@ -415,6 +417,7 @@ SharedPreferences `adjust_bp_raw` / `customer_id`。`init` 读盘 → 缓存非�
 - 沙盒包（`-PtestEvents=true`）冷启动：Testing Console 见 `ad_app_opened`，已登录过的设备带 `customerId`。
 - 用 Chrome DevTools 在页面执行 `location.href='adjusth5event://deposit?amount=1,000.50&currency=php&orderId=t1'`：Adjust 见 `ad_deposit`，revenue 1000.5 PHP，重复同一 orderId 被去重；AF 见同名事件带 af_revenue。`BingoPlusShell.openExternal(...)` 与 `window.open(...)` 同样各验一次。
 - 注册一个新账号（H5 发 `adjusth5event://register?customerId=…`）：Adjust 见 `ad_registration` 且 externalDeviceId 已绑定；AppsFlyer 侧同时见 `ad_registration` 与老的 `af_complete_registration`。
-- 首页 URL 抓包确认带 `appSource=<applicationId>`；`window.BingoPlusShell.openExternal` 存在。
+- 首页 URL 抓包确认带 `appSource=mktApp`；`window.BingoPlusShell.openExternal` 存在。
+- debug 包（WebView 调试自动开启）用 chrome://inspect 执行 `navigator.userAgent`：末尾为 ` <applicationId>/<versionName>`，前面系统 UA（含 `wv`）不变。
 - `adb shell am start -a android.intent.action.VIEW -d "https://<deepLinkHost>/xxx"`：App 打开默认首页且见 `ad_deeplink_opened`。
 - **回归**：同一渠道关掉开关重打包，`adb logcat -s HybridAdjust HybridAdjustBpRaw` 无 bpRaw 日志，6 个旧事件照常。

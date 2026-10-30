@@ -11,7 +11,7 @@ import com.hybrid.android.BuildConfig
 
 /**
  * BP 原始事件模式（[AdjustBootstrap.bpRawMode]）专用：customerId 缓存与绑定、H5 自定义 scheme
- * 事件解析（含注册）、Adjust 品牌短链归因、加载 URL 追加 appSource 参数。
+ * 事件解析（含注册）、Adjust 品牌短链归因、加载 URL 追加 appSource 参数、WebView UA 追加包名。
  *
  * 行为参照 BP 团队自家壳（`H5ShellApplication` / `AdjustH5EventTracker` /
  * `AdjustDeepLinkTracker`，见「马甲包 Adjust 归因流程代码说明」），结构用我们自己的
@@ -111,6 +111,21 @@ object BpRawAdjustTracker {
             .getOrDefault(false)
         if (has) return url
         return uri.buildUpon().appendQueryParameter(PARAM_APP_SOURCE, appSource).build().toString()
+    }
+
+    /**
+     * 在 WebView UA 末尾追加 ` <包名>/<versionName>`（见 docs/prd/马甲包UserAgent设置说明.md）。
+     * 先去掉末尾已有的 `<包名>/<任意版本>` 或 `<包名>`，同一 WebView 重复调用后缀也只出现一次；
+     * 系统 UA 其余部分（内核版本、`wv`、`Mobile` 等）原样保留。
+     *
+     * 包名照实传 applicationId，与 appSource 不同、不受 H5 白名单约束：H5 现网（r20261014）读 UA
+     * 只判断是否含 `com.bingoplus.lite`（隐藏三方登录与下载条），我们的包名不命中，页面表现不变。
+     */
+    fun appendUserAgent(ua: String, packageName: String, versionName: String = BuildConfig.VERSION_NAME): String {
+        val existing = Regex("(^|\\s+)${Regex.escape(packageName)}(/\\S*)?\\s*$")
+        val base = ua.replace(existing, "").trimEnd()
+        val suffix = "$packageName/$versionName"
+        return if (base.isEmpty()) suffix else "$base $suffix"
     }
 
     /**

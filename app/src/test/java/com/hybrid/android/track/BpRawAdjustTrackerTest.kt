@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config
 
 /**
  * BP 原始事件模式（[BpRawAdjustTracker]）的 JVM 单测：金额/币种解析、action→事件名解析、
- * H5 事件消费行为（register/updatecustomerid）、appSource 参数追加。
+ * H5 事件消费行为（register/updatecustomerid）、appSource 参数追加、UA 追加包名。
  *
  * 纯逻辑抽成可测函数，不依赖 Adjust SDK 真实初始化（测试用 flavor 的 ADJUST_APP_TOKEN 为空，
  * AdjustBootstrap.trackRaw 内部因查不到 token 会静默跳过，不会触碰真实 Adjust 网络请求）。
@@ -207,6 +207,35 @@ class BpRawAdjustTrackerTest {
     fun `appSource 已存在则不重复`() {
         val url = "https://a.com/?appSource=com.x.y&palcode=1"
         assertEquals(url, BpRawAdjustTracker.appendAppSource(url, "com.x.y"))
+    }
+
+    // ---------------------------- UA 追加包名 ----------------------------
+
+    private val sysUa = "Mozilla/5.0 (Linux; Android 14; X; wv) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Version/4.0 Chrome/120.0 Mobile Safari/537.36"
+
+    @Test
+    fun `UA 末尾空格分隔追加 包名斜杠版本 原 UA 不动`() {
+        assertEquals("$sysUa com.bingoplus.a1/1.0.4", BpRawAdjustTracker.appendUserAgent(sysUa, "com.bingoplus.a1", "1.0.4"))
+    }
+
+    @Test
+    fun `UA 重复追加只保留一份后缀`() {
+        val once = BpRawAdjustTracker.appendUserAgent(sysUa, "com.bingoplus.a1", "1.0.4")
+        assertEquals(once, BpRawAdjustTracker.appendUserAgent(once, "com.bingoplus.a1", "1.0.4"))
+    }
+
+    @Test
+    fun `UA 末尾已有旧版本或仅包名时替换而非叠加`() {
+        val expected = "$sysUa com.bingoplus.a1/1.0.4"
+        assertEquals(expected, BpRawAdjustTracker.appendUserAgent("$sysUa com.bingoplus.a1/1.0.3", "com.bingoplus.a1", "1.0.4"))
+        assertEquals(expected, BpRawAdjustTracker.appendUserAgent("$sysUa com.bingoplus.a1  ", "com.bingoplus.a1", "1.0.4"))
+    }
+
+    @Test
+    fun `UA 末尾是别的包名时不误删`() {
+        val other = "$sysUa com.bingoplus.a12/1.0.0"
+        assertEquals("$other com.bingoplus.a1/1.0.4", BpRawAdjustTracker.appendUserAgent(other, "com.bingoplus.a1", "1.0.4"))
     }
 
     @Test
